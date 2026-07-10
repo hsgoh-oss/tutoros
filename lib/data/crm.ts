@@ -1,0 +1,809 @@
+// CRM 조회 헬퍼 — 상담·학생·수업·일정·성적·결제·자료 7개 모듈 공용.
+// DB 미연결(hasDb()=false) 시 전부 빈 배열/null 반환 — 페이지는 안내 배너+빈 상태 UI로 대응한다.
+// 컬럼은 snake_case, 반환 타입은 camelCase(lib/types.ts 정합). lesson_materials는 타입 미정의라 이 파일에서 자체 정의한다.
+
+import { createServiceClient, hasDb } from "@/lib/supabase/server";
+import type {
+  ClassType,
+  Consent,
+  ConsentItem,
+  Consultation,
+  ConsultationStatus,
+  Faq,
+  GradeRecord,
+  Lesson,
+  Payment,
+  PaymentMethod,
+  PaymentStatus,
+  Review,
+  ScheduleItem,
+  Student,
+} from "@/lib/types";
+
+export { hasDb };
+
+/* ---------- 포맷 헬퍼 ---------- */
+
+export function formatKDate(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}.${m}.${day}`;
+}
+
+export function formatKDateTime(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  const h = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${formatKDate(iso)} ${h}:${min}`;
+}
+
+export function formatWon(amount: number | null | undefined): string {
+  return `${(amount ?? 0).toLocaleString("ko-KR")}원`;
+}
+
+/* ---------- 학생 select 공용 옵션 ---------- */
+
+export interface StudentOption {
+  id: string;
+  name: string;
+}
+
+export async function listStudentOptions(
+  tenantId: string,
+): Promise<StudentOption[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("students")
+    .select("id,name")
+    .eq("tenant_id", tenantId)
+    .order("name");
+  return (data ?? []) as StudentOption[];
+}
+
+/* ---------- 학생 ---------- */
+
+interface StudentRow {
+  id: string;
+  name: string;
+  parent_phone: string;
+  student_phone: string | null;
+  school: string | null;
+  grade: string | null;
+  class_type: ClassType;
+  subject_type: string | null;
+  status: Student["status"];
+  notion_page_id: string | null;
+  created_at: string;
+}
+
+function mapStudent(row: StudentRow): Student {
+  return {
+    id: row.id,
+    name: row.name,
+    parentPhone: row.parent_phone,
+    studentPhone: row.student_phone,
+    school: row.school,
+    grade: row.grade,
+    classType: row.class_type,
+    subjectType: row.subject_type,
+    status: row.status,
+    notionPageId: row.notion_page_id,
+    createdAt: row.created_at,
+  };
+}
+
+export interface StudentFilters {
+  status?: Student["status"];
+  q?: string;
+}
+
+export async function listStudents(
+  tenantId: string,
+  filters: StudentFilters = {},
+): Promise<Student[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  let query = db
+    .from("students")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false });
+  if (filters.status) query = query.eq("status", filters.status);
+  if (filters.q) query = query.ilike("name", `%${filters.q}%`);
+  const { data } = await query;
+  return (data ?? []).map((r) => mapStudent(r as StudentRow));
+}
+
+export async function getStudent(
+  tenantId: string,
+  id: string,
+): Promise<Student | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("students")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapStudent(data as StudentRow) : null;
+}
+
+/* ---------- 수업 기록 ---------- */
+
+interface LessonRow {
+  id: string;
+  student_id: string;
+  lesson_date: string;
+  session_number: number;
+  content: string;
+  homework: string | null;
+  concentration: number | null;
+  attitude: number | null;
+  absent: boolean;
+}
+
+interface LessonJoinRow extends LessonRow {
+  students: { name: string } | null;
+}
+
+function mapLesson(row: LessonRow): Lesson {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    lessonDate: row.lesson_date,
+    sessionNumber: row.session_number,
+    content: row.content,
+    homework: row.homework,
+    concentration: row.concentration,
+    attitude: row.attitude,
+    absent: row.absent,
+  };
+}
+
+export interface LessonListItem extends Lesson {
+  studentName: string;
+}
+
+export async function listLessons(
+  tenantId: string,
+  studentId?: string,
+): Promise<LessonListItem[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  let query = db
+    .from("lessons")
+    .select("*, students(name)")
+    .eq("tenant_id", tenantId)
+    .order("lesson_date", { ascending: false })
+    .order("session_number", { ascending: false });
+  if (studentId) query = query.eq("student_id", studentId);
+  const { data } = await query;
+  return (data ?? []).map((r) => {
+    const row = r as LessonJoinRow;
+    return { ...mapLesson(row), studentName: row.students?.name ?? "알 수 없음" };
+  });
+}
+
+export async function getLesson(
+  tenantId: string,
+  id: string,
+): Promise<Lesson | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("lessons")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapLesson(data as LessonRow) : null;
+}
+
+/** 다음 회차 번호 — 해당 학생의 기존 기록 수 + 1 (기획: 회차 자동 계산). */
+export async function nextSessionNumber(
+  tenantId: string,
+  studentId: string,
+): Promise<number> {
+  const db = createServiceClient();
+  if (!db) return 1;
+  const { count } = await db
+    .from("lessons")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("student_id", studentId);
+  return (count ?? 0) + 1;
+}
+
+/* ---------- 일정 ---------- */
+
+interface ScheduleRow {
+  id: string;
+  student_id: string;
+  scheduled_at: string;
+  class_type: ClassType;
+  status: ScheduleItem["status"];
+  reminder_sent: boolean;
+}
+
+interface ScheduleJoinRow extends ScheduleRow {
+  students: { name: string } | null;
+}
+
+function mapSchedule(row: ScheduleRow): ScheduleItem {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    scheduledAt: row.scheduled_at,
+    classType: row.class_type,
+    status: row.status,
+    reminderSent: row.reminder_sent,
+  };
+}
+
+export interface ScheduleListItem extends ScheduleItem {
+  studentName: string;
+}
+
+export async function listSchedules(
+  tenantId: string,
+  range: { from: string; to: string },
+): Promise<ScheduleListItem[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("schedules")
+    .select("*, students(name)")
+    .eq("tenant_id", tenantId)
+    .gte("scheduled_at", range.from)
+    .lt("scheduled_at", range.to)
+    .order("scheduled_at");
+  return (data ?? []).map((r) => {
+    const row = r as ScheduleJoinRow;
+    return { ...mapSchedule(row), studentName: row.students?.name ?? "알 수 없음" };
+  });
+}
+
+export async function getSchedule(
+  tenantId: string,
+  id: string,
+): Promise<ScheduleItem | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("schedules")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapSchedule(data as ScheduleRow) : null;
+}
+
+/* ---------- 성적 ---------- */
+
+interface GradeRow {
+  id: string;
+  student_id: string;
+  exam_name: string;
+  raw_score: number | null;
+  percentile: number | null;
+  grade: string | null;
+  exam_date: string | null;
+}
+
+interface GradeJoinRow extends GradeRow {
+  students: { name: string } | null;
+}
+
+function mapGrade(row: GradeRow): GradeRecord {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    examName: row.exam_name,
+    rawScore: row.raw_score,
+    percentile: row.percentile,
+    grade: row.grade,
+    examDate: row.exam_date,
+  };
+}
+
+export interface GradeListItem extends GradeRecord {
+  studentName: string;
+}
+
+export async function listGrades(
+  tenantId: string,
+  studentId?: string,
+): Promise<GradeListItem[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  let query = db
+    .from("grade_records")
+    .select("*, students(name)")
+    .eq("tenant_id", tenantId)
+    .order("exam_date", { ascending: true });
+  if (studentId) query = query.eq("student_id", studentId);
+  const { data } = await query;
+  return (data ?? []).map((r) => {
+    const row = r as GradeJoinRow;
+    return { ...mapGrade(row), studentName: row.students?.name ?? "알 수 없음" };
+  });
+}
+
+export async function getGrade(
+  tenantId: string,
+  id: string,
+): Promise<GradeRecord | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("grade_records")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapGrade(data as GradeRow) : null;
+}
+
+/* ---------- 결제 ---------- */
+
+interface PaymentRow {
+  id: string;
+  student_id: string;
+  period_start: string;
+  period_end: string;
+  amount: number;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  due_date: string | null;
+  pay_url: string | null;
+  toss_payment_key: string | null;
+  paid_at: string | null;
+}
+
+interface PaymentJoinRow extends PaymentRow {
+  students: { name: string } | null;
+}
+
+function mapPayment(row: PaymentRow): Payment {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    amount: row.amount,
+    method: row.method,
+    status: row.status,
+    dueDate: row.due_date,
+    payUrl: row.pay_url,
+    tossPaymentKey: row.toss_payment_key,
+    paidAt: row.paid_at,
+  };
+}
+
+export interface PaymentListItem extends Payment {
+  studentName: string;
+}
+
+export interface PaymentFilters {
+  status?: PaymentStatus;
+}
+
+export async function listPayments(
+  tenantId: string,
+  filters: PaymentFilters = {},
+): Promise<PaymentListItem[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  let query = db
+    .from("payments")
+    .select("*, students(name)")
+    .eq("tenant_id", tenantId)
+    .order("due_date", { ascending: true });
+  if (filters.status) query = query.eq("status", filters.status);
+  const { data } = await query;
+  return (data ?? []).map((r) => {
+    const row = r as PaymentJoinRow;
+    return { ...mapPayment(row), studentName: row.students?.name ?? "알 수 없음" };
+  });
+}
+
+export async function getPayment(
+  tenantId: string,
+  id: string,
+): Promise<Payment | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("payments")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapPayment(data as PaymentRow) : null;
+}
+
+export interface PaymentSummary {
+  paidThisMonth: number;
+  overdueTotal: number;
+  pendingTotal: number;
+}
+
+export async function getPaymentSummary(
+  tenantId: string,
+): Promise<PaymentSummary> {
+  const db = createServiceClient();
+  if (!db) return { paidThisMonth: 0, overdueTotal: 0, pendingTotal: 0 };
+
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const [paidRes, overdueRes, pendingRes] = await Promise.all([
+    db
+      .from("payments")
+      .select("amount")
+      .eq("tenant_id", tenantId)
+      .eq("status", "paid")
+      .gte("paid_at", monthStart),
+    db.from("payments").select("amount").eq("tenant_id", tenantId).eq("status", "overdue"),
+    db.from("payments").select("amount").eq("tenant_id", tenantId).eq("status", "pending"),
+  ]);
+
+  const sum = (rows: { amount: number }[] | null) =>
+    (rows ?? []).reduce((acc, r) => acc + r.amount, 0);
+
+  return {
+    paidThisMonth: sum(paidRes.data as { amount: number }[] | null),
+    overdueTotal: sum(overdueRes.data as { amount: number }[] | null),
+    pendingTotal: sum(pendingRes.data as { amount: number }[] | null),
+  };
+}
+
+/* ---------- 자료 (lib/types.ts 미정의 — 이 파일에서 자체 타입 관리) ---------- */
+
+export interface LessonMaterial {
+  id: string;
+  studentId: string | null;
+  lessonId: string | null;
+  name: string;
+  fileUrl: string;
+  isShared: boolean;
+  createdAt: string;
+}
+
+interface MaterialRow {
+  id: string;
+  student_id: string | null;
+  lesson_id: string | null;
+  name: string;
+  file_url: string;
+  is_shared: boolean;
+  created_at: string;
+}
+
+interface MaterialJoinRow extends MaterialRow {
+  students: { name: string } | null;
+}
+
+function mapMaterial(row: MaterialRow): LessonMaterial {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    lessonId: row.lesson_id,
+    name: row.name,
+    fileUrl: row.file_url,
+    isShared: row.is_shared,
+    createdAt: row.created_at,
+  };
+}
+
+export interface MaterialListItem extends LessonMaterial {
+  studentName: string | null;
+}
+
+export async function listMaterials(
+  tenantId: string,
+): Promise<MaterialListItem[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("lesson_materials")
+    .select("*, students(name)")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((r) => {
+    const row = r as MaterialJoinRow;
+    return { ...mapMaterial(row), studentName: row.students?.name ?? null };
+  });
+}
+
+/* ---------- 상담 ---------- */
+
+interface ConsultationRow {
+  id: string;
+  name: string;
+  phone: string;
+  subject: string | null;
+  class_type: ClassType | null;
+  message: string | null;
+  status: ConsultationStatus;
+  is_student_self: boolean;
+  birth_year: number | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  checklist_items: string[];
+  prefill: { mode?: string; hours?: number; freq?: number } | null;
+  memo: string | null;
+  student_id: string | null;
+  created_at: string;
+}
+
+/** lib/types.ts의 Consultation은 학생 전환 연결 필드(studentId)를 포함하지 않아 관리자 전용으로 확장. */
+export interface ConsultationDetail extends Consultation {
+  studentId: string | null;
+}
+
+function mapConsultation(row: ConsultationRow): ConsultationDetail {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    subject: row.subject,
+    classType: row.class_type,
+    message: row.message,
+    status: row.status,
+    isStudentSelf: row.is_student_self,
+    birthYear: row.birth_year,
+    guardianName: row.guardian_name,
+    guardianPhone: row.guardian_phone,
+    checklistItems: row.checklist_items ?? [],
+    prefill: row.prefill,
+    memo: row.memo,
+    studentId: row.student_id,
+    createdAt: row.created_at,
+  };
+}
+
+export interface ConsultationFilters {
+  status?: ConsultationStatus;
+}
+
+export async function listConsultations(
+  tenantId: string,
+  filters: ConsultationFilters = {},
+): Promise<ConsultationDetail[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  let query = db
+    .from("consultations")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false });
+  if (filters.status) query = query.eq("status", filters.status);
+  const { data } = await query;
+  return (data ?? []).map((r) => mapConsultation(r as ConsultationRow));
+}
+
+export async function getConsultation(
+  tenantId: string,
+  id: string,
+): Promise<ConsultationDetail | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("consultations")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapConsultation(data as ConsultationRow) : null;
+}
+
+/* ---------- 동의 내역 ---------- */
+
+interface ConsentRow {
+  id: string;
+  subject_type: Consent["subjectType"];
+  subject_id: string;
+  item: ConsentItem;
+  policy_version: string;
+  consented_at: string;
+  via: string;
+}
+
+function mapConsent(row: ConsentRow): Consent {
+  return {
+    id: row.id,
+    subjectType: row.subject_type,
+    subjectId: row.subject_id,
+    item: row.item,
+    policyVersion: row.policy_version,
+    consentedAt: row.consented_at,
+    via: row.via,
+  };
+}
+
+export async function listConsents(
+  tenantId: string,
+  subjectType: Consent["subjectType"],
+  subjectId: string,
+): Promise<Consent[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("consents")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("subject_type", subjectType)
+    .eq("subject_id", subjectId)
+    .order("consented_at", { ascending: false });
+  return (data ?? []).map((r) => mapConsent(r as ConsentRow));
+}
+
+/* ---------- 학생 상세 요약 (수업·성적·결제 최근 5건) ---------- */
+
+export interface StudentSummary {
+  lessons: Lesson[];
+  grades: GradeRecord[];
+  payments: Payment[];
+}
+
+export async function getStudentSummary(
+  tenantId: string,
+  studentId: string,
+): Promise<StudentSummary> {
+  const db = createServiceClient();
+  if (!db) return { lessons: [], grades: [], payments: [] };
+
+  const [lessonsRes, gradesRes, paymentsRes] = await Promise.all([
+    db
+      .from("lessons")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("student_id", studentId)
+      .order("lesson_date", { ascending: false })
+      .limit(5),
+    db
+      .from("grade_records")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("student_id", studentId)
+      .order("exam_date", { ascending: false })
+      .limit(5),
+    db
+      .from("payments")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("student_id", studentId)
+      .order("due_date", { ascending: false })
+      .limit(5),
+  ]);
+
+  return {
+    lessons: (lessonsRes.data ?? []).map((r) => mapLesson(r as LessonRow)),
+    grades: (gradesRes.data ?? []).map((r) => mapGrade(r as GradeRow)),
+    payments: (paymentsRes.data ?? []).map((r) => mapPayment(r as PaymentRow)),
+  };
+}
+
+/* ---------- 후기 (lib/data/content.ts의 공개 로더와 컬럼 매핑 동일 — 관리자 CRUD 조회 전용) ---------- */
+
+interface ReviewMeta {
+  region?: string;
+  grade?: string;
+  track?: string;
+  source?: string;
+  reviewed_at?: string;
+}
+
+interface ReviewRow {
+  id: string;
+  reviewer_type: Review["reviewerType"];
+  content: string;
+  rating: number;
+  before_grade: string | null;
+  after_grade: string | null;
+  meta: ReviewMeta | null;
+  screenshots: string[] | null;
+  ai_tags: string[] | null;
+  is_pinned: boolean;
+}
+
+function mapReview(row: ReviewRow): Review {
+  return {
+    id: row.id,
+    reviewerType: row.reviewer_type,
+    content: row.content,
+    rating: row.rating,
+    beforeGrade: row.before_grade,
+    afterGrade: row.after_grade,
+    region: row.meta?.region ?? null,
+    grade: row.meta?.grade ?? null,
+    track: row.meta?.track ?? null,
+    source: row.meta?.source ?? null,
+    reviewedAt: row.meta?.reviewed_at ?? null,
+    screenshots: row.screenshots ?? [],
+    aiTags: row.ai_tags ?? [],
+    isPinned: row.is_pinned,
+  };
+}
+
+export async function listReviews(tenantId: string): Promise<Review[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("reviews")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("is_pinned", { ascending: false })
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((r) => mapReview(r as ReviewRow));
+}
+
+export async function getReview(
+  tenantId: string,
+  id: string,
+): Promise<Review | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("reviews")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapReview(data as ReviewRow) : null;
+}
+
+/* ---------- FAQ ---------- */
+
+interface FaqRow {
+  id: string;
+  category: string;
+  question: string;
+  answer: string;
+  sort_order: number;
+}
+
+function mapFaq(row: FaqRow): Faq {
+  return {
+    id: row.id,
+    category: row.category,
+    question: row.question,
+    answer: row.answer,
+    sortOrder: row.sort_order,
+  };
+}
+
+export async function listFaqs(tenantId: string): Promise<Faq[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("faqs")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("sort_order");
+  return (data ?? []).map((r) => mapFaq(r as FaqRow));
+}
+
+export async function getFaq(
+  tenantId: string,
+  id: string,
+): Promise<Faq | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("faqs")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapFaq(data as FaqRow) : null;
+}

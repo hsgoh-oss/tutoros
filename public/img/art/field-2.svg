@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150">
+  <defs>
+    <linearGradient id="iris1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9ff0ff"/>
+      <stop offset=".45" stop-color="#4f8cff"/>
+      <stop offset="1" stop-color="#7c5cff"/>
+    </linearGradient>
+    <linearGradient id="iris2" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#2d5df4"/>
+      <stop offset=".55" stop-color="#62c9ff"/>
+      <stop offset="1" stop-color="#bdf2ff"/>
+    </linearGradient>
+    <linearGradient id="iris3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#bff3ff"/>
+      <stop offset=".5" stop-color="#5e8bff"/>
+      <stop offset="1" stop-color="#9b6bff"/>
+    </linearGradient>
+    <radialGradient id="darkSpot1" cx="78%" cy="22%" r="60%">
+      <stop offset="0" stop-color="#5e8bff" stop-opacity=".55"/>
+      <stop offset=".5" stop-color="#2d5df4" stop-opacity=".25"/>
+      <stop offset="1" stop-color="#05070d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="darkSpot2" cx="18%" cy="85%" r="55%">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#05070d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="darkSpot3" cx="50%" cy="50%" r="70%">
+      <stop offset="0" stop-color="#62e0ff" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#05070d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="darkBase" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#02040a"/>
+      <stop offset=".5" stop-color="#0a1430"/>
+      <stop offset="1" stop-color="#040712"/>
+    </linearGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .04 0"/>
+    </filter>
+    <filter id="soft" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="soft2" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="28"/></filter>
+    <linearGradient id="glassEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+<path d="M96.0 75.0 L85.5 93.2 L64.5 93.2 L54.0 75.0 L64.5 56.8 L85.5 56.8Z" fill="url(#iris2)"/><path d="M133.4 75.0 L122.9 93.2 L101.9 93.2 L91.4 75.0 L101.9 56.8 L122.9 56.8Z" fill="url(#iris2)" opacity="1"/><path d="M114.7 107.4 L104.2 125.6 L83.2 125.6 L72.7 107.4 L83.2 89.2 L104.2 89.2Z" fill="url(#iris2)" opacity="0.7"/><path d="M77.3 107.4 L66.8 125.6 L45.8 125.6 L35.3 107.4 L45.8 89.2 L66.8 89.2Z" fill="url(#iris2)" opacity="0.85"/><path d="M58.6 75.0 L48.1 93.2 L27.1 93.2 L16.6 75.0 L27.1 56.8 L48.1 56.8Z" fill="url(#iris2)" opacity="0.6"/><path d="M77.3 42.6 L66.8 60.8 L45.8 60.8 L35.3 42.6 L45.8 24.4 L66.8 24.4Z" fill="url(#iris2)" opacity="0.85"/><path d="M114.7 42.6 L104.2 60.8 L83.2 60.8 L72.7 42.6 L83.2 24.4 L104.2 24.4Z" fill="url(#iris2)" opacity="0.7"/></svg>

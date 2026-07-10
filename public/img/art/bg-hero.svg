@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 760" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="hbase" cx="50%" cy="36%" r="80%">
+      <stop offset="0%" stop-color="#0b1426"/>
+      <stop offset="55%" stop-color="#05080f"/>
+      <stop offset="100%" stop-color="#02040a"/>
+    </radialGradient>
+    <linearGradient id="oil" x1="0" y1="0" x2="1" y2="0.25">
+      <stop offset="0%"  stop-color="#1d3bd6" stop-opacity=".0"/>
+      <stop offset="18%" stop-color="#1f6fff" stop-opacity=".55"/>
+      <stop offset="34%" stop-color="#27d3c4" stop-opacity=".5"/>
+      <stop offset="50%" stop-color="#7a5cff" stop-opacity=".5"/>
+      <stop offset="66%" stop-color="#ff5ea8" stop-opacity=".42"/>
+      <stop offset="82%" stop-color="#ffb24d" stop-opacity=".34"/>
+      <stop offset="100%" stop-color="#1d3bd6" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="hb" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="46"/></filter>
+    <filter id="hb2" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect width="1600" height="760" fill="url(#hbase)"/>
+  <!-- oil-slick arc across the upper field -->
+  <g filter="url(#hb)" opacity=".9">
+    <path d="M-100 250 C 300 60, 760 60, 1080 200 C 1330 310, 1500 240, 1720 150 L 1720 -60 L -100 -60 Z" fill="url(#oil)"/>
+  </g>
+  <g filter="url(#hb2)" opacity=".7">
+    <ellipse cx="560" cy="210" rx="360" ry="120" fill="#2f7bff" opacity=".30"/>
+    <ellipse cx="980" cy="170" rx="300" ry="110" fill="#16d0bf" opacity=".22"/>
+    <ellipse cx="1240" cy="250" rx="280" ry="120" fill="#8a5cff" opacity=".22"/>
+    <ellipse cx="300" cy="300" rx="260" ry="120" fill="#ff63a6" opacity=".14"/>
+  </g>
+  <!-- faint rainbow rim highlight -->
+  <g filter="url(#hb2)" opacity=".5">
+    <path d="M120 215 C 420 110, 820 110, 1120 215" fill="none" stroke="#bfe6ff" stroke-width="3"/>
+    <path d="M180 250 C 520 150, 880 150, 1180 250" fill="none" stroke="#ffc7e6" stroke-width="2"/>
+  </g>
+</svg>

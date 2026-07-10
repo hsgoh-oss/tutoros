@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-pretendard), "Pretendard", -apple-system,
+    BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI",
+    sans-serif;
+
+  /* AXIOM 브랜드 팔레트 (v46 계승 · 커스텀 스케일) */
+  --color-brand-50: #eef3fe;
+  --color-brand-100: #dce7fd;
+  --color-brand-200: #bccffb;
+  --color-brand-300: #93aef7;
+  --color-brand-400: #6489f1;
+  --color-brand-500: #3d68ea;
+  --color-brand-600: #2b5ce6;
+  --color-brand-700: #1c42bf;
+  --color-brand-800: #1a3a9e;
+  --color-brand-900: #182f78;
+
+  --color-ink: #0b1220;
+  --color-ink-soft: #1d2939;
+  --color-muted: #667085;
+  --color-line: #e6ebf3;
+  --color-soft: #f6f8fc;
+
+  --radius-card: 28px;
+  --radius-panel: 18px;
+
+  --shadow-soft: 0 22px 70px rgba(13, 29, 61, 0.11);
+  --shadow-card: 0 8px 22px rgba(13, 29, 61, 0.05);
+  --shadow-lift: 0 14px 30px rgba(45, 93, 244, 0.26);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 90px;
+  }
+
+  body {
+    @apply bg-white text-ink antialiased;
+    word-break: keep-all;
+    text-rendering: optimizeLegibility;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

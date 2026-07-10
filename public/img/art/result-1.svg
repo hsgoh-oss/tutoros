@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="r1bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef7f1"/><stop offset="60%" stop-color="#e2f1ea"/><stop offset="100%" stop-color="#cfe7db"/>
+    </linearGradient>
+    <linearGradient id="r1pg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#f3f8f5"/>
+    </linearGradient>
+    <filter id="r1s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#1f4d3a" flood-opacity="0.18"/></filter>
+  </defs>
+  <rect width="600" height="460" fill="url(#r1bg)"/>
+  <g transform="rotate(-7 300 230)">
+    <rect x="120" y="70" width="380" height="330" rx="14" fill="url(#r1pg)" filter="url(#r1s)"/>
+    <rect x="150" y="104" width="150" height="13" rx="6" fill="#bcdccd"/>
+    <rect x="150" y="126" width="96" height="9" rx="4" fill="#d6e9df"/>
+    <circle cx="250" cy="150" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="302" cy="150" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="354" cy="150" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="406" cy="150" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="458" cy="150" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="250" cy="184" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="302" cy="184" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="354" cy="184" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="406" cy="184" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="458" cy="184" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="250" cy="218" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="302" cy="218" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="354" cy="218" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="406" cy="218" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="458" cy="218" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="250" cy="252" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="302" cy="252" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="354" cy="252" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="406" cy="252" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="458" cy="252" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="250" cy="286" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="302" cy="286" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="354" cy="286" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="406" cy="286" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="458" cy="286" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="250" cy="320" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="302" cy="320" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="354" cy="320" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="406" cy="320" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="458" cy="320" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="250" cy="354" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="302" cy="354" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="354" cy="354" r="9" fill="#2f8f6b" stroke="#2f8f6b" stroke-width="2"/><circle cx="406" cy="354" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/><circle cx="458" cy="354" r="9" fill="#ffffff" stroke="#9fc7b4" stroke-width="2"/>
+    <rect x="150" y="150" width="74" height="200" rx="7" fill="#2f8f6b" opacity="0.10"/>
+  </g>
+  <rect x="60" y="300" width="300" height="60" rx="30" fill="#34a877" opacity="0.16" transform="rotate(-7 210 330)"/>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 460">
+  <defs>
+    <radialGradient id="disc" cx="42%" cy="38%" r="70%"><stop offset="0%" stop-color="#ffffff" stop-opacity=".92"/><stop offset="55%" stop-color="#eaf2ff" stop-opacity=".5"/><stop offset="100%" stop-color="#bcd0ef" stop-opacity=".5"/></radialGradient>
+    <linearGradient id="discRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#bfeaff"/>
+      <stop offset="22%" stop-color="#d7c8ff"/>
+      <stop offset="45%" stop-color="#ffd6ec"/>
+      <stop offset="65%" stop-color="#fff0c2"/>
+      <stop offset="82%" stop-color="#c9ffe6"/>
+      <stop offset="100%" stop-color="#bfe2ff"/></linearGradient>
+    <radialGradient id="pShadow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#aebfda" stop-opacity=".5"/><stop offset="100%" stop-color="#aebfda" stop-opacity="0"/></radialGradient>
+    <filter id="psb" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+  </defs>
+  <ellipse cx="270" cy="400" rx="170" ry="28" fill="url(#pShadow)" filter="url(#psb)"/>
+  <g>
+    <ellipse cx="250" cy="150" rx="150" ry="62" fill="url(#disc)" stroke="url(#discRim)" stroke-width="2" opacity=".75"/>
+    <ellipse cx="290" cy="220" rx="160" ry="66" fill="url(#disc)" stroke="url(#discRim)" stroke-width="2" opacity=".8"/>
+    <ellipse cx="240" cy="290" rx="150" ry="62" fill="url(#disc)" stroke="url(#discRim)" stroke-width="2" opacity=".8"/>
+    <ellipse cx="226" cy="138" rx="34" ry="13" fill="#ffffff" opacity=".85"/>
+  </g>
+</svg>

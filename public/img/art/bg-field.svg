@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 640" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="fnav" cx="42%" cy="120%" r="95%">
+      <stop offset="0%" stop-color="#143fb0"/>
+      <stop offset="40%" stop-color="#0a1f63"/>
+      <stop offset="100%" stop-color="#020a2a"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="40%" cy="118%" r="60%">
+      <stop offset="0%" stop-color="#3f7bff" stop-opacity=".9"/>
+      <stop offset="55%" stop-color="#1b4fd8" stop-opacity=".35"/>
+      <stop offset="100%" stop-color="#1b4fd8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="fb" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="26"/></filter>
+    <filter id="fb2" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <rect width="1600" height="640" fill="url(#fnav)"/>
+  <ellipse cx="640" cy="780" rx="1100" ry="560" fill="url(#glow)" filter="url(#fb)"/>
+  <!-- warm scattering rim along the limb -->
+  <g filter="url(#fb2)" opacity=".85">
+    <path d="M-120 470 C 260 360, 760 330, 1180 430" fill="none" stroke="#ffb45a" stroke-width="3" opacity=".55"/>
+    <path d="M-120 452 C 260 342, 760 312, 1180 412" fill="none" stroke="#ffe0b0" stroke-width="1.6" opacity=".5"/>
+  </g>
+</svg>

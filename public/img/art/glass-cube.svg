@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 520">
+  <defs>
+    <linearGradient id="gTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffffff" stop-opacity=".95"/><stop offset="100%" stop-color="#dbe6f5" stop-opacity=".7"/></linearGradient>
+    <linearGradient id="gL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#cfe0f2" stop-opacity=".8"/><stop offset="100%" stop-color="#9fb4d4" stop-opacity=".55"/></linearGradient>
+    <linearGradient id="gR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#eef4fb" stop-opacity=".85"/><stop offset="100%" stop-color="#bccadf" stop-opacity=".6"/></linearGradient>
+    <linearGradient id="gEdge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#bfeaff"/>
+      <stop offset="22%" stop-color="#d7c8ff"/>
+      <stop offset="45%" stop-color="#ffd6ec"/>
+      <stop offset="65%" stop-color="#fff0c2"/>
+      <stop offset="82%" stop-color="#c9ffe6"/>
+      <stop offset="100%" stop-color="#bfe2ff"/></linearGradient>
+    <radialGradient id="cubeShadow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#9fb0c8" stop-opacity=".5"/><stop offset="100%" stop-color="#9fb0c8" stop-opacity="0"/></radialGradient>
+    <filter id="csb" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
+    <filter id="hl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <ellipse cx="280" cy="430" rx="170" ry="34" fill="url(#cubeShadow)" filter="url(#csb)"/>
+  
+      <polygon points="250,115.0 320,150 250,185.0 180,150"  fill="url(#gTop)" stroke="url(#gEdge)" stroke-width="1.4" opacity="0.42"/>
+      <polygon points="180,150 250,185.0 250,255.0 180,220" fill="url(#gL)"   stroke="url(#gEdge)" stroke-width="1.4" opacity="0.42"/>
+      <polygon points="320,150 250,185.0 250,255.0 320,220" fill="url(#gR)"  stroke="url(#gEdge)" stroke-width="1.4" opacity="0.42"/>
+      <polygon points="330,165.0 400,200 330,235.0 260,200"  fill="url(#gTop)" stroke="url(#gEdge)" stroke-width="1.4" opacity="0.5"/>
+      <polygon points="260,200 330,235.0 330,305.0 260,270" fill="url(#gL)"   stroke="url(#gEdge)" stroke-width="1.4" opacity="0.5"/>
+      <polygon points="400,200 330,235.0 330,305.0 400,270" fill="url(#gR)"  stroke="url(#gEdge)" stroke-width="1.4" opacity="0.5"/>
+      <polygon points="195,200.0 265,235 195,270.0 125,235"  fill="url(#gTop)" stroke="url(#gEdge)" stroke-width="1.4" opacity="0.5"/>
+      <polygon points="125,235 195,270.0 195,340.0 125,305" fill="url(#gL)"   stroke="url(#gEdge)" stroke-width="1.4" opacity="0.5"/>
+      <polygon points="265,235 195,270.0 195,340.0 265,305" fill="url(#gR)"  stroke="url(#gEdge)" stroke-width="1.4" opacity="0.5"/>
+      <polygon points="280,250.0 350,285 280,320.0 210,285"  fill="url(#gTop)" stroke="url(#gEdge)" stroke-width="1.4" opacity="0.46"/>
+      <polygon points="210,285 280,320.0 280,390.0 210,355" fill="url(#gL)"   stroke="url(#gEdge)" stroke-width="1.4" opacity="0.46"/>
+      <polygon points="350,285 280,320.0 280,390.0 350,355" fill="url(#gR)"  stroke="url(#gEdge)" stroke-width="1.4" opacity="0.46"/>
+      <polygon points="360,272.5 415,300 360,327.5 305,300"  fill="url(#gTop)" stroke="url(#gEdge)" stroke-width="1.4" opacity="0.4"/>
+      <polygon points="305,300 360,327.5 360,382.5 305,355" fill="url(#gL)"   stroke="url(#gEdge)" stroke-width="1.4" opacity="0.4"/>
+      <polygon points="415,300 360,327.5 360,382.5 415,355" fill="url(#gR)"  stroke="url(#gEdge)" stroke-width="1.4" opacity="0.4"/>
+      <polygon points="225,302.5 280,330 225,357.5 170,330"  fill="url(#gTop)" stroke="url(#gEdge)" stroke-width="1.4" opacity="0.42"/>
+      <polygon points="170,330 225,357.5 225,412.5 170,385" fill="url(#gL)"   stroke="url(#gEdge)" stroke-width="1.4" opacity="0.42"/>
+      <polygon points="280,330 225,357.5 225,412.5 280,385" fill="url(#gR)"  stroke="url(#gEdge)" stroke-width="1.4" opacity="0.42"/>
+  <g filter="url(#hl)" opacity=".8">
+    <ellipse cx="240" cy="150" rx="40" ry="16" fill="#ffffff"/>
+    <ellipse cx="330" cy="205" rx="22" ry="10" fill="#eaf6ff"/>
+  </g>
+</svg>
