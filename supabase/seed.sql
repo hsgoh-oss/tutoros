@@ -11,6 +11,15 @@ values
   ('00000000-0000-0000-0000-000000000003', '테스트 국어과외', 'test-korean@example.com', 'standard', 'trial', null, 'test-kor')
 on conflict (id) do nothing;
 
+/* ---------- 관리자 계정 (테넌트당 다중 허용 — 00007) ---------- */
+-- 이메일은 소문자로 저장(authorizeAdmin이 소문자 정규화 후 대조).
+insert into public.admin_accounts (tenant_id, email) values
+  ('00000000-0000-0000-0000-000000000001', 'hsgoh05@gmail.com'),
+  ('00000000-0000-0000-0000-000000000001', 'seolwon@nqsolution.kr'),
+  ('00000000-0000-0000-0000-000000000002', 'test-english@example.com'),
+  ('00000000-0000-0000-0000-000000000003', 'test-korean@example.com')
+on conflict (tenant_id, email) do nothing;
+
 /* ---------- 1호 테넌트: 사이트 설정 ---------- */
 
 insert into public.site_settings (tenant_id, key, value) values

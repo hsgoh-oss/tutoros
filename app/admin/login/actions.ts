@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { resolveTenant } from "@/lib/tenant";
+import { createServiceClient } from "@/lib/supabase/server";
 import {
   SESSION_COOKIE,
   createSessionToken,
@@ -18,8 +19,9 @@ export interface LoginActionResult {
   devCode?: string;
 }
 
-// 현재 Host의 테넌트 관리자 이메일과 일치할 때만 OTP를 발급한다(테넌트당 관리자 1인).
-// OTP 레코드는 (tenant_id, email)로 격리되므로 테넌트 식별자를 함께 돌려준다.
+// 현재 Host의 테넌트에 등록된 관리자 이메일일 때만 OTP를 발급한다(테넌트당 관리자 다중 허용).
+// admin_accounts(00007)에 (tenant_id, email)로 등록된 계정을 인가한다. tenants.email(소유자)은
+// 마이그레이션 백필로 이 테이블에 포함된다. OTP 레코드도 (tenant_id, email)로 격리되므로 함께 돌려준다.
 interface AuthorizedAdmin {
   tenantId: string;
   email: string;
@@ -29,9 +31,23 @@ async function authorizeAdmin(email: string): Promise<AuthorizedAdmin | null> {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
   const tenant = await resolveTenant();
-  return normalized === tenant.email.toLowerCase()
-    ? { tenantId: tenant.id, email: normalized }
-    : null;
+  const isOwner = normalized === tenant.email.toLowerCase();
+
+  const db = createServiceClient();
+  if (db) {
+    const { data } = await db
+      .from("admin_accounts")
+      .select("email")
+      .eq("tenant_id", tenant.id)
+      .eq("email", normalized)
+      .maybeSingle();
+    // 등록된 관리자이거나, (방어적으로) 백필 누락 시에도 소유자 이메일은 항상 허용.
+    if (data || isOwner) return { tenantId: tenant.id, email: normalized };
+    return null;
+  }
+
+  // DB 미연결(개발 모드) — 테넌트 소유자 이메일만 허용.
+  return isOwner ? { tenantId: tenant.id, email: normalized } : null;
 }
 
 export async function requestLoginOtp(email: string): Promise<LoginActionResult> {
