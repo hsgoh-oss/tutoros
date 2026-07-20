@@ -56,9 +56,22 @@ export function Select({
   children,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement>) {
+  // appearance-none으로 네이티브 화살표를 지우므로, 직접 쉐브론을 얹어 "드롭다운" 어포던스를 준다.
   return (
-    <select className={cn(control, "appearance-none", className)} {...props}>
-      {children}
-    </select>
+    <div className="relative">
+      <select className={cn(control, "appearance-none pr-10", className)} {...props}>
+        {children}
+      </select>
+      <svg
+        aria-hidden
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+      >
+        <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
   );
 }

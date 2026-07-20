@@ -11,6 +11,10 @@ import { runLessonReminder } from "./jobs/lessonReminder.ts";
 import { runPaymentD3 } from "./jobs/paymentD3.ts";
 import { runPaymentOverdueNotice } from "./jobs/paymentOverdueNotice.ts";
 import { runWeeklyReportDraft } from "./jobs/weeklyReportDraft.ts";
+import { runReviewRequest } from "./jobs/reviewRequest.ts";
+import { runMonthlyReportDraft } from "./jobs/monthlyReportDraft.ts";
+import { runDdayRecalc } from "./jobs/ddayRecalc.ts";
+import { runNotifyRetry } from "./jobs/notifyRetry.ts";
 
 type JobResult = Record<string, number>;
 type JobHandler = (db: ReturnType<typeof createServiceClient>) => Promise<JobResult>;
@@ -20,6 +24,10 @@ const JOBS: Record<string, JobHandler> = {
   payment_d3: runPaymentD3,
   payment_overdue_notice: runPaymentOverdueNotice,
   weekly_report_draft: runWeeklyReportDraft,
+  review_request: runReviewRequest,
+  monthly_report_draft: runMonthlyReportDraft,
+  dday_recalc: runDdayRecalc,
+  notify_retry: runNotifyRetry,
 };
 
 function json(body: unknown, status = 200): Response {

@@ -13,11 +13,31 @@ export default async function FaqPage() {
   const tenant = await resolveTenant();
   const content = await getSiteContent(tenant.id);
 
+  const faqJsonLd =
+    content.faqs.length > 0
+      ? {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: content.faqs.map((f) => ({
+            "@type": "Question",
+            name: f.question,
+            acceptedAnswer: { "@type": "Answer", text: f.answer },
+          })),
+        }
+      : null;
+
   return (
     <>
+      {faqJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        />
+      )}
       <Section className="pt-14 md:pt-20">
         <Container className="max-w-3xl">
           <SectionHeading
+            as="h1"
             eyebrow="FAQ"
             title="자주 묻는 질문"
             desc="상담 전 궁금한 점을 먼저 확인해 보세요."

@@ -10,7 +10,13 @@ import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { ActionButton } from "@/components/admin/crm/action-button";
 import { reviewerTypeLabel } from "./constants";
-import { deleteReview, restoreReviewsBackup, togglePinReview } from "./actions";
+import {
+  deleteReview,
+  moveReviewDown,
+  moveReviewUp,
+  restoreReviewsBackup,
+  togglePinReview,
+} from "./actions";
 
 export default async function ReviewsPage() {
   const session = await getAdminSession();
@@ -56,11 +62,12 @@ export default async function ReviewsPage() {
                 <Th>출처</Th>
                 <Th>일자</Th>
                 <Th>고정</Th>
+                <Th>순서</Th>
                 <Th>삭제</Th>
               </tr>
             </thead>
             <tbody>
-              {reviews.map((r) => (
+              {reviews.map((r, i) => (
                 <tr key={r.id}>
                   <Td>
                     <Link
@@ -88,6 +95,24 @@ export default async function ReviewsPage() {
                       id={r.id}
                       label={r.isPinned ? "고정 해제" : "고정"}
                     />
+                  </Td>
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <ActionButton
+                        action={moveReviewUp}
+                        id={r.id}
+                        label="위로"
+                        className={i === 0 ? "pointer-events-none opacity-30" : undefined}
+                      />
+                      <ActionButton
+                        action={moveReviewDown}
+                        id={r.id}
+                        label="아래로"
+                        className={
+                          i === reviews.length - 1 ? "pointer-events-none opacity-30" : undefined
+                        }
+                      />
+                    </div>
                   </Td>
                   <Td>
                     <ActionButton

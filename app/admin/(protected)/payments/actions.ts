@@ -4,23 +4,13 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { formatWon } from "@/lib/data/crm";
-import { createPaymentLink, isTossConfigured } from "@/lib/payments/toss";
 import { sendNotification } from "@/lib/notify/send";
 import { renderTemplate } from "@/lib/notify/templates";
 import type { PaymentMethod } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
-const VALID_METHODS: PaymentMethod[] = ["toss", "payssaem", "bank"];
-
-interface PaymentForLinkRow {
-  id: string;
-  amount: number;
-  method: PaymentMethod;
-  status: string;
-  period_start: string;
-  period_end: string;
-}
+const VALID_METHODS: PaymentMethod[] = ["payssaem", "bank"];
 
 interface PaymentWithStudentRow {
   id: string;
@@ -100,57 +90,8 @@ export async function markPaid(id: string): Promise<CrmActionResult> {
   return { ok: true };
 }
 
-/** 토스 결제 링크 발급 — 링크 생성만 하고 발송은 하지 않는다(발송은 선생님이 수동으로). */
-export async function issueTossLink(id: string): Promise<CrmActionResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, error: "인증이 필요합니다." };
-  if (!hasDb()) return { ok: false, error: DB_ERROR };
-  if (!isTossConfigured()) {
-    return { ok: false, error: "토스 시크릿 키가 설정되지 않았습니다." };
-  }
-
-  const db = createServiceClient()!;
-  const { data, error: fetchError } = await db
-    .from("payments")
-    .select("id, amount, method, status, period_start, period_end")
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id)
-    .maybeSingle();
-  if (fetchError || !data) {
-    return { ok: false, error: "청구 정보를 찾을 수 없습니다." };
-  }
-  const payment = data as PaymentForLinkRow;
-  if (payment.method !== "toss") {
-    return { ok: false, error: "토스 결제 수단인 청구만 링크를 발급할 수 있습니다." };
-  }
-  if (payment.status === "paid") {
-    return { ok: false, error: "완납된 청구는 링크를 발급할 수 없습니다." };
-  }
-
-  const result = await createPaymentLink({
-    id: payment.id,
-    amount: payment.amount,
-    orderName: `수강료 ${payment.period_start}~${payment.period_end}`,
-  });
-  if (!result.ok || !result.url) {
-    return { ok: false, error: result.error ?? "결제 링크 발급에 실패했습니다." };
-  }
-
-  const { error } = await db
-    .from("payments")
-    .update({ pay_url: result.url })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[payments] issueTossLink update failed", error);
-    return { ok: false, error: "결제 링크 저장 중 오류가 발생했습니다." };
-  }
-
-  revalidatePayment(id);
-  return { ok: true };
-}
-
-/** 청구 안내 알림 발송 — 선생님이 수동으로 클릭할 때만 발송(자동 발송 금지, 기획 고정). */
+/** 청구 안내 알림 발송 — 선생님이 수동으로 클릭할 때만 발송(자동 발송 금지, 기획 고정).
+ *  무통장입금·결제선생 모두 수동 완납이므로 링크 없이 안내 문구만 발송한다. */
 export async function sendPaymentRequestNotice(id: string): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };

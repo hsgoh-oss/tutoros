@@ -124,7 +124,7 @@ export function ConsultForm({
 
   if (submitState === "success") {
     return (
-      <Card className="flex flex-col items-start gap-5 p-10">
+      <Card role="status" aria-live="polite" className="flex flex-col items-start gap-5 p-10">
         <p className="text-sm font-extrabold text-brand-600">접수 완료</p>
         <h3 className="text-2xl font-black tracking-tight text-ink">
           상담 신청이 접수되었습니다
@@ -150,9 +150,18 @@ export function ConsultForm({
       <Card className="space-y-6 p-8">
         <div className="grid gap-5 md:grid-cols-2">
           <Field label="이름" required>
-            <Input {...register("name")} placeholder="홍길동" />
+            <Input
+              {...register("name")}
+              placeholder="홍길동"
+              aria-invalid={errors.name ? true : undefined}
+              aria-describedby={errors.name ? "consult-name-error" : undefined}
+            />
             {errors.name && (
-              <p className="mt-1.5 text-xs font-semibold text-rose-600">
+              <p
+                id="consult-name-error"
+                role="alert"
+                className="mt-1.5 text-xs font-semibold text-rose-600"
+              >
                 {errors.name.message}
               </p>
             )}
@@ -169,11 +178,17 @@ export function ConsultForm({
                   onBlur={field.onBlur}
                   inputMode="numeric"
                   placeholder="010-1234-5678"
+                  aria-invalid={errors.phone ? true : undefined}
+                  aria-describedby={errors.phone ? "consult-phone-error" : undefined}
                 />
               )}
             />
             {errors.phone && (
-              <p className="mt-1.5 text-xs font-semibold text-rose-600">
+              <p
+                id="consult-phone-error"
+                role="alert"
+                className="mt-1.5 text-xs font-semibold text-rose-600"
+              >
                 {errors.phone.message}
               </p>
             )}
@@ -241,7 +256,7 @@ export function ConsultForm({
       </Card>
 
       <Card className="space-y-5 p-8">
-        <label className="flex min-h-11 items-start gap-3">
+        <label className="flex min-h-12 items-start gap-3">
           <input
             type="checkbox"
             className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
@@ -255,7 +270,13 @@ export function ConsultForm({
         {isStudentSelf && (
           <div className="space-y-5 border-t border-line pt-5">
             <Field label="출생년도" required>
-              <Select {...register("birthYear")}>
+              <Select
+                {...register("birthYear")}
+                aria-invalid={errors.birthYear ? true : undefined}
+                aria-describedby={
+                  errors.birthYear ? "consult-birthyear-error" : undefined
+                }
+              >
                 <option value="">선택해 주세요</option>
                 {BIRTH_YEARS.map((y) => (
                   <option key={y} value={y}>
@@ -264,7 +285,11 @@ export function ConsultForm({
                 ))}
               </Select>
               {errors.birthYear && (
-                <p className="mt-1.5 text-xs font-semibold text-rose-600">
+                <p
+                  id="consult-birthyear-error"
+                  role="alert"
+                  className="mt-1.5 text-xs font-semibold text-rose-600"
+                >
                   {errors.birthYear.message}
                 </p>
               )}
@@ -277,9 +302,20 @@ export function ConsultForm({
                 </p>
                 <div className="grid gap-5 md:grid-cols-2">
                   <Field label="보호자 성명" required>
-                    <Input {...register("guardianName")} placeholder="보호자 이름" />
+                    <Input
+                      {...register("guardianName")}
+                      placeholder="보호자 이름"
+                      aria-invalid={errors.guardianName ? true : undefined}
+                      aria-describedby={
+                        errors.guardianName ? "consult-guardianname-error" : undefined
+                      }
+                    />
                     {errors.guardianName && (
-                      <p className="mt-1.5 text-xs font-semibold text-rose-600">
+                      <p
+                        id="consult-guardianname-error"
+                        role="alert"
+                        className="mt-1.5 text-xs font-semibold text-rose-600"
+                      >
                         {errors.guardianName.message}
                       </p>
                     )}
@@ -297,21 +333,37 @@ export function ConsultForm({
                           onBlur={field.onBlur}
                           inputMode="numeric"
                           placeholder="010-1234-5678"
+                          aria-invalid={errors.guardianPhone ? true : undefined}
+                          aria-describedby={
+                            errors.guardianPhone
+                              ? "consult-guardianphone-error"
+                              : undefined
+                          }
                         />
                       )}
                     />
                     {errors.guardianPhone && (
-                      <p className="mt-1.5 text-xs font-semibold text-rose-600">
+                      <p
+                        id="consult-guardianphone-error"
+                        role="alert"
+                        className="mt-1.5 text-xs font-semibold text-rose-600"
+                      >
                         {errors.guardianPhone.message}
                       </p>
                     )}
                   </Field>
                 </div>
-                <label className="flex min-h-11 items-start gap-3">
+                <label className="flex min-h-12 items-start gap-3">
                   <input
                     type="checkbox"
                     className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
                     {...register("guardianConsent")}
+                    aria-invalid={errors.guardianConsent ? true : undefined}
+                    aria-describedby={
+                      errors.guardianConsent
+                        ? "consult-guardianconsent-error"
+                        : undefined
+                    }
                   />
                   <span className="text-sm font-bold text-ink-soft">
                     법정대리인으로서 위 신청 및 아래 개인정보 처리에
@@ -319,7 +371,11 @@ export function ConsultForm({
                   </span>
                 </label>
                 {errors.guardianConsent && (
-                  <p className="text-xs font-semibold text-rose-600">
+                  <p
+                    id="consult-guardianconsent-error"
+                    role="alert"
+                    className="text-xs font-semibold text-rose-600"
+                  >
                     {errors.guardianConsent.message}
                   </p>
                 )}
@@ -329,11 +385,15 @@ export function ConsultForm({
         )}
 
         <div className="space-y-3 border-t border-line pt-5">
-          <label className="flex min-h-11 items-start gap-3">
+          <label className="flex min-h-12 items-start gap-3">
             <input
               type="checkbox"
               className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
               {...register("privacyConsent")}
+              aria-invalid={errors.privacyConsent ? true : undefined}
+              aria-describedby={
+                errors.privacyConsent ? "consult-privacyconsent-error" : undefined
+              }
             />
             <span className="text-sm leading-relaxed text-ink-soft">
               [필수] 개인정보 수집·이용 동의 (TUTOR OS 플랫폼 처리위탁 및
@@ -345,12 +405,16 @@ export function ConsultForm({
             </span>
           </label>
           {errors.privacyConsent && (
-            <p className="text-xs font-semibold text-rose-600">
+            <p
+              id="consult-privacyconsent-error"
+              role="alert"
+              className="text-xs font-semibold text-rose-600"
+            >
               {errors.privacyConsent.message}
             </p>
           )}
 
-          <label className="flex min-h-11 items-start gap-3">
+          <label className="flex min-h-12 items-start gap-3">
             <input
               type="checkbox"
               className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
@@ -364,7 +428,10 @@ export function ConsultForm({
       </Card>
 
       {serverError && (
-        <p className="rounded-panel border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+        <p
+          role="alert"
+          className="rounded-panel border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700"
+        >
           {serverError}
         </p>
       )}

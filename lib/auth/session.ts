@@ -12,8 +12,40 @@ const OTP_TTL_MS = 10 * 60 * 1000; // 10분
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_INTERVAL_MS = 60 * 1000; // 60초
 
+const DEV_SECRET = "dev-only-secret-change-me";
+
+// 세션 쿠키·OTP 해시 서명 키. 프로덕션에서 미설정/기본값이면 즉시 실패한다 —
+// 이 키가 유출/기본값이면 임의 tenant의 관리자 세션을 위조할 수 있어 전 격리가 무력화된다.
 function secret(): string {
-  return process.env.AUTH_SECRET ?? "dev-only-secret-change-me";
+  const s = process.env.AUTH_SECRET;
+  if (!s || s === DEV_SECRET) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "AUTH_SECRET 미설정 — 프로덕션에서는 강력한 무작위 값이 필수입니다(관리자 세션 위조 방지).",
+      );
+    }
+    return DEV_SECRET;
+  }
+  return s;
+}
+
+// 로그인 OTP 요청 rate limit — 이메일당 슬라이딩 윈도우.
+// 서버리스 다중 인스턴스에선 인스턴스별로 동작(완전 방어는 아님) — 60초 재발송·5회 시도 캡과 함께 다층 방어.
+const otpRequestLog = new Map<string, number[]>();
+const OTP_RATE_WINDOW_MS = 10 * 60 * 1000; // 10분
+const OTP_RATE_MAX = 5;
+
+function otpRateLimited(email: string, now: number): boolean {
+  const recent = (otpRequestLog.get(email) ?? []).filter(
+    (t) => now - t < OTP_RATE_WINDOW_MS,
+  );
+  if (recent.length >= OTP_RATE_MAX) {
+    otpRequestLog.set(email, recent);
+    return true;
+  }
+  recent.push(now);
+  otpRequestLog.set(email, recent);
+  return false;
 }
 
 function sign(payload: string): string {
@@ -92,9 +124,12 @@ export interface OtpResult {
 }
 
 export async function issueOtp(tenantId: string, email: string): Promise<OtpResult> {
+  const now = Date.now();
+  if (otpRateLimited(email, now)) {
+    return { ok: false, error: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." };
+  }
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const codeHash = hashOtp(email, code);
-  const now = Date.now();
   const db = createServiceClient();
 
   if (db) {

@@ -6,8 +6,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import type { Review } from "@/lib/types";
+import { reviewerTypeLabel } from "./constants";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
 const STORAGE_ERROR =
@@ -146,25 +148,44 @@ export async function createReview(formData: FormData): Promise<CrmActionResult>
   }
 
   const db = createServiceClient()!;
+  const { count } = await db
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", session.tenantId);
+
   const uploaded = await uploadScreenshots(db, session.tenantId, files);
   if ("error" in uploaded) return { ok: false, error: uploaded.error };
 
   await backupReviews(db, session.tenantId);
 
-  const { error } = await db.from("reviews").insert({
-    tenant_id: session.tenantId,
-    reviewer_type: parsed.reviewerType,
-    content: parsed.content,
-    rating: parsed.rating,
-    before_grade: parsed.beforeGrade,
-    after_grade: parsed.afterGrade,
-    meta: metaPayload(parsed),
-    screenshots: uploaded,
-  });
+  const { data: inserted, error } = await db
+    .from("reviews")
+    .insert({
+      tenant_id: session.tenantId,
+      reviewer_type: parsed.reviewerType,
+      content: parsed.content,
+      rating: parsed.rating,
+      before_grade: parsed.beforeGrade,
+      after_grade: parsed.afterGrade,
+      meta: metaPayload(parsed),
+      screenshots: uploaded,
+      sort_order: count ?? 0,
+    })
+    .select("id")
+    .maybeSingle();
   if (error) {
     console.error("[reviews] insert failed", error);
     return { ok: false, error: "후기 등록 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "create",
+    "review",
+    inserted?.id ?? null,
+    `${reviewerTypeLabel(parsed.reviewerType)} 후기 등록`,
+  );
 
   revalidateReviews();
   return { ok: true };
@@ -239,6 +260,15 @@ export async function updateReview(formData: FormData): Promise<CrmActionResult>
     return { ok: false, error: "후기 수정 중 오류가 발생했습니다." };
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "review",
+    id,
+    `${reviewerTypeLabel(parsed.reviewerType)} 후기 수정`,
+  );
+
   revalidateReviews();
   revalidatePath(`/admin/reviews/${id}`);
   return { ok: true };
@@ -272,6 +302,15 @@ export async function togglePinReview(id: string): Promise<CrmActionResult> {
     console.error("[reviews] pin toggle failed", error);
     return { ok: false, error: "고정 상태 변경 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "review",
+    id,
+    existing.is_pinned ? "후기 고정 해제" : "후기 고정",
+  );
 
   revalidateReviews();
   return { ok: true };
@@ -313,8 +352,79 @@ export async function deleteReview(id: string): Promise<CrmActionResult> {
     return { ok: false, error: "후기 삭제 중 오류가 발생했습니다." };
   }
 
+  await logActivity(session.tenantId, session.email, "delete", "review", id, "후기 삭제");
+
   revalidateReviews();
   return { ok: true };
+}
+
+async function moveReview(id: string, direction: "up" | "down"): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+
+  const db = createServiceClient()!;
+  const { data: rows, error: listError } = await db
+    .from("reviews")
+    .select("id,sort_order")
+    .eq("tenant_id", session.tenantId)
+    .order("sort_order", { ascending: true });
+  if (listError || !rows) {
+    console.error("[reviews] fetch order failed", listError);
+    return { ok: false, error: "정렬 순서를 불러오지 못했습니다." };
+  }
+
+  const index = rows.findIndex((r: { id: string }) => r.id === id);
+  if (index === -1) return { ok: false, error: "후기를 찾을 수 없습니다." };
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= rows.length) {
+    return {
+      ok: false,
+      error: direction === "up" ? "이미 첫 번째 항목입니다." : "이미 마지막 항목입니다.",
+    };
+  }
+
+  const current = rows[index] as { id: string; sort_order: number };
+  const target = rows[targetIndex] as { id: string; sort_order: number };
+
+  await backupReviews(db, session.tenantId);
+
+  const [{ error: error1 }, { error: error2 }] = await Promise.all([
+    db
+      .from("reviews")
+      .update({ sort_order: target.sort_order })
+      .eq("tenant_id", session.tenantId)
+      .eq("id", current.id),
+    db
+      .from("reviews")
+      .update({ sort_order: current.sort_order })
+      .eq("tenant_id", session.tenantId)
+      .eq("id", target.id),
+  ]);
+  if (error1 || error2) {
+    console.error("[reviews] move failed", error1 ?? error2);
+    return { ok: false, error: "순서 변경 중 오류가 발생했습니다." };
+  }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "review",
+    id,
+    direction === "up" ? "후기 순서 위로 이동" : "후기 순서 아래로 이동",
+  );
+
+  revalidateReviews();
+  return { ok: true };
+}
+
+export async function moveReviewUp(id: string): Promise<CrmActionResult> {
+  return moveReview(id, "up");
+}
+
+export async function moveReviewDown(id: string): Promise<CrmActionResult> {
+  return moveReview(id, "down");
 }
 
 interface ReviewSnapshotRow {

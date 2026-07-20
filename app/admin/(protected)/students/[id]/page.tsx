@@ -7,12 +7,17 @@ import {
   getStudent,
   getStudentSummary,
   listConsents,
+  listMaterials,
+  listStudentNotifications,
 } from "@/lib/data/crm";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
-import { updateStudent } from "../actions";
+import { PortalLinkCard } from "@/components/admin/portal-link";
+import { regeneratePortalToken, updateStudent } from "../actions";
 import { StudentFormFields } from "../student-form-fields";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
 import { classTypeLabel, studentStatusLabel, studentStatusTone } from "../constants";
 import { consentItemLabel } from "../../consultations/constants";
 
@@ -22,6 +27,18 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   paid: "완납",
   overdue: "미납",
 };
+
+const NOTIFY_STATUS_LABEL: Record<string, string> = {
+  queued: "대기",
+  sent: "발송",
+  failed: "실패",
+};
+
+function notifyStatusTone(status: string): "success" | "danger" | "soft" {
+  if (status === "sent") return "success";
+  if (status === "failed") return "danger";
+  return "soft";
+}
 
 export default async function StudentDetailPage({
   params,
@@ -35,9 +52,11 @@ export default async function StudentDetailPage({
   const student = await getStudent(session.tenantId, id);
   if (!student) notFound();
 
-  const [summary, consents] = await Promise.all([
+  const [summary, consents, notifications, materials] = await Promise.all([
     getStudentSummary(session.tenantId, id),
     listConsents(session.tenantId, "student", id),
+    listStudentNotifications(session.tenantId, id, 10),
+    listMaterials(session.tenantId, id),
   ]);
 
   return (
@@ -202,6 +221,60 @@ export default async function StudentDetailPage({
           </Card>
 
           <Card>
+            <h2 className="mb-3 text-sm font-black text-ink-soft">알림 이력</h2>
+            {notifications.length === 0 ? (
+              <p className="text-sm text-muted">발송된 알림이 없습니다.</p>
+            ) : (
+              <ul className="space-y-3">
+                {notifications.map((n) => (
+                  <li
+                    key={n.id}
+                    className="flex items-center justify-between border-b border-line pb-3 last:border-0 last:pb-0"
+                  >
+                    <div>
+                      <p className="text-sm font-bold">{n.type}</p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {formatKDate(n.sentAt)}
+                      </p>
+                    </div>
+                    <Badge tone={notifyStatusTone(n.status)}>
+                      {NOTIFY_STATUS_LABEL[n.status] ?? n.status}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 text-sm font-black text-ink-soft">자료</h2>
+            {materials.length === 0 ? (
+              <p className="text-sm text-muted">등록된 자료가 없습니다.</p>
+            ) : (
+              <ul className="space-y-3">
+                {materials.map((m) => (
+                  <li
+                    key={m.id}
+                    className="border-b border-line pb-3 last:border-0 last:pb-0"
+                  >
+                    <a
+                      href={m.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-bold text-brand-700 hover:underline"
+                    >
+                      {m.name}
+                    </a>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {formatKDate(m.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card>
             <h2 className="mb-3 text-sm font-black text-ink-soft">동의 내역</h2>
             {consents.length === 0 ? (
               <p className="text-sm text-muted">기록된 동의 내역이 없습니다.</p>
@@ -222,14 +295,24 @@ export default async function StudentDetailPage({
             )}
           </Card>
 
-          {student.notionPageId && (
-            <Card>
-              <h2 className="mb-2 text-sm font-black text-ink-soft">Notion 연동</h2>
-              <p className="text-xs text-muted">
-                연결된 페이지: {student.notionPageId}
-              </p>
-            </Card>
-          )}
+          <Card>
+            <h2 className="mb-2 text-sm font-black text-ink-soft">
+              학생·학부모 리포트 링크
+            </h2>
+            <p className="mb-3 text-xs leading-relaxed text-muted">
+              승인된 리포트를 학생·학부모가 이 링크로 조회합니다(읽기 전용).
+              링크가 있으면 누구나 열람하니 공유에 주의하세요.
+            </p>
+            {student.portalToken ? (
+              <PortalLinkCard
+                url={`${SITE_URL}/portal/${student.portalToken}`}
+                studentId={student.id}
+                regenerate={regeneratePortalToken}
+              />
+            ) : (
+              <p className="text-xs text-muted">DB 연결 후 자동 발급됩니다.</p>
+            )}
+          </Card>
         </div>
       </div>
     </div>

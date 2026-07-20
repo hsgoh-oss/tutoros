@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
+import { GradeTrend } from "@/components/admin/grade-trend";
 
 export default async function GradesPage({
   searchParams,
@@ -45,6 +46,18 @@ export default async function GradesPage({
             필터 해제
           </Link>
         </div>
+      )}
+
+      {student && grades.length > 0 && (
+        <GradeTrend
+          grades={grades.map((g) => ({
+            examName: g.examName,
+            examDate: g.examDate,
+            percentile: g.percentile,
+            grade: g.grade,
+            rawScore: g.rawScore,
+          }))}
+        />
       )}
 
       {grades.length === 0 ? (

@@ -89,16 +89,18 @@ else
   echo "  ↷ 생략 (--seed 옵션으로 활성화)"
 fi
 
-echo "═══ 4/5 Storage 버킷 (materials·photos·reviews, 공개 읽기) ═══"
+echo "═══ 4/5 Storage 버킷 (materials=비공개·서명URL / photos·reviews=공개 읽기) ═══"
 if [ "$SKIP_BUCKETS" = true ]; then
   echo "  ↷ 생략 (--skip-buckets)"
 else
   for bucket in materials photos reviews; do
+    # materials는 학생 PII 자료 — 비공개(서명 URL로만 접근). photos·reviews는 공개 사이트 자산.
+    if [ "$bucket" = "materials" ]; then pub=false; else pub=true; fi
     code="$(curl -s -o /tmp/bucket_resp.json -w "%{http_code}" \
       -X POST "$SUPABASE_URL/storage/v1/bucket" \
       -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
       -H "Content-Type: application/json" \
-      -d "{\"id\":\"$bucket\",\"name\":\"$bucket\",\"public\":true,\"file_size_limit\":10485760}")"
+      -d "{\"id\":\"$bucket\",\"name\":\"$bucket\",\"public\":$pub,\"file_size_limit\":10485760}")"
     case "$code" in
       200|201) echo "  ✔ 생성: $bucket" ;;
       400|409)

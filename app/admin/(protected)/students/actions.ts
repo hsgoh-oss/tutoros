@@ -1,8 +1,10 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
+import { logActivity } from "@/lib/data/activity";
 import type { ClassType, Student } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -105,6 +107,15 @@ export async function createStudent(formData: FormData): Promise<CrmActionResult
     await recordStudentPhoneConsent(session.tenantId, student.id);
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "create",
+    "student",
+    student.id,
+    `학생 '${parsed.name}' 등록`,
+  );
+
   revalidatePath("/admin/students");
   return { ok: true };
 }
@@ -144,7 +155,47 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
     await recordStudentPhoneConsent(session.tenantId, id);
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "student",
+    id,
+    `학생 '${parsed.name}' 정보 수정`,
+  );
+
   revalidatePath("/admin/students");
+  revalidatePath(`/admin/students/${id}`);
+  return { ok: true };
+}
+
+/** 리포트 포털 링크 재발급 — 기존 토큰을 새 값으로 회전(이전 링크 즉시 무효화). */
+export async function regeneratePortalToken(id: string): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+  if (!id) return { ok: false, error: "잘못된 요청입니다." };
+
+  const db = createServiceClient()!;
+  const { error } = await db
+    .from("students")
+    .update({ portal_token: randomBytes(16).toString("hex") })
+    .eq("tenant_id", session.tenantId)
+    .eq("id", id);
+  if (error) {
+    console.error("[students] portal token regenerate failed", error);
+    return { ok: false, error: "링크 재발급 중 오류가 발생했습니다." };
+  }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "student",
+    id,
+    "포털 링크 재발급",
+  );
+
   revalidatePath(`/admin/students/${id}`);
   return { ok: true };
 }
@@ -188,6 +239,15 @@ export async function bulkCreateStudents(
     console.error("[students] bulk insert failed", error);
     return { ok: false, error: "CSV 일괄 등록 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "create",
+    "student",
+    null,
+    `학생 CSV 일괄 등록 (${valid.length}건)`,
+  );
 
   revalidatePath("/admin/students");
   return { ok: true, created: valid.length, skipped };

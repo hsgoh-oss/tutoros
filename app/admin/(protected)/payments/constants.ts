@@ -26,15 +26,13 @@ export function paymentStatusTone(status: PaymentStatus): BadgeTone {
 }
 
 export const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
-  { value: "toss", label: "토스 링크" },
+  { value: "bank", label: "계좌이체(무통장입금)" },
   { value: "payssaem", label: "결제선생" },
-  { value: "bank", label: "계좌이체" },
 ];
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
-  toss: "토스 링크",
   payssaem: "결제선생",
-  bank: "계좌이체",
+  bank: "계좌이체(무통장입금)",
 };
 
 export function paymentMethodLabel(method: PaymentMethod): string {

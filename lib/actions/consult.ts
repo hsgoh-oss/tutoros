@@ -5,6 +5,7 @@ import { resolveTenant } from "@/lib/tenant";
 import { sendNotification } from "@/lib/notify/send";
 import {
   consultFormSchema,
+  isMinorBirthYear,
   type ConsultFormValues,
 } from "@/components/public/consult/schema";
 
@@ -67,27 +68,26 @@ export async function submitConsult(
     };
   }
 
+  // 만 14세 미만 학생 본인 신청 + 법정대리인 동의 체크 시 guardian 동의를 기록한다.
+  const isMinorGuardian =
+    data.isStudentSelf &&
+    !!data.birthYear &&
+    isMinorBirthYear(Number(data.birthYear)) &&
+    data.guardianConsent;
+
+  const consentBase = {
+    tenant_id: tenant.id,
+    subject_type: "consultation",
+    subject_id: inserted.id,
+    policy_version: POLICY_VERSION,
+    via: "form",
+  };
+  // 필수 동의 문구에 'AI 처리 목적 가명화 국외이전'이 포함되므로 privacy와 함께 overseas_ai도 기록.
   const consentRows = [
-    {
-      tenant_id: tenant.id,
-      subject_type: "consultation",
-      subject_id: inserted.id,
-      item: "privacy",
-      policy_version: POLICY_VERSION,
-      via: "form",
-    },
-    ...(data.marketingConsent
-      ? [
-          {
-            tenant_id: tenant.id,
-            subject_type: "consultation",
-            subject_id: inserted.id,
-            item: "marketing",
-            policy_version: POLICY_VERSION,
-            via: "form",
-          },
-        ]
-      : []),
+    { ...consentBase, item: "privacy" },
+    { ...consentBase, item: "overseas_ai" },
+    ...(data.marketingConsent ? [{ ...consentBase, item: "marketing" }] : []),
+    ...(isMinorGuardian ? [{ ...consentBase, item: "guardian" }] : []),
   ];
 
   const { error: consentError } = await db.from("consents").insert(consentRows);

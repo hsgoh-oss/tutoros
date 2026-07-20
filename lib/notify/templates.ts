@@ -27,6 +27,7 @@ export type NotifyType =
   | "weekly_report"
   | "monthly_report"
   | "exam_report"
+  | "review_request"
   | "schedule_unresolved";
 
 export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
@@ -35,7 +36,7 @@ export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   trial_scheduled: "{name}님, 시범수업이 {date}로 예약되었습니다.",
   lesson_reminder: "{name}님, {date} 수업 예정입니다. 준비물을 확인해 주세요.",
   lesson_report: "{name}님, 오늘 수업 리포트가 도착했습니다.",
-  payment_request: "{name}님, {amount} 청구서가 발행되었습니다. 아래 링크에서 결제해 주세요.",
+  payment_request: "{name}님, {amount} 수강료 청구서가 발행되었습니다. 안내드린 방법(계좌이체 또는 결제선생)으로 결제 부탁드립니다.",
   payment_d3: "{name}님, 결제 마감일이 3일 남았습니다. ({amount})",
   payment_paid: "{name}님, 결제가 완료되었습니다. 감사합니다.",
   payment_overdue: "{name}님, 결제 기한이 지났습니다. 확인 부탁드립니다. ({amount})",
@@ -43,6 +44,7 @@ export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   weekly_report: "{name}님, 주간 학습 리포트가 도착했습니다.",
   monthly_report: "{name}님, 월간 학습 리포트가 도착했습니다.",
   exam_report: "{name}님, 시험 분석 리포트가 도착했습니다.",
+  review_request: "{name}님, 그동안의 수업은 어떠셨나요? 짧은 후기를 남겨 주시면 큰 힘이 됩니다.",
   // 선생님 내부 알림. 실제 문구는 automation_schedule_autoclean(00002)이 미처리 건수를 넣어
   // 완성된 message로 적재하므로 renderTemplate를 거치지 않는다. 이 항목은 isNotifyType 통과용.
   schedule_unresolved: "어제 이전 미처리 일정이 있습니다. 관리자 페이지에서 확인해 주세요.",

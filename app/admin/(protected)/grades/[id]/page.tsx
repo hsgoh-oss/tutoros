@@ -5,7 +5,7 @@ import { getGrade, listStudentOptions } from "@/lib/data/crm";
 import { Card } from "@/components/ui/card";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { ActionButton } from "@/components/admin/crm/action-button";
-import { updateGrade, deleteGrade } from "../actions";
+import { updateGrade, deleteGrade, generateExamReport } from "../actions";
 import { GradeFormFields } from "../grade-form-fields";
 
 export default async function GradeDetailPage({
@@ -42,7 +42,15 @@ export default async function GradeDetailPage({
           <input type="hidden" name="id" value={grade.id} />
           <GradeFormFields studentOptions={studentOptions} record={grade} />
         </SubmitForm>
-        <div className="mt-6 border-t border-line pt-4">
+        <div className="mt-6 flex flex-wrap items-center gap-5 border-t border-line pt-4">
+          <ActionButton
+            action={generateExamReport}
+            id={grade.id}
+            label="시험 리포트 생성"
+            pendingLabel="생성 중..."
+            confirmText="이 시험 성적으로 학부모용·학생용 리포트 초안을 생성하시겠습니까? (AI 참고용, 발송 전 검토 필요)"
+            redirectTo={`/admin/reports?student=${grade.studentId}`}
+          />
           <ActionButton
             action={deleteGrade}
             id={grade.id}

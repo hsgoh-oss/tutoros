@@ -55,7 +55,7 @@ export function RateCalculator({ rates }: { rates: Rates }) {
                 type="button"
                 onClick={() => setMode(value)}
                 className={cn(
-                  "flex-1 rounded-panel border px-4 py-3 text-sm font-extrabold transition-colors",
+                  "flex min-h-12 flex-1 items-center justify-center rounded-panel border px-4 text-sm font-extrabold transition-colors",
                   mode === value
                     ? "border-brand-600 bg-brand-50 text-brand-700"
                     : "border-line text-muted hover:border-brand-200",

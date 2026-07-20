@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
@@ -59,6 +60,15 @@ export async function createDday(formData: FormData): Promise<CrmActionResult> {
     return { ok: false, error: "D-day 추가 중 오류가 발생했습니다." };
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "create",
+    "dday",
+    null,
+    `D-day '${name}' 추가`,
+  );
+
   revalidateDday();
   return { ok: true };
 }
@@ -89,6 +99,15 @@ export async function updateDday(formData: FormData): Promise<CrmActionResult> {
     return { ok: false, error: "D-day 수정 중 오류가 발생했습니다." };
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "dday",
+    id,
+    `D-day '${name}' 수정`,
+  );
+
   revalidateDday();
   return { ok: true };
 }
@@ -111,6 +130,15 @@ export async function deleteDday(id: string): Promise<CrmActionResult> {
     console.error("[dday] delete failed", error);
     return { ok: false, error: "D-day 삭제 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "delete",
+    "dday",
+    id,
+    "D-day 삭제",
+  );
 
   revalidateDday();
   return { ok: true };
@@ -137,6 +165,15 @@ export async function toggleDdayVisibility(
     console.error("[dday] visibility update failed", error);
     return { ok: false, error: "노출 설정 변경 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "dday",
+    id,
+    `D-day 노출 ${value === "true" ? "켜기" : "끄기"}`,
+  );
 
   revalidateDday();
   return { ok: true };
@@ -174,6 +211,15 @@ async function moveDday(id: string, direction: "up" | "down"): Promise<CrmAction
     console.error("[dday] reorder failed", e1 ?? e2);
     return { ok: false, error: "정렬 변경 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "dday",
+    id,
+    `D-day 순서 변경 (${direction === "up" ? "위로" : "아래로"})`,
+  );
 
   revalidateDday();
   return { ok: true };

@@ -5,7 +5,7 @@ import { getLesson, getStudent, formatKDate } from "@/lib/data/crm";
 import { Card } from "@/components/ui/card";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { ActionButton } from "@/components/admin/crm/action-button";
-import { updateLesson, deleteLesson } from "../actions";
+import { updateLesson, deleteLesson, generateLessonReport } from "../actions";
 import { LessonFormFields } from "../lesson-form-fields";
 
 export default async function LessonDetailPage({
@@ -44,6 +44,23 @@ export default async function LessonDetailPage({
           <input type="hidden" name="id" value={lesson.id} />
           <LessonFormFields lesson={lesson} studentName={student?.name ?? "알 수 없음"} />
         </SubmitForm>
+
+        <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-line pt-4">
+          <ActionButton
+            action={generateLessonReport}
+            id={lesson.id}
+            label="리포트 생성"
+            pendingLabel="생성 중..."
+            confirmText="이 수업으로 학부모·학생용 리포트 초안을 생성할까요?"
+            redirectTo={`/admin/reports?student=${lesson.studentId}`}
+          />
+          <Link
+            href={`/admin/materials/new?student=${lesson.studentId}&lesson=${lesson.id}`}
+            className="text-xs font-bold text-brand-700 hover:underline"
+          >
+            자료 첨부
+          </Link>
+        </div>
 
         <div className="mt-4 border-t border-line pt-4">
           <ActionButton

@@ -1,0 +1,77 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getAdminSession } from "@/lib/auth/session";
+import { formatKDateTime, hasDb } from "@/lib/data/crm";
+import { listActivity } from "@/lib/data/activity";
+import { Card } from "@/components/ui/card";
+import { Table, TableWrap, Td, Th } from "@/components/ui/table";
+import { DbBanner } from "@/components/admin/crm/db-banner";
+import { EmptyState } from "@/components/admin/crm/empty-state";
+
+export default async function ActivityPage() {
+  const session = await getAdminSession();
+  if (!session) notFound();
+
+  const connected = hasDb();
+  const entries = await listActivity(session.tenantId, 100);
+
+  return (
+    <div>
+      <div className="mb-8">
+        <Link
+          href="/admin/dashboard"
+          className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
+        >
+          ← 대시보드
+        </Link>
+        <h1 className="mt-2 text-xl font-black tracking-tight">변경 이력</h1>
+        <p className="mt-1 text-sm text-muted">
+          주요 변경 작업의 감사 로그를 최근순으로 확인합니다.
+        </p>
+      </div>
+
+      {!connected && <DbBanner />}
+
+      <Card>
+        {entries.length === 0 ? (
+          <EmptyState
+            title="변경 이력이 없습니다"
+            description="상담·학생·결제 등 주요 작업이 기록되면 이곳에 표시됩니다."
+          />
+        ) : (
+          <TableWrap>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>시각</Th>
+                  <Th>동작</Th>
+                  <Th>대상</Th>
+                  <Th>요약</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e) => (
+                  <tr key={e.id}>
+                    <Td className="whitespace-nowrap text-muted">
+                      {formatKDateTime(e.createdAt)}
+                    </Td>
+                    <Td className="font-bold text-ink">{e.action}</Td>
+                    <Td>
+                      <span className="text-ink-soft">{e.targetType}</span>
+                      {e.targetId && (
+                        <span className="ml-1 text-xs text-muted">
+                          {e.targetId}
+                        </span>
+                      )}
+                    </Td>
+                    <Td className="text-ink-soft">{e.summary}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableWrap>
+        )}
+      </Card>
+    </div>
+  );
+}

@@ -9,12 +9,16 @@ import type {
   ConsentItem,
   Consultation,
   ConsultationStatus,
+  Dday,
   Faq,
   GradeRecord,
   Lesson,
+  NotificationLog,
   Payment,
   PaymentMethod,
   PaymentStatus,
+  RecruitStatus,
+  ReportType,
   Review,
   ScheduleItem,
   Student,
@@ -80,6 +84,7 @@ interface StudentRow {
   subject_type: string | null;
   status: Student["status"];
   notion_page_id: string | null;
+  portal_token: string | null;
   created_at: string;
 }
 
@@ -95,6 +100,7 @@ function mapStudent(row: StudentRow): Student {
     subjectType: row.subject_type,
     status: row.status,
     notionPageId: row.notion_page_id,
+    portalToken: row.portal_token,
     createdAt: row.created_at,
   };
 }
@@ -134,6 +140,70 @@ export async function getStudent(
     .eq("id", id)
     .maybeSingle();
   return data ? mapStudent(data as StudentRow) : null;
+}
+
+/* ---------- 학생/학부모 리포트 포털 (Notion 대체) ---------- */
+
+export interface PortalStudent {
+  id: string;
+  tenantId: string;
+  name: string;
+}
+
+/** 포털 토큰으로 학생을 조회한다(코드 없는 비공개 링크 방식). */
+export async function getStudentByPortalToken(
+  token: string,
+): Promise<PortalStudent | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  // tenant-scope-ok: portal_token은 추측 불가한 단일 학생 식별자(플랫폼 경로 — 열람 링크에 테넌트 컨텍스트 없음).
+  // 조회된 tenant_id를 이후 리포트 조회 스코프에 사용한다.
+  const { data } = await db
+    .from("students")
+    .select("id, tenant_id, name")
+    .eq("portal_token", token)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as { id: string; tenant_id: string; name: string };
+  return { id: row.id, tenantId: row.tenant_id, name: row.name };
+}
+
+export interface PortalReport {
+  id: string;
+  type: ReportType;
+  content: string;
+  createdAt: string;
+}
+
+/** 포털에 노출할 리포트 — 승인/발송된 학부모·학생용만(내부용·초안·실패 제외). */
+export async function listPortalReports(
+  tenantId: string,
+  studentId: string,
+): Promise<PortalReport[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("ai_reports")
+    .select("id, type, content, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("student_id", studentId)
+    .in("status", ["approved", "sent"])
+    .in("audience", ["parent", "student"])
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((r) => {
+    const row = r as {
+      id: string;
+      type: ReportType;
+      content: string;
+      created_at: string;
+    };
+    return {
+      id: row.id,
+      type: row.type,
+      content: row.content,
+      createdAt: row.created_at,
+    };
+  });
 }
 
 /* ---------- 수업 기록 ---------- */
@@ -231,6 +301,7 @@ interface ScheduleRow {
   class_type: ClassType;
   status: ScheduleItem["status"];
   reminder_sent: boolean;
+  lesson_id: string | null;
 }
 
 interface ScheduleJoinRow extends ScheduleRow {
@@ -245,6 +316,7 @@ function mapSchedule(row: ScheduleRow): ScheduleItem {
     classType: row.class_type,
     status: row.status,
     reminderSent: row.reminder_sent,
+    lessonId: row.lesson_id,
   };
 }
 
@@ -508,20 +580,43 @@ export interface MaterialListItem extends LessonMaterial {
   studentName: string | null;
 }
 
+const MATERIALS_BUCKET = "materials";
+const MATERIAL_URL_TTL_S = 60 * 60; // 서명 URL 1시간 만료
+
+/** 저장된 file_url(비공개 버킷 오브젝트 경로)로 만료 서명 URL을 발급한다. 레거시 public URL은 그대로 반환. */
+async function materialSignedUrl(
+  db: NonNullable<ReturnType<typeof createServiceClient>>,
+  fileUrl: string,
+): Promise<string> {
+  if (/^https?:\/\//.test(fileUrl)) return fileUrl; // 레거시 public URL 호환
+  const { data } = await db.storage
+    .from(MATERIALS_BUCKET)
+    .createSignedUrl(fileUrl, MATERIAL_URL_TTL_S);
+  return data?.signedUrl ?? "";
+}
+
 export async function listMaterials(
   tenantId: string,
+  studentId?: string,
 ): Promise<MaterialListItem[]> {
   const db = createServiceClient();
   if (!db) return [];
-  const { data } = await db
+  let query = db
     .from("lesson_materials")
     .select("*, students(name)")
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
-  return (data ?? []).map((r) => {
-    const row = r as MaterialJoinRow;
-    return { ...mapMaterial(row), studentName: row.students?.name ?? null };
-  });
+  if (studentId) query = query.eq("student_id", studentId);
+  const { data } = await query;
+  const rows = (data ?? []) as MaterialJoinRow[];
+  // materials는 비공개 버킷 — 조회 시점에 만료 서명 URL을 발급한다(URL만 알면 열리던 PII 노출 차단).
+  return Promise.all(
+    rows.map(async (row) => ({
+      ...mapMaterial(row),
+      fileUrl: await materialSignedUrl(db, row.file_url),
+      studentName: row.students?.name ?? null,
+    })),
+  );
 }
 
 /* ---------- 상담 ---------- */
@@ -743,6 +838,7 @@ export async function listReviews(tenantId: string): Promise<Review[]> {
     .select("*")
     .eq("tenant_id", tenantId)
     .order("is_pinned", { ascending: false })
+    .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
   return (data ?? []).map((r) => mapReview(r as ReviewRow));
 }
@@ -760,6 +856,144 @@ export async function getReview(
     .eq("id", id)
     .maybeSingle();
   return data ? mapReview(data as ReviewRow) : null;
+}
+
+/* ---------- 관리자 대시보드 보조 ---------- */
+
+/** 관리자용 D-day 전체(숨김 포함) — 공개 getSiteContent와 달리 is_visible 필터 없음. */
+export async function listTenantDdays(tenantId: string): Promise<Dday[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("ddays")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("sort_order");
+  return (data ?? []).map((r) => {
+    const row = r as {
+      id: string;
+      name: string;
+      exam_date: string;
+      is_visible: boolean;
+      sort_order: number;
+    };
+    return {
+      id: row.id,
+      name: row.name,
+      examDate: row.exam_date,
+      isVisible: row.is_visible,
+      sortOrder: row.sort_order,
+    };
+  });
+}
+
+export async function getRecruitStatus(
+  tenantId: string,
+): Promise<RecruitStatus | null> {
+  const db = createServiceClient();
+  if (!db) return null;
+  const { data } = await db
+    .from("recruit_status")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as {
+    status: RecruitStatus["status"];
+    message: string;
+    seat_count: number | null;
+    is_banner_visible: boolean;
+  };
+  return {
+    status: row.status,
+    message: row.message,
+    seatCount: row.seat_count,
+    isBannerVisible: row.is_banner_visible,
+  };
+}
+
+export interface DueSoonPayment {
+  id: string;
+  studentName: string;
+  amount: number;
+  dueDate: string | null;
+}
+
+/** 청구 필요 목록 — pending이고 due_date가 오늘~오늘+days 사이(D-3 안내 대상). */
+export async function listPaymentsDueSoon(
+  tenantId: string,
+  days = 3,
+): Promise<DueSoonPayment[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const to = new Date(now.getTime() + days * 24 * 3600 * 1000);
+  const { data } = await db
+    .from("payments")
+    .select("id, amount, due_date, students(name)")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pending")
+    .gte("due_date", fmt(now))
+    .lte("due_date", fmt(to))
+    .order("due_date", { ascending: true });
+  return (data ?? []).map((r) => {
+    const row = r as unknown as {
+      id: string;
+      amount: number;
+      due_date: string | null;
+      students: { name: string } | null;
+    };
+    return {
+      id: row.id,
+      studentName: row.students?.name ?? "알 수 없음",
+      amount: row.amount,
+      dueDate: row.due_date,
+    };
+  });
+}
+
+/** 학생별 알림 이력(최근순). */
+export async function listStudentNotifications(
+  tenantId: string,
+  studentId: string,
+  limit = 10,
+): Promise<NotificationLog[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("notifications")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("student_id", studentId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []).map((r) => {
+    const row = r as {
+      id: string;
+      student_id: string | null;
+      type: string;
+      channel: "alimtalk" | "sms";
+      phone: string;
+      message: string;
+      status: "queued" | "sent" | "failed";
+      is_ad: boolean;
+      retry_count: number;
+      sent_at: string | null;
+    };
+    return {
+      id: row.id,
+      studentId: row.student_id,
+      type: row.type,
+      channel: row.channel,
+      phone: row.phone,
+      message: row.message,
+      status: row.status,
+      isAd: row.is_ad,
+      retryCount: row.retry_count,
+      sentAt: row.sent_at,
+    };
+  });
 }
 
 /* ---------- FAQ ---------- */

@@ -12,7 +12,6 @@ import {
 } from "../constants";
 import {
   deletePayment,
-  issueTossLink,
   markPaid,
   sendPaymentRequestNotice,
 } from "../actions";
@@ -46,18 +45,6 @@ export default async function PaymentDetailPage({
           <Badge tone={paymentStatusTone(payment.status)}>
             {paymentStatusLabel(payment.status)}
           </Badge>
-          {payment.method === "toss" && payment.status !== "paid" && (
-            <ActionButton
-              action={issueTossLink}
-              id={payment.id}
-              label={payment.payUrl ? "토스 결제 링크 재발급" : "토스 결제 링크 발급"}
-              pendingLabel="발급 중..."
-              confirmText={
-                payment.payUrl ? "기존 링크를 새로 발급하시겠습니까?" : undefined
-              }
-              className="rounded-full border border-line bg-soft px-4 py-2 text-xs font-bold text-brand-700 hover:bg-line/40"
-            />
-          )}
         </div>
       </div>
 
@@ -106,18 +93,6 @@ export default async function PaymentDetailPage({
                 </div>
               )}
             </dl>
-            {payment.payUrl && (
-              <div className="mt-4 rounded-panel bg-soft p-4 text-sm">
-                <a
-                  href={payment.payUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-bold text-brand-700 hover:underline"
-                >
-                  결제 링크 열기 →
-                </a>
-              </div>
-            )}
           </Card>
         </div>
 

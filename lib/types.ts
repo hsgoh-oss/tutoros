@@ -133,6 +133,7 @@ export interface Student {
   subjectType: string | null;
   status: "trial" | "active" | "paused" | "ended";
   notionPageId: string | null;
+  portalToken: string | null; // 네이티브 학생/학부모 리포트 포털 링크 토큰
   createdAt: string;
 }
 
@@ -155,6 +156,7 @@ export interface ScheduleItem {
   classType: ClassType;
   status: "planned" | "done" | "canceled" | "makeup";
   reminderSent: boolean;
+  lessonId: string | null; // 완료 시 자동 생성·연결된 수업 기록
 }
 
 export interface GradeRecord {
@@ -167,7 +169,7 @@ export interface GradeRecord {
   examDate: string | null;
 }
 
-export type PaymentMethod = "toss" | "payssaem" | "bank";
+export type PaymentMethod = "payssaem" | "bank"; // 토스 제거 — 무통장입금(bank)+결제선생(payssaem)
 export type PaymentStatus = "draft" | "pending" | "paid" | "overdue";
 
 export interface Payment {

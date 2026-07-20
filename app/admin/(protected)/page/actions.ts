@@ -6,6 +6,8 @@ import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getSiteContent } from "@/lib/data/content";
 import { getBackup, recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
+import { toWebp } from "@/lib/images";
 import type { CaseItem, ChecklistItem, Rates, SubjectCard } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -290,10 +292,18 @@ export async function uploadPhoto(formData: FormData): Promise<CrmActionResult> 
   const current = await getSitePhotos(session.tenantId);
   await recordBackup(session.tenantId, "settings:photos", current);
 
-  const objectPath = `${session.tenantId}/${randomUUID()}.${extension}`;
+  // WebP로 변환해 업로드(기획 7-7 형식 자동 변환). 실패 시 원본을 그대로 저장한다.
+  const webp = await toWebp(file);
+  const objectPath = webp
+    ? `${session.tenantId}/${randomUUID()}.webp`
+    : `${session.tenantId}/${randomUUID()}.${extension}`;
   const { error: uploadError } = await db.storage
     .from(PHOTOS_BUCKET)
-    .upload(objectPath, file, { contentType: file.type || undefined });
+    .upload(
+      objectPath,
+      webp ? webp.buffer : file,
+      { contentType: webp ? webp.contentType : file.type || undefined },
+    );
   if (uploadError) {
     console.error("[page] photo upload failed", uploadError);
     return { ok: false, error: "사진 업로드 중 오류가 발생했습니다(Storage 버킷 photos 설정을 확인해 주세요)." };
@@ -320,6 +330,8 @@ export async function uploadPhoto(formData: FormData): Promise<CrmActionResult> 
       if (removeError) console.error("[page] old photo remove failed", removeError);
     }
   }
+
+  await logActivity(session.tenantId, session.email, "update", "photo", null, "사진 업로드/교체");
 
   revalidatePath("/", "layout");
   return { ok: true };

@@ -9,6 +9,7 @@ import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { InlineSelect } from "@/components/admin/crm/inline-select";
 import { ActionButton } from "@/components/admin/crm/action-button";
+import { ScheduleCalendar } from "@/components/admin/schedule-calendar";
 import {
   SCHEDULE_STATUS_OPTIONS,
   classTypeLabel,
@@ -49,20 +50,137 @@ function addDays(date: Date, days: number): Date {
   return copy;
 }
 
+// month 파라미터는 "YYYY-MM". week와 같은 이유로 연/월을 직접 파싱해 로컬 Date로 다룬다.
+function parseMonth(value: string | undefined): Date | null {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, y, m] = match;
+  return new Date(Number(y), Number(m) - 1, 1);
+}
+
+function firstDayOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function toMonthOnly(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function formatKMonth(date: Date): string {
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+}
+
 export default async function SchedulesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; view?: string; month?: string }>;
 }) {
-  const { week } = await searchParams;
+  const { week, view: viewParam, month: monthParam } = await searchParams;
+  const view: "week" | "month" = viewParam === "month" ? "month" : "week";
+
+  const session = await getAdminSession();
+  const connected = hasDb();
+
+  // 주간 ↔ 월간 뷰 토글 (양쪽 뷰에서 공용)
+  const viewToggle = (
+    <div className="flex items-center gap-1">
+      <Link
+        href="/admin/schedules?view=week"
+        className={buttonClass(view === "week" ? "primary" : "ghost", "sm")}
+      >
+        주간
+      </Link>
+      <Link
+        href="/admin/schedules?view=month"
+        className={buttonClass(view === "month" ? "primary" : "ghost", "sm")}
+      >
+        월간
+      </Link>
+    </div>
+  );
+
+  const header = (
+    <>
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-black tracking-tight">일정 관리</h1>
+          <p className="mt-1 text-sm text-muted">
+            {view === "month"
+              ? "월간 달력에서 수업 일정을 한눈에 확인합니다."
+              : "주간 수업 일정을 확인하고 상태를 관리합니다."}
+          </p>
+        </div>
+        <Link href="/admin/schedules/new" className={buttonClass("primary", "sm")}>
+          신규 등록
+        </Link>
+      </div>
+
+      {!connected && <DbBanner />}
+    </>
+  );
+
+  if (view === "month") {
+    const monthStart = parseMonth(monthParam) ?? firstDayOfMonth(new Date());
+    const nextMonthStart = addMonths(monthStart, 1);
+    const prevMonthStart = addMonths(monthStart, -1);
+    const thisMonthStart = firstDayOfMonth(new Date());
+
+    const schedules = session
+      ? await listSchedules(session.tenantId, {
+          from: monthStart.toISOString(),
+          to: nextMonthStart.toISOString(),
+        })
+      : [];
+
+    return (
+      <div>
+        {header}
+
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {viewToggle}
+            <span className="mx-1 h-5 w-px bg-line" />
+            <Link
+              href={`/admin/schedules?view=month&month=${toMonthOnly(prevMonthStart)}`}
+              className={buttonClass("ghost", "sm")}
+            >
+              이전 달
+            </Link>
+            <Link
+              href={`/admin/schedules?view=month&month=${toMonthOnly(thisMonthStart)}`}
+              className={buttonClass("ghost", "sm")}
+            >
+              이번 달
+            </Link>
+            <Link
+              href={`/admin/schedules?view=month&month=${toMonthOnly(nextMonthStart)}`}
+              className={buttonClass("ghost", "sm")}
+            >
+              다음 달
+            </Link>
+          </div>
+          <p className="text-sm font-bold text-ink-soft">{formatKMonth(monthStart)}</p>
+        </Card>
+
+        <ScheduleCalendar schedules={schedules} month={monthStart} />
+      </div>
+    );
+  }
+
+  // 주간 뷰 (기본)
   const monday = mondayOf(parseDateOnly(week) ?? new Date());
   const sunday = addDays(monday, 6);
   const nextMonday = addDays(monday, 7);
   const prevMonday = addDays(monday, -7);
   const thisMonday = mondayOf(new Date());
 
-  const session = await getAdminSession();
-  const connected = hasDb();
   const schedules = session
     ? await listSchedules(session.tenantId, {
         from: monday.toISOString(),
@@ -72,22 +190,12 @@ export default async function SchedulesPage({
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-black tracking-tight">일정 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            주간 수업 일정을 확인하고 상태를 관리합니다.
-          </p>
-        </div>
-        <Link href="/admin/schedules/new" className={buttonClass("primary", "sm")}>
-          신규 등록
-        </Link>
-      </div>
-
-      {!connected && <DbBanner />}
+      {header}
 
       <Card className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {viewToggle}
+          <span className="mx-1 h-5 w-px bg-line" />
           <Link
             href={`/admin/schedules?week=${toDateOnly(prevMonday)}`}
             className={buttonClass("ghost", "sm")}

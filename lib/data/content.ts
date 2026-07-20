@@ -71,6 +71,7 @@ export const getSiteContent = cache(
         .select("*")
         .eq("tenant_id", tenantId)
         .order("is_pinned", { ascending: false })
+        .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false }),
       db
         .from("faqs")

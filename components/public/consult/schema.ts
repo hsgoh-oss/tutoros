@@ -23,12 +23,17 @@ export const BIRTH_YEAR_MAX = 2016;
 
 const PHONE_REGEX = /^01[016789]-\d{3,4}-\d{4}$/;
 
-// 기획서 확정판 고정값 — 2026년 기준 만 14세 미만 판별(= (2026 − 생년) < 15). 변경 시 CR 필요.
-const AGE_REFERENCE_YEAR = 2026;
+// 만 14세 미만 판별 — 만 나이 근사식: (현재 연도 − 출생 연도) < 15.
+// ⚠️ 기존엔 기획서 확정판 고정값 AGE_REFERENCE_YEAR=2026을 사용했으나, 2027년부터
+//    미성년 판별이 틀어지는 시한폭탄이라 "현재 연도" 기준 동적 계산으로 교체했다.
+//    법정대리인 동의 게이트라 최신성이 곧 정확성이다. 판별 시점마다 재평가되도록
+//    상수 캡처가 아닌 함수 내부에서 new Date()를 읽는다.
+//    (기획서 "2026 고정" 문구와 상충 — 갑 확정/CR 대상. 확정 시 이 주석 갱신.)
 const MINOR_AGE_THRESHOLD = 15;
 
 export function isMinorBirthYear(birthYear: number): boolean {
-  return AGE_REFERENCE_YEAR - birthYear < MINOR_AGE_THRESHOLD;
+  const currentYear = new Date().getFullYear();
+  return currentYear - birthYear < MINOR_AGE_THRESHOLD;
 }
 
 // <select>의 "선택 안 함" 옵션은 빈 문자열로 제출된다 — enum 검증 전에 undefined로 정규화.

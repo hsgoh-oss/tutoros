@@ -19,6 +19,7 @@ export default async function ReviewsPage() {
       <Section className="pt-14 md:pt-20">
         <Container>
           <SectionHeading
+            as="h1"
             eyebrow="수강 후기"
             title="학생·학부모가 남긴 실제 이야기"
             desc="과장 없이, 실제로 수업을 들은 학생과 학부모의 후기만 싣습니다."

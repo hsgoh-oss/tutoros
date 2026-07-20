@@ -35,8 +35,8 @@ export function FaqExplorer({ faqs }: { faqs: Faq[] }) {
           type="button"
           onClick={() => setCategory(null)}
           className={cn(
-            // min-h-11: 모바일 탭타깃 44px
-            "inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-extrabold tracking-tight transition-colors",
+            // min-h-12: 모바일 탭타깃 48px (계약 최소치)
+            "inline-flex min-h-12 items-center rounded-full border px-4 text-sm font-extrabold tracking-tight transition-colors",
             category === null
               ? "border-brand-600 bg-brand-600 text-white"
               : "border-line text-muted hover:border-brand-200",

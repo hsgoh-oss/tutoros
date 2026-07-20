@@ -1,13 +1,24 @@
 import { getAdminSession } from "@/lib/auth/session";
-import { listStudentOptions } from "@/lib/data/crm";
+import { listStudentOptions, listLessons, formatKDate } from "@/lib/data/crm";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { uploadMaterial } from "../actions";
 
-export default async function NewMaterialPage() {
+export default async function NewMaterialPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ student?: string; lesson?: string }>;
+}) {
+  const { student: selectedStudentId = "", lesson: selectedLessonId = "" } =
+    await searchParams;
   const session = await getAdminSession();
   const students = session ? await listStudentOptions(session.tenantId) : [];
+  // 특정 학생이 지정된 경우에만 그 학생의 수업 회차를 불러와 자료를 특정 회차에 연결할 수 있게 한다.
+  const lessons =
+    session && selectedStudentId
+      ? await listLessons(session.tenantId, selectedStudentId)
+      : [];
 
   return (
     <div>
@@ -40,11 +51,25 @@ export default async function NewMaterialPage() {
             </Field>
 
             <Field label="대상 학생" hint="선택하지 않으면 전체 공유 자료로 등록됩니다">
-              <Select name="studentId" defaultValue="">
+              <Select name="studentId" defaultValue={selectedStudentId}>
                 <option value="">전체 공유</option>
                 {students.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field
+              label="연결할 수업"
+              hint="특정 회차에 첨부하려면 선택하세요 (대상 학생 지정 시 표시)"
+            >
+              <Select name="lessonId" defaultValue={selectedLessonId}>
+                <option value="">미연결</option>
+                {lessons.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.sessionNumber}회차 · {formatKDate(l.lessonDate)}
                   </option>
                 ))}
               </Select>

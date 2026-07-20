@@ -19,3 +19,7 @@ export function paymentD3Message(name: string, amount: number): string {
 export function paymentOverdueMessage(name: string, amount: number): string {
   return `${name}님, 결제 기한이 지났습니다. 확인 부탁드립니다. (${formatWon(amount)})`;
 }
+
+export function reviewRequestMessage(name: string): string {
+  return `${name}님, 그동안의 수업은 어떠셨나요? 짧은 후기를 남겨 주시면 큰 힘이 됩니다.`;
+}

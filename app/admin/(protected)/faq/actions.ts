@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
@@ -64,6 +65,15 @@ export async function createFaq(formData: FormData): Promise<CrmActionResult> {
     return { ok: false, error: "FAQ 등록 중 오류가 발생했습니다." };
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "create",
+    "faq",
+    null,
+    `FAQ 등록 (${parsed.category})`,
+  );
+
   revalidateFaqs();
   return { ok: true };
 }
@@ -96,6 +106,15 @@ export async function updateFaq(formData: FormData): Promise<CrmActionResult> {
     return { ok: false, error: "FAQ 수정 중 오류가 발생했습니다." };
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "faq",
+    id,
+    `FAQ 수정 (${parsed.category})`,
+  );
+
   revalidateFaqs();
   revalidatePath(`/admin/faq/${id}`);
   return { ok: true };
@@ -118,6 +137,15 @@ export async function deleteFaq(id: string): Promise<CrmActionResult> {
     console.error("[faq] delete failed", error);
     return { ok: false, error: "FAQ 삭제 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "delete",
+    "faq",
+    id,
+    "FAQ 삭제",
+  );
 
   revalidateFaqs();
   return { ok: true };
@@ -170,6 +198,15 @@ async function moveFaq(id: string, direction: "up" | "down"): Promise<CrmActionR
     console.error("[faq] move failed", error1 ?? error2);
     return { ok: false, error: "순서 변경 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "faq",
+    id,
+    `FAQ 순서 변경 (${direction === "up" ? "위로" : "아래로"})`,
+  );
 
   revalidateFaqs();
   return { ok: true };

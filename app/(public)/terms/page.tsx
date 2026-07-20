@@ -32,7 +32,7 @@ export default function TermsPage() {
   return (
     <Section className="pt-14 md:pt-20">
       <Container className="max-w-3xl">
-        <SectionHeading eyebrow="약관" title="이용약관" />
+        <SectionHeading as="h1" eyebrow="약관" title="이용약관" />
 
         <div className="mb-10 flex flex-wrap items-center gap-3 rounded-panel border border-line bg-soft px-5 py-4 text-sm text-muted">
           <Badge tone="warning">v0.9 초안</Badge>

@@ -18,6 +18,7 @@ export default async function ConsultPage({
     <Section className="pt-14 md:pt-20">
       <Container className="max-w-3xl">
         <SectionHeading
+          as="h1"
           eyebrow="상담 신청"
           title="지금 상황을 알려주시면 맞춤 상담을 도와드립니다"
           desc="무료 상담이며, 상담 후 등록을 강요하지 않습니다. 확인 후 빠르게 연락드립니다."

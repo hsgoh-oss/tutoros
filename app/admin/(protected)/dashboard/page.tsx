@@ -2,16 +2,23 @@ import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import {
   formatKDate,
+  formatKDateTime,
   formatWon,
   getPaymentSummary,
+  getRecruitStatus,
   hasDb,
   listConsultations,
+  listPaymentsDueSoon,
   listSchedules,
   listStudents,
+  listTenantDdays,
   type ConsultationDetail,
+  type DueSoonPayment,
   type PaymentSummary,
   type ScheduleListItem,
 } from "@/lib/data/crm";
+import { listActivity, type ActivityEntry } from "@/lib/data/activity";
+import type { Dday, RecruitState, RecruitStatus, Student } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
@@ -21,7 +28,10 @@ import {
   consultationStatusLabel,
   consultationStatusTone,
 } from "../consultations/constants";
-import type { Student } from "@/lib/types";
+import { scheduleStatusLabel, scheduleStatusTone } from "../schedules/constants";
+
+// components/ui/badge.tsx가 BadgeTone을 export하지 않아 동일한 값 집합을 로컬로 정의(constants 파일들과 동일 패턴).
+type BadgeTone = "brand" | "soft" | "success" | "warning" | "danger";
 
 // 이번 주 월요일 00:00 ~ 다음 주 월요일 00:00 (schedules 모듈의 주간 계산과 동일 기준).
 function currentWeekRange(): { from: string; to: string } {
@@ -33,6 +43,44 @@ function currentWeekRange(): { from: string; to: string } {
   nextMonday.setDate(monday.getDate() + 7);
   return { from: monday.toISOString(), to: nextMonday.toISOString() };
 }
+
+// 오늘 00:00 ~ 내일 00:00 (currentWeekRange와 동일한 로컬 기준 — 저장된 scheduled_at 해석과 통일).
+function todayRange(): { from: string; to: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(start);
+  tomorrow.setDate(start.getDate() + 1);
+  return { from: start.toISOString(), to: tomorrow.toISOString() };
+}
+
+// examDate("YYYY-MM-DD") 기준 남은 일수 — 로컬 자정 기준으로 계산(시각 성분 제거).
+function daysUntil(dateStr: string): number {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const target = new Date(y, (m ?? 1) - 1, d ?? 1);
+  return Math.round((target.getTime() - start.getTime()) / 86_400_000);
+}
+
+function ddayLabel(dateStr: string): string {
+  const n = daysUntil(dateStr);
+  if (n === 0) return "D-DAY";
+  return n > 0 ? `D-${n}` : `D+${Math.abs(n)}`;
+}
+
+const RECRUIT_LABEL: Record<RecruitState, string> = {
+  open: "모집중",
+  closing: "마감 임박",
+  waitlist: "대기 접수",
+  closed: "마감",
+};
+
+const RECRUIT_TONE: Record<RecruitState, BadgeTone> = {
+  open: "success",
+  closing: "warning",
+  waitlist: "brand",
+  closed: "danger",
+};
 
 const EMPTY_PAYMENT_SUMMARY: PaymentSummary = {
   paidThisMonth: 0,
@@ -49,6 +97,11 @@ export default async function DashboardPage() {
   let weekSchedules: ScheduleListItem[] = [];
   let paymentSummary: PaymentSummary = EMPTY_PAYMENT_SUMMARY;
   let recentConsultations: ConsultationDetail[] = [];
+  let todaySchedules: ScheduleListItem[] = [];
+  let duePayments: DueSoonPayment[] = [];
+  let ddays: Dday[] = [];
+  let recruit: RecruitStatus | null = null;
+  let recentActivity: ActivityEntry[] = [];
 
   if (session) {
     [
@@ -57,16 +110,27 @@ export default async function DashboardPage() {
       weekSchedules,
       paymentSummary,
       recentConsultations,
+      todaySchedules,
+      duePayments,
+      ddays,
+      recruit,
+      recentActivity,
     ] = await Promise.all([
       listConsultations(session.tenantId, { status: "new" }),
       listStudents(session.tenantId, { status: "active" }),
       listSchedules(session.tenantId, currentWeekRange()),
       getPaymentSummary(session.tenantId),
       listConsultations(session.tenantId),
+      listSchedules(session.tenantId, todayRange()),
+      listPaymentsDueSoon(session.tenantId, 3),
+      listTenantDdays(session.tenantId),
+      getRecruitStatus(session.tenantId),
+      listActivity(session.tenantId, 8),
     ]);
   }
 
   const recent = recentConsultations.slice(0, 5);
+  const visibleDdays = ddays.filter((d) => d.isVisible);
 
   return (
     <div>
@@ -116,7 +180,150 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <Card>
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-black tracking-tight">오늘 수업</h2>
+            <Link
+              href="/admin/schedules"
+              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
+            >
+              일정 관리
+            </Link>
+          </div>
+          {todaySchedules.length === 0 ? (
+            <EmptyState title="오늘 예정된 수업이 없습니다" />
+          ) : (
+            <ul className="divide-y divide-line">
+              {todaySchedules.map((s) => (
+                <li
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-ink">
+                      {s.studentName}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {formatKDateTime(s.scheduledAt)}
+                    </p>
+                  </div>
+                  <Badge tone={scheduleStatusTone(s.status)}>
+                    {scheduleStatusLabel(s.status)}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-black tracking-tight">청구 필요 (D-3)</h2>
+            <Link
+              href="/admin/payments"
+              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
+            >
+              결제 관리
+            </Link>
+          </div>
+          {duePayments.length === 0 ? (
+            <EmptyState title="임박한 청구가 없습니다" />
+          ) : (
+            <ul className="divide-y divide-line">
+              {duePayments.map((p) => (
+                <li key={p.id}>
+                  <Link
+                    href={`/admin/payments/${p.id}`}
+                    className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0 hover:text-brand-600"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-ink">
+                        {p.studentName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        마감 {formatKDate(p.dueDate)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-black tracking-tight text-ink">
+                      {formatWon(p.amount)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-black tracking-tight">D-day</h2>
+            <Link
+              href="/admin/settings"
+              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
+            >
+              설정
+            </Link>
+          </div>
+          {visibleDdays.length === 0 ? (
+            <EmptyState title="표시 중인 D-day가 없습니다" />
+          ) : (
+            <ul className="divide-y divide-line">
+              {visibleDdays.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-ink">{d.name}</p>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {formatKDate(d.examDate)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-black tracking-tight text-brand-600">
+                    {ddayLabel(d.examDate)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-black tracking-tight">모집 상태</h2>
+            <Link
+              href="/admin/settings"
+              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
+            >
+              설정
+            </Link>
+          </div>
+          {!recruit ? (
+            <EmptyState title="모집 상태가 설정되지 않았습니다" />
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Badge tone={RECRUIT_TONE[recruit.status]}>
+                  {RECRUIT_LABEL[recruit.status]}
+                </Badge>
+                {recruit.seatCount != null && (
+                  <span className="text-xs font-bold text-muted">
+                    잔여 {recruit.seatCount}석
+                  </span>
+                )}
+              </div>
+              {recruit.message && (
+                <p className="text-sm text-ink-soft">{recruit.message}</p>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <Card className="mb-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-black tracking-tight">최근 상담</h2>
           <Link
@@ -167,6 +374,37 @@ export default async function DashboardPage() {
               </tbody>
             </Table>
           </TableWrap>
+        )}
+      </Card>
+
+      <Card>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-black tracking-tight">최근 변경</h2>
+          <Link
+            href="/admin/activity"
+            className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
+          >
+            전체 보기
+          </Link>
+        </div>
+        {recentActivity.length === 0 ? (
+          <EmptyState title="최근 변경 이력이 없습니다" />
+        ) : (
+          <ul className="divide-y divide-line">
+            {recentActivity.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+              >
+                <p className="min-w-0 truncate text-sm text-ink-soft">
+                  {a.summary}
+                </p>
+                <span className="shrink-0 text-xs text-muted">
+                  {formatKDateTime(a.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
     </div>

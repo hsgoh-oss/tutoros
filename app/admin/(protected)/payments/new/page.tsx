@@ -10,6 +10,15 @@ export default async function NewPaymentPage() {
   const session = await getAdminSession();
   const students = session ? await listStudentOptions(session.tenantId) : [];
 
+  // 4주 정액 기본값 — 한국 시간(KST) 기준 오늘/오늘+27일.
+  const kstDay = (offsetDays = 0) => {
+    const kstMs = Date.now() + 9 * 3600 * 1000 + offsetDays * 24 * 3600 * 1000;
+    return new Date(kstMs).toISOString().slice(0, 10);
+  };
+  const defaultPeriodStart = kstDay(0);
+  const defaultPeriodEnd = kstDay(27);
+  const defaultDueDate = kstDay(27);
+
   return (
     <div>
       <div className="mb-8">
@@ -50,11 +59,11 @@ export default async function NewPaymentPage() {
             </Field>
 
             <Field label="기간 시작" required>
-              <Input type="date" name="periodStart" />
+              <Input type="date" name="periodStart" defaultValue={defaultPeriodStart} />
             </Field>
 
             <Field label="기간 종료" required>
-              <Input type="date" name="periodEnd" />
+              <Input type="date" name="periodEnd" defaultValue={defaultPeriodEnd} />
             </Field>
 
             <Field label="금액" required hint="원 단위">
@@ -62,8 +71,12 @@ export default async function NewPaymentPage() {
             </Field>
 
             <Field label="납기일">
-              <Input type="date" name="dueDate" />
+              <Input type="date" name="dueDate" defaultValue={defaultDueDate} />
             </Field>
+
+            <p className="text-xs text-muted md:col-span-2">
+              4주 정액 기본값이 채워져 있습니다 — 필요 시 수정하세요.
+            </p>
           </div>
         </SubmitForm>
       </Card>

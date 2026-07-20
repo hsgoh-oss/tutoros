@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
 import type { RecruitState } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -67,6 +68,15 @@ export async function saveRecruitStatus(formData: FormData): Promise<CrmActionRe
     console.error("[recruit] save failed", error);
     return { ok: false, error: "모집 현황 저장 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "recruit",
+    null,
+    `모집 현황 변경 (${status})`,
+  );
 
   revalidateRecruit();
   return { ok: true };

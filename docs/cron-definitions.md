@@ -1,4 +1,8 @@
-# 자동화 8종 — 크론 정의서
+# 자동화 크론 정의서 (인프라 8종 + 기획 7-9 추가 4종)
+
+> **2026-07 갱신:** 기존 8종은 인프라 중심 세트다. 기획서 7-9가 명시한 8종 중 누락됐던
+> ④후기요청·⑥월간리포트·⑦D-day재계산·⑧발송실패재시도를 `00005_automation_extra.sql`로 추가했다
+> (모두 automation 엣지 잡, §2 표 9~12). 이로써 기획 7-9의 8종을 모두 커버한다.
 
 > **주의: 기획서 원문(TUTOR_OS_기능기획서_v2.1) 자동화 8종 상세 절이 이 세션에 제공되지 않아,
 > 아래 8종은 계약서 §14 검수 기준 문구("D-3 예정 안내만 자동", "청구 발송은 수동", "Make·구글시트
@@ -60,6 +64,10 @@ select vault.create_secret('<CRON_SECRET 값>', 'cron_secret');
 | 6 | `weekly_report_draft` | 주간 리포트 생성 대기열 | 매주 월 09:00 (월 00:00) | `students.status='active'` 중 지난주(KST 월~일) `lessons` 존재 | `ai_reports` draft 행 삽입(내용은 비움 — AI 생성은 Next 서버가 별도 트리거) | 이번주(KST 이번주 월요일 이후) 동일 학생·`type='weekly'` draft 존재 시 스킵 |
 | 7 | `content_backup_daily` | 설정 일일 백업 | 매일 03:00 (전일 18:00) | tenant별 `site_settings` 전 키 | `backups`(target=`settings:daily`) 스냅샷 1건/tenant + 12개 초과분 삭제 | 순수 SQL, 매일 새 스냅샷 추가 후 정리라 재실행해도 안전 |
 | 8 | `schedule_autoclean` | 미처리 일정 집계 알림 | 매일 04:00 (전일 19:00) | `schedules.status='planned' AND scheduled_at < 오늘(KST)` | tenant별 미처리 건수 집계 → `notifications`(type=`schedule_unresolved`, channel=`sms`) 큐잉 | **연락처(`site_settings.site_info.phone`) 미설정 tenant는 자동 알림을 스킵하고 `NOTICE`만 남긴다 — 이 경우 관리자 대시보드에서 미처리 일정을 수동으로 확인할 것을 권장한다.** 일정 자체의 상태는 변경하지 않음(자동 취소·삭제 없음) |
+| 9 | `review_request` | 후기 요청(기획 7-9 ④) | 매일 11:00 (02:00) | `students.status='active'` 중 첫 수업 `lesson_date`가 28일 이전 | `notifications` 큐잉(type=`review_request`) | 학생당 `review_request` 존재 시 스킵(1회성) |
+| 10 | `monthly_report_draft` | 월간 리포트 초안(기획 7-9 ⑥) | 매월 1일 09:00 (1일 00:00) | active 학생 중 지난 30일 `lessons` 존재 | `ai_reports` draft(type=`monthly`) 삽입 | 이번 달(KST 1일 이후) 동일 학생·`type='monthly'` draft 존재 시 스킵 |
+| 11 | `dday_recalc` | 경과 시험 자동 숨김(기획 7-9 ⑦) | 매일 00:20 (전일 15:20) | `ddays.exam_date < 오늘(KST) AND is_visible=true` | `UPDATE ddays SET is_visible=false` | 이미 숨김이면 재대상 아님(임박 강조는 렌더 시점 계산) |
+| 12 | `notify_retry` | 발송 실패 재큐잉(기획 7-9 ⑧) | 매시 40분 | `notifications.status='failed' AND retry_count<3` | `status='queued'`로 되돌리고 `retry_count+1` → flush가 재발송 | 상태 전환형 + `retry_count` 상한(3) |
 
 ## 3. 알려진 한계 (정직하게 명시)
 

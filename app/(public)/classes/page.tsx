@@ -11,57 +11,38 @@ export const metadata: Metadata = { title: "수업 안내" };
 export default async function ClassesPage() {
   const tenant = await resolveTenant();
   const content = await getSiteContent(tenant.id);
-  const [primarySubject, ...restSubjects] = content.subjects;
 
   return (
     <>
       <Section className="pt-14 md:pt-20">
         <Container>
           <SectionHeading
+            as="h1"
             eyebrow="수업 안내"
             title="내신부터 수리논술까지, 목표에 맞춘 1:1 수업"
             desc="학생의 현재 위치를 먼저 진단하고, 시험에 나오는 것부터 순서대로 채워갑니다."
           />
 
+          {/* 세 트랙 동등한 흰 카드 3열 — 특정 과목 강조 없이 균형 배치 */}
           <div className="grid gap-6 md:grid-cols-3">
-            {primarySubject && (
-              <Card className="flex flex-col gap-4 border-brand-100 bg-brand-600 p-8 text-white md:col-span-1">
-                <p className="text-xs font-extrabold tracking-tight text-brand-100">
-                  {primarySubject.target}
+            {content.subjects.map((s) => (
+              <Card key={s.key} className="flex flex-col gap-3 p-7">
+                <p className="text-xs font-extrabold tracking-tight text-brand-600">
+                  {s.target}
                 </p>
-                <h3 className="text-2xl font-black tracking-tight">
-                  {primarySubject.title}
+                <h3 className="text-xl font-black tracking-tight text-ink">
+                  {s.title}
                 </h3>
-                <p className="text-[15px] leading-[1.86] tracking-tight text-brand-50">
-                  {primarySubject.summary}
+                <p className="text-sm leading-[1.86] tracking-tight text-muted">
+                  {s.summary}
                 </p>
-                <ul className="mt-2 space-y-2 text-sm leading-relaxed text-brand-50">
-                  {primarySubject.points.map((p) => (
+                <ul className="mt-1 space-y-1.5 text-[13px] leading-relaxed text-ink-soft">
+                  {s.points.map((p) => (
                     <li key={p}>· {p}</li>
                   ))}
                 </ul>
               </Card>
-            )}
-            <div className="grid gap-6 md:col-span-2 md:grid-cols-2">
-              {restSubjects.map((s) => (
-                <Card key={s.key} className="flex flex-col gap-3 p-7">
-                  <p className="text-xs font-extrabold tracking-tight text-brand-600">
-                    {s.target}
-                  </p>
-                  <h3 className="text-xl font-black tracking-tight text-ink">
-                    {s.title}
-                  </h3>
-                  <p className="text-sm leading-[1.86] tracking-tight text-muted">
-                    {s.summary}
-                  </p>
-                  <ul className="mt-1 space-y-1.5 text-[13px] leading-relaxed text-ink-soft">
-                    {s.points.map((p) => (
-                      <li key={p}>· {p}</li>
-                    ))}
-                  </ul>
-                </Card>
-              ))}
-            </div>
+            ))}
           </div>
         </Container>
       </Section>

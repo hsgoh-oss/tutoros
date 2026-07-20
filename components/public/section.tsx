@@ -25,14 +25,18 @@ export function SectionHeading({
   title,
   desc,
   align = "left",
+  as = "h2",
   className,
 }: {
   eyebrow?: string;
   title: ReactNode;
   desc?: ReactNode;
   align?: "left" | "center";
+  /** 페이지 선두 제목은 "h1"로 — 페이지당 문서 제목(랜드마크) 1개 보장. 기본은 섹션 제목 "h2". */
+  as?: "h1" | "h2";
   className?: string;
 }) {
+  const Title = as;
   return (
     <div
       className={cn(
@@ -46,9 +50,9 @@ export function SectionHeading({
           {eyebrow}
         </p>
       )}
-      <h2 className="text-[28px] font-black leading-[1.18] tracking-[-0.04em] md:text-[42px]">
+      <Title className="text-[28px] font-black leading-[1.18] tracking-[-0.04em] md:text-[42px]">
         {title}
-      </h2>
+      </Title>
       {desc && (
         <p className="mt-4 text-[17px] leading-[1.86] tracking-tight text-muted">
           {desc}

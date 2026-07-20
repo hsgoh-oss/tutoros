@@ -139,7 +139,7 @@ export default async function PaymentsPage({
                     </Badge>
                   </Td>
                   <Td>
-                    {p.status !== "paid" && p.method !== "toss" && (
+                    {p.status !== "paid" && (
                       <ActionButton
                         action={markPaid}
                         id={p.id}

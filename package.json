@@ -12,7 +12,9 @@
     "verify:rls": "bash scripts/verify-rls.sh",
     "audit:scope": "node scripts/audit-tenant-scope.mjs",
     "audit:notify": "node scripts/audit-notify-types.mjs",
-    "verify:all": "pnpm typecheck && pnpm audit:scope && pnpm audit:notify && pnpm verify:rls"
+    "verify:all": "pnpm typecheck && pnpm audit:scope && pnpm audit:notify && pnpm verify:rls",
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -23,10 +25,12 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.81.0",
+    "sharp": "^0.35.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

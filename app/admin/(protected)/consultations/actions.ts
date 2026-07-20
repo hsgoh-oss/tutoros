@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getConsultation } from "@/lib/data/crm";
+import { logActivity } from "@/lib/data/activity";
 import { createReportRow } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
@@ -47,6 +48,15 @@ export async function updateConsultationStatus(
     return { ok: false, error: "상태 변경 중 오류가 발생했습니다." };
   }
 
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "consultation",
+    id,
+    `상담 상태 변경 (${status})`,
+  );
+
   revalidateConsultation(id);
   return { ok: true };
 }
@@ -72,6 +82,15 @@ export async function updateConsultationMemo(
     console.error("[consultations] memo update failed", error);
     return { ok: false, error: "메모 저장 중 오류가 발생했습니다." };
   }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "update",
+    "consultation",
+    id,
+    "상담 메모 수정",
+  );
 
   revalidateConsultation(id);
   return { ok: true };
@@ -130,6 +149,39 @@ export async function convertToStudent(
     console.error("[consultations] link update failed", updateError);
     return { ok: false, error: "상담 연결 중 오류가 발생했습니다." };
   }
+
+  // 상담 시 받은 동의(privacy·overseas_ai·marketing·guardian)를 학생 레코드로 이관 —
+  // 학생 상세 "동의 내역"에서 보이도록(감사 가시성). 실패해도 전환 자체는 성공 처리.
+  const { data: priorConsents } = await db
+    .from("consents")
+    .select("item, policy_version, via")
+    .eq("tenant_id", session.tenantId)
+    .eq("subject_type", "consultation")
+    .eq("subject_id", id);
+  if (priorConsents && priorConsents.length > 0) {
+    const { error: consentCopyError } = await db.from("consents").insert(
+      priorConsents.map((c) => ({
+        tenant_id: session.tenantId,
+        subject_type: "student",
+        subject_id: student.id,
+        item: c.item,
+        policy_version: c.policy_version,
+        via: c.via,
+      })),
+    );
+    if (consentCopyError) {
+      console.error("[consultations] consent copy failed", consentCopyError);
+    }
+  }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "create",
+    "student",
+    student.id,
+    "상담→학생 전환",
+  );
 
   revalidateConsultation(id);
   revalidatePath("/admin/students");
@@ -199,6 +251,15 @@ export async function generateConsultBrief(
     tokenUsage: generated.tokenUsage ?? null,
   });
   if (!created.ok) return created;
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "create",
+    "report",
+    created.id,
+    "상담 브리핑 생성",
+  );
 
   revalidatePath("/admin/reports");
   return { ok: true, reportId: created.id };
