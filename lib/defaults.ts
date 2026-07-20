@@ -1,5 +1,4 @@
-// 1호 테넌트(AXIOM MATH LAB) 기본 콘텐츠 — v46 운영 사이트 실데이터 기반.
-// DB(site_settings 등)가 연결되면 DB 값이 우선하고, 비어 있는 항목만 이 값으로 폴백된다.
+// 1호 테넌트(AXIOM MATH LAB) 기본 콘텐츠 — DB(site_settings 등) 값이 우선하고 빈 항목만 이 값으로 폴백.
 // 시드(supabase/seed.sql)와 동일 원천 — 수정 시 양쪽 정합 유지.
 
 import type { SiteContent, Tenant } from "@/lib/types";

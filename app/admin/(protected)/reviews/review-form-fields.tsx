@@ -3,7 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { REVIEWER_TYPE_OPTIONS, RATING_OPTIONS } from "./constants";
 import type { Review } from "@/lib/types";
 
-// 신규 등록·수정 공용 필드 — actions.ts parseReviewForm의 name 계약과 1:1.
 export function ReviewFormFields({ review }: { review?: Review }) {
   return (
     <div className="space-y-6">

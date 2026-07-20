@@ -21,8 +21,7 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
   return (
     <header className="sticky top-0 z-60 border-b border-line/85 bg-white/88 backdrop-blur-lg backdrop-saturate-150">
       <div className="mx-auto flex h-[74px] w-full max-w-7xl items-center justify-between gap-6 px-6 md:px-8">
-        {/* 로고 이미지 높이는 31px이라 세로 패딩으로 44px 히트영역을 만든다(모바일 탭타깃).
-            flex 컨테이너로 만들면 next/image가 종횡비 수정으로 오인해 경고를 낸다 — block+py로 처리. */}
+        {/* block+py로 44px 히트영역 — flex로 감싸면 next/image가 종횡비 경고를 낸다. */}
         <Link
           href="/"
           aria-label="AXIOM MATH LAB 홈으로"
@@ -45,7 +44,6 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
               key={item.href}
               href={item.href}
               className={cn(
-                // min-w-11: 짧은 라벨(FAQ)도 44px 탭타깃 확보 — 태블릿(768)도 터치 기기다
                 "relative inline-flex min-w-11 justify-center py-6 text-[15px] font-extrabold tracking-tight text-ink transition-colors hover:text-brand-600",
                 pathname === item.href &&
                   "text-brand-600 after:absolute after:inset-x-0 after:bottom-4 after:h-0.5 after:rounded-full after:bg-brand-600",

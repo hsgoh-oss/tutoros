@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
-// 폰트 파일은 KS X 1001 완성형(2,350자)+라틴 서브셋(1MB→416KB, scripts/subset-font.sh)
-// — 원본 1MB는 시뮬레이션 4G에서 LCP를 7.5s까지 밀어 Lighthouse 모바일 90+(계약)을 깬다.
+// 라틴 서브셋으로 1MB→416KB. 원본은 4G에서 LCP를 밀어 Lighthouse 모바일 90+를 깬다.
 const pretendard = localFont({
   src: "./fonts/PretendardVariable.woff2",
   display: "swap",

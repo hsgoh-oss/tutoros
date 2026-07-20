@@ -50,10 +50,7 @@ function parseLessonForm(formData: FormData): LessonFormPayload | { error: strin
   };
 }
 
-/**
- * 수업 기록 신규 등록.
- * session_number(회차)는 입력받지 않고 해당 학생의 기존 기록 수 + 1로 서버에서 자동 계산(기획 요구).
- */
+/** session_number(회차)는 입력받지 않고 기존 기록 수 + 1로 서버에서 자동 계산(기획 요구). */
 export async function createLesson(formData: FormData): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };

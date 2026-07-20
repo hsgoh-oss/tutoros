@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { buttonClass } from "@/components/ui/button";
 
-// 하단 고정 버튼 — 모바일 전용 바(상담+카카오), 데스크톱은 우하단 플로팅.
-
 export function StickyCta({ kakaoUrl }: { kakaoUrl: string }) {
   return (
     <>

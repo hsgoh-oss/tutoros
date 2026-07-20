@@ -1,5 +1,4 @@
-// job=review_request — 매일: 첫 수업이 4주 이상 지난 active 학생 학부모에게 후기 요청을 큐잉한다.
-// 1회성(멱등): 해당 학생에게 review_request가 한 번이라도 있으면 스킵. 실발송은 flush가 담당.
+// job=review_request — 매일: 첫 수업이 4주 이상 지난 active 학생 학부모에게 후기 요청을 큐잉(1회성, 실발송은 flush).
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDateString } from "../../_shared/kst.ts";

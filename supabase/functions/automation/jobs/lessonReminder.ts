@@ -1,8 +1,5 @@
-// job=lesson_reminder — 매일 18:00 KST(09:00 UTC): 내일(KST) 수업 예정인 학생 학부모에게
-// 리마인더를 큐잉하고 schedules.reminder_sent를 true로 전환한다.
-// 실 발송은 하지 않는다 — notifications에 status='queued'로 적재만 하고, 실제 Solapi 호출은
-// notify_queue_flush(app/api/cron/flush)가 담당한다 (엣지 함수는 Next 전용 dispatchQueued를
-// import할 수 없으므로 여기서는 큐 적재까지만).
+// job=lesson_reminder — 매일 18:00 KST: 내일(KST) 수업 예정 학부모에게 리마인더를 큐잉하고 reminder_sent를 켠다.
+// 실 발송은 flush(app/api/cron/flush)가 담당 — 여기선 notifications에 queued 적재까지만.
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDayRangeUtc, formatKstDateTime } from "../../_shared/kst.ts";

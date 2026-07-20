@@ -23,7 +23,6 @@ export default async function ClassesPage() {
             desc="학생의 현재 위치를 먼저 진단하고, 시험에 나오는 것부터 순서대로 채워갑니다."
           />
 
-          {/* 세 트랙 동등한 흰 카드 3열 — 특정 과목 강조 없이 균형 배치 */}
           <div className="grid gap-6 md:grid-cols-3">
             {content.subjects.map((s) => (
               <Card key={s.key} className="flex flex-col gap-3 p-7">

@@ -1,10 +1,6 @@
-// 자동화 8종 중 DB 조인·조건부 큐잉이 필요한 4종을 한 엣지 함수로 통합 라우팅한다
-// (?job= 파라미터 분기 — 잡별 함수보다 배포·시크릿 관리가 단순해 유지보수가 쉽다).
-// 순수 SQL로 가능한 나머지(payment_overdue_flag·content_backup_daily·schedule_autoclean)는
-// supabase/migrations/00002_automation.sql의 pg_cron 잡이 DB 함수를 직접 호출한다.
-// 실 알림 발송(Solapi)은 여기서 하지 않는다 — notifications에 queued 적재까지만 하고
-// 실발송은 app/api/cron/flush(Next, lib/notify/send.ts 재사용)가 담당한다.
-// 상세: docs/cron-definitions.md
+// 자동화 잡 라우터(?job=) — DB 조인·조건부 큐잉이 필요한 잡들을 한 엣지 함수로 통합한다.
+// 순수 SQL로 되는 나머지는 migrations/00002_automation.sql의 pg_cron이 담당한다.
+// 실 발송은 하지 않는다 — notifications에 queued 적재까지만, 실발송은 app/api/cron/flush. 상세: docs/cron-definitions.md
 
 import { createServiceClient } from "../_shared/db.ts";
 import { runLessonReminder } from "./jobs/lessonReminder.ts";

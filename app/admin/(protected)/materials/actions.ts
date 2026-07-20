@@ -26,7 +26,7 @@ function fileExtension(fileName: string): string {
   return idx >= 0 ? fileName.slice(idx + 1).toLowerCase() : "";
 }
 
-/** file_url에서 버킷 내부 오브젝트 경로를 뽑는다 — 현재는 경로 직접 저장, 레거시 public URL도 호환(삭제 시 재사용). */
+/** file_url에서 버킷 내부 오브젝트 경로 추출 — 경로 직접 저장 + 레거시 public URL 호환. */
 function storageObjectPath(fileUrl: string): string | null {
   const marker = `/${MATERIALS_BUCKET}/`;
   const idx = fileUrl.indexOf(marker);
@@ -69,7 +69,7 @@ export async function uploadMaterial(formData: FormData): Promise<CrmActionResul
   }
 
   const db = createServiceClient()!;
-  // 한글·공백 등 원본 파일명은 안전화하지 않고 랜덤 UUID + 확장자로 대체 — 원본 이름은 name 컬럼에 보존.
+  // 원본 파일명 대신 랜덤 UUID + 확장자로 저장(원본 이름은 name 컬럼에 보존).
   const objectPath = `${session.tenantId}/${randomUUID()}.${extension}`;
   const { error: uploadError } = await db.storage
     .from(MATERIALS_BUCKET)
@@ -86,7 +86,7 @@ export async function uploadMaterial(formData: FormData): Promise<CrmActionResul
       student_id: studentId,
       lesson_id: lessonId,
       name,
-      // 비공개 버킷 — 오브젝트 경로만 저장하고 조회 시점에 서명 URL을 발급한다(lib/data/crm.ts listMaterials).
+      // 비공개 버킷 — 경로만 저장하고 조회 시 서명 URL 발급(lib/data/crm.ts listMaterials).
       file_url: objectPath,
       is_shared: isShared,
     })

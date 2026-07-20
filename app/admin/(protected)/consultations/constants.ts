@@ -1,6 +1,5 @@
 import type { ConsentItem, ConsultationStatus } from "@/lib/types";
 
-// components/ui/badge.tsx가 BadgeTone을 export하지 않아 동일한 값 집합을 로컬로 정의.
 type BadgeTone = "brand" | "soft" | "success" | "warning" | "danger";
 
 export const CONSULTATION_STATUS_OPTIONS: { value: ConsultationStatus; label: string }[] = [

@@ -1,5 +1,4 @@
-// job=notify_retry — 주기 실행: 발송 실패(status='failed') 알림을 재큐잉한다(retry_count 상한).
-// status='queued'로 되돌리고 retry_count를 올리면 다음 flush(app/api/cron/flush)가 재발송한다.
+// job=notify_retry — 발송 실패(status='failed') 알림을 retry_count 상한까지 재큐잉한다(다음 flush가 재발송).
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 

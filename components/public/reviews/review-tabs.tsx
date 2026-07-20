@@ -31,7 +31,6 @@ export function ReviewTabs({ reviews }: { reviews: Review[] }) {
             type="button"
             onClick={() => setTab(t.value)}
             className={cn(
-              // min-h-12: 모바일 탭타깃 48px (계약 최소치)
               "inline-flex min-h-12 items-center rounded-full px-5 text-sm font-extrabold tracking-tight transition-colors",
               tab === t.value
                 ? "bg-brand-600 text-white shadow-lift"

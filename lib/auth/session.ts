@@ -14,8 +14,7 @@ const OTP_RESEND_INTERVAL_MS = 60 * 1000; // 60초
 
 const DEV_SECRET = "dev-only-secret-change-me";
 
-// 세션 쿠키·OTP 해시 서명 키. 프로덕션에서 미설정/기본값이면 즉시 실패한다 —
-// 이 키가 유출/기본값이면 임의 tenant의 관리자 세션을 위조할 수 있어 전 격리가 무력화된다.
+// 세션 쿠키·OTP 서명 키 — 유출/기본값이면 임의 tenant의 관리자 세션을 위조할 수 있어, 프로덕션에선 미설정 시 즉시 실패한다.
 function secret(): string {
   const s = process.env.AUTH_SECRET;
   if (!s || s === DEV_SECRET) {
@@ -29,8 +28,7 @@ function secret(): string {
   return s;
 }
 
-// 로그인 OTP 요청 rate limit — 이메일당 슬라이딩 윈도우.
-// 서버리스 다중 인스턴스에선 인스턴스별로 동작(완전 방어는 아님) — 60초 재발송·5회 시도 캡과 함께 다층 방어.
+// 로그인 OTP 요청 rate limit(이메일당 슬라이딩 윈도우). 서버리스에선 인스턴스별로만 동작 — 60초 재발송·5회 캡과 함께 다층 방어.
 const otpRequestLog = new Map<string, number[]>();
 const OTP_RATE_WINDOW_MS = 10 * 60 * 1000; // 10분
 const OTP_RATE_MAX = 5;
@@ -83,7 +81,6 @@ export function verifySessionToken(token: string): AdminSession | null {
   }
 }
 
-/** 서버 컴포넌트/액션에서 현재 관리자 세션 조회 (미인증 시 null) */
 export async function getAdminSession(): Promise<AdminSession | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
@@ -93,8 +90,7 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
 /* ---------- OTP ---------- */
 
-// 개발 모드(DB 미연결)용 인메모리 저장 — 프로덕션은 admin_otps 테이블 사용.
-// 키는 테넌트별로 분리한다(DB의 복합 PK (tenant_id, email)와 동일한 격리).
+// 개발 모드(DB 미연결)용 인메모리 OTP 저장 — 키를 테넌트별로 분리(DB 복합 PK (tenant_id, email)와 동일 격리).
 const devOtps = new Map<
   string,
   { codeHash: string; expiresAt: number; attempts: number; issuedAt: number }

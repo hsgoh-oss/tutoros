@@ -107,8 +107,7 @@ export async function sendPaymentRequestNotice(id: string): Promise<CrmActionRes
   if (fetchError || !data) {
     return { ok: false, error: "청구 정보를 찾을 수 없습니다." };
   }
-  // students는 payments.student_id 기준 to-one 관계 — Database 제네릭 없이는
-  // supabase-js가 임베드 관계를 배열로 추론해 직접 캐스트가 거부된다. 실제 응답은 단일 객체.
+  // students는 to-one 관계지만 Database 제네릭 없이는 supabase-js가 배열로 추론한다 — 실제 응답은 단일 객체.
   const payment = data as unknown as PaymentWithStudentRow;
   if (!payment.students?.parent_phone) {
     return { ok: false, error: "학부모 연락처를 확인할 수 없습니다." };

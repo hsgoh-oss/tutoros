@@ -1,6 +1,5 @@
-// job=payment_d3 — 매일 10:00 KST(01:00 UTC): due_date = D+3(KST)인 pending 청구에
-// "결제 예정 안내"를 큐잉한다. 계약: 이 안내만 자동 — 청구 링크 발송/재발송은 관리자 수동.
-// 멱등성: payment당 하루 1건만 — 오늘(KST) 이미 같은 학생·타입 알림이 있으면 스킵.
+// job=payment_d3 — 매일 10:00 KST: due_date=D+3(KST)인 pending 청구에 "결제 예정 안내"를 큐잉.
+// 계약: 이 안내만 자동(청구 링크 발송은 관리자 수동). 멱등: 오늘 같은 학생·타입 알림이 있으면 스킵.
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDateString, kstDayRangeUtc } from "../../_shared/kst.ts";

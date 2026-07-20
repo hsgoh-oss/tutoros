@@ -2,8 +2,6 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import type { RecruitStatus } from "@/lib/types";
 
-// 모집 현황 배너 — 상태별 색상(모집중·마감임박·대기·마감), 문구 즉시 반영.
-
 const STATE_STYLE: Record<
   RecruitStatus["status"],
   { chip: string; label: string; bar: string }
@@ -42,7 +40,6 @@ export function RecruitBanner({ recruit }: { recruit: RecruitStatus }) {
         style.bar,
       )}
     >
-      {/* 배너 전체가 /consult로 가는 CTA — 모바일 탭타깃 48px 확보 */}
       <span className="mx-auto inline-flex min-h-12 w-full max-w-7xl items-center justify-center gap-2.5 px-6 md:px-8">
         <span
           className={cn(

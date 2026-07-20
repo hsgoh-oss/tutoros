@@ -1,6 +1,5 @@
-// 알림 발송 골격 — 기획서 6-5 (Solapi: 알림톡 우선 → SMS 자동 폴백, 전 이력 로그).
-// 실 발송 연동(템플릿·야간 대기·광고성 분리·전환 스위치)은 W7(알림 모듈)에서 구현한다.
-// 여기서는 발송 요청 계약과 채널 결정 로직만 확정한다.
+// 알림 발송 계약(요청 타입·채널 결정) — 기획서 6-5(알림톡 우선→SMS 폴백, 전 이력 로그).
+// 실 발송 연동(템플릿·야간 대기·광고성 분리)은 W7.
 
 import type { NotifyType } from "./templates";
 
@@ -9,7 +8,7 @@ export type NotifyChannel = "alimtalk" | "sms";
 export interface NotifyRequest {
   tenantId: string;
   studentId: string | null;
-  /** 알림 종류. string이 아니라 NotifyType이어야 미등록 키(예: 템플릿 없는 exam_report)가 컴파일에 걸린다. */
+  /** NotifyType으로 고정 — 템플릿 없는 미등록 키(예: exam_report)를 컴파일 단계에서 걸러낸다. */
   type: NotifyType;
   phone: string;
   message: string;
@@ -17,9 +16,8 @@ export interface NotifyRequest {
 }
 
 /**
- * 큐(notifications)에서 다시 읽어 발송할 때 쓰는 요청.
- * DB의 type 컬럼에는 CHECK 제약이 없고 SQL·엣지 함수도 행을 적재하므로, 값은 임의 문자열일 수 있다.
- * 미등록 타입이면 알림톡 템플릿 조회가 null을 반환해 SMS로 폴백한다 — message는 이미 완성돼 있어 발송 자체는 안전하다.
+ * 큐(notifications)에서 다시 읽어 발송할 때의 요청. type 컬럼엔 CHECK가 없어(SQL·엣지도 적재) 임의 문자열일 수 있다.
+ * 미등록 타입이면 알림톡 템플릿이 null→SMS 폴백 — message는 이미 완성돼 있어 발송은 안전하다.
  */
 export type DispatchRequest = Omit<NotifyRequest, "type"> & { type: string };
 

@@ -26,9 +26,7 @@ function kstDateOnly(iso: string): string {
 }
 
 /**
- * 일정 완료 시 수업 기록을 자동 생성·연결한다(기획: 완료→수업 자동연결).
- * idempotent — 이미 lesson_id가 있으면 아무것도 하지 않는다.
- * 이 연결이 실패해도 호출부의 상태 변경 성공은 그대로 유지한다(로그만 남김).
+ * 일정 완료 시 수업 기록 자동 생성·연결(기획 요구). idempotent, 실패해도 상태 변경은 유지(로그만).
  */
 async function linkLessonForSchedule(
   db: NonNullable<ReturnType<typeof createServiceClient>>,
@@ -154,7 +152,7 @@ export async function updateScheduleStatus(
     return { ok: false, error: "상태 변경 중 오류가 발생했습니다." };
   }
 
-  // 완료 처리 시 수업 기록 자동 생성·연결(idempotent). 연결 실패해도 상태 변경은 유지한다.
+  // 완료 시 수업 기록 자동 연결(idempotent).
   if (status === "done") {
     await linkLessonForSchedule(db, session.tenantId, id);
   }

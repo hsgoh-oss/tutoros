@@ -24,7 +24,6 @@ export function RateToggle({ rates }: { rates: Rates }) {
             type="button"
             onClick={() => setMode(value)}
             className={cn(
-              // min-h-12: 모바일 탭타깃 48px (계약 최소치)
               "inline-flex min-h-12 items-center rounded-full px-5 text-sm font-extrabold tracking-tight transition-colors",
               mode === value
                 ? "bg-brand-600 text-white shadow-lift"

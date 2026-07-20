@@ -9,9 +9,8 @@ import {
   type ConsultFormValues,
 } from "@/components/public/consult/schema";
 
-// 상담 폼 제출 — 만 14세 미만 로직은 스키마(superRefine)에서 서버 재검증(클라 우회 차단).
-// consultations insert 성공 후 consents(필수 privacy + 선택 marketing) insert.
-// consents insert 실패 시 방금 만든 consultation 행을 삭제해 "동의 없는 상담 접수"가 남지 않게 한다.
+// 상담 폼 제출 — 만 14세 미만 판정은 스키마 superRefine로 서버 재검증(클라 우회 차단).
+// consultations insert 후 consents 기록에 실패하면, 방금 만든 상담 행을 되돌려 "동의 없는 접수"를 막는다.
 
 const POLICY_VERSION = "v0.9";
 const DB_ERROR_MESSAGE =
@@ -68,7 +67,7 @@ export async function submitConsult(
     };
   }
 
-  // 만 14세 미만 학생 본인 신청 + 법정대리인 동의 체크 시 guardian 동의를 기록한다.
+  // 만 14세 미만 본인 신청 + 법정대리인 동의 체크 시에만 guardian 동의를 기록.
   const isMinorGuardian =
     data.isStudentSelf &&
     !!data.birthYear &&
@@ -107,7 +106,7 @@ export async function submitConsult(
     };
   }
 
-  // 접수 확인 알림(정보성) — 실패해도 접수 자체는 성공 처리(알림은 이력 로그로 추적).
+  // 접수 확인 알림 — 실패해도 접수는 성공 처리(알림은 이력 로그로 추적).
   try {
     await sendNotification({
       tenantId: tenant.id,

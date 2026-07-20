@@ -2,7 +2,6 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { CLASS_TYPE_OPTIONS, STUDENT_STATUS_OPTIONS } from "./constants";
 import type { Student } from "@/lib/types";
 
-// 신규 등록·상세 수정 공용 필드 — actions.ts parseStudentForm의 name 계약과 1:1.
 export function StudentFormFields({ student }: { student?: Student }) {
   return (
     <div className="grid gap-5 md:grid-cols-2">

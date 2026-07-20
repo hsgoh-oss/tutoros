@@ -1,7 +1,6 @@
 import { Field, Input, Textarea } from "@/components/ui/form";
 import type { Faq } from "@/lib/types";
 
-// 신규 등록·수정 공용 필드 — actions.ts parseFaqForm의 name 계약과 1:1.
 export function FaqFormFields({ faq }: { faq?: Faq }) {
   return (
     <div className="grid gap-5">

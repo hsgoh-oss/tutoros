@@ -1,6 +1,5 @@
-// job=payment_overdue_notice — 매일 10:30 KST(01:30 UTC): status='overdue' 청구 학부모에게
-// 미납 안내를 큐잉한다. 멱등성: 주 1회 — 최근 7일 내 동일 학생·타입 알림이 있으면 스킵.
-// status='overdue' 전환 자체는 이 잡이 아니라 payment_overdue_flag(순수 SQL)가 담당한다.
+// job=payment_overdue_notice — 매일 10:30 KST: status='overdue' 청구 학부모에게 미납 안내를 큐잉.
+// 멱등: 주 1회(최근 7일 내 동일 알림이면 스킵). overdue 전환 자체는 payment_overdue_flag(순수 SQL)가 담당.
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { paymentOverdueMessage } from "../../_shared/templates.ts";

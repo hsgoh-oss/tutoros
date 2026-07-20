@@ -1,8 +1,5 @@
-// 자동화 잡 전용 메시지 템플릿.
-// lib/notify/templates.ts(Next 전용 — Node crypto 등에 의존)는 Deno 런타임 경계를 넘어
-// import할 수 없어, 이 잡들이 실제로 쓰는 3종 문구만 동일 내용으로 복제한다.
-// 문구를 바꿀 때는 lib/notify/templates.ts의 lesson_reminder/payment_d3/payment_overdue와
-// 함께 수동으로 맞춘다 (docs/cron-definitions.md에 동기화 필요 명시).
+// 자동화 잡 전용 메시지 템플릿 — Deno 런타임이 lib/notify/templates.ts(Node 의존)를 import할 수 없어
+// 실제 쓰는 문구만 복제한다. 변경 시 lib/notify/templates.ts와 수동으로 맞출 것(docs/cron-definitions.md).
 
 export function formatWon(amount: number): string {
   return `${amount.toLocaleString("ko-KR")}원`;

@@ -1,6 +1,5 @@
-// job=monthly_report_draft — 매월 1일: 지난 30일 lessons 기록이 있는 active 학생에 한해
-// ai_reports monthly draft 행만 삽입한다(실제 AI 생성은 관리자 화면). weekly_report_draft 미러.
-// 멱등성: 이번 달 1일 00:00 KST 이후 이미 monthly draft가 있으면 스킵.
+// job=monthly_report_draft — 매월 1일: 지난 30일 lessons가 있는 active 학생에 monthly draft만 삽입(weekly_report_draft 미러).
+// 멱등: 이번 달 1일 00:00 KST 이후 monthly draft가 있으면 스킵.
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDateString, kstMidnightUtc, kstParts } from "../../_shared/kst.ts";

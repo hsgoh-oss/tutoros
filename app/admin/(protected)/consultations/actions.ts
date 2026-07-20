@@ -97,9 +97,7 @@ export async function updateConsultationMemo(
 }
 
 /**
- * 상담 → 학생 원클릭 전환.
- * parent_phone: guardian_phone이 있으면 그것, 없으면 phone.
- * student_phone: 학생 본인 연락처 동의 흐름이 아직 없어 오늘은 null 고정 — 추후 consents(student_phone) 확인 후 채움.
+ * 상담 → 학생 원클릭 전환. student_phone은 본인 연락처 동의 흐름이 없어 null 고정(추후 consents 확인 후 채움).
  */
 export async function convertToStudent(
   id: string,
@@ -150,8 +148,7 @@ export async function convertToStudent(
     return { ok: false, error: "상담 연결 중 오류가 발생했습니다." };
   }
 
-  // 상담 시 받은 동의(privacy·overseas_ai·marketing·guardian)를 학생 레코드로 이관 —
-  // 학생 상세 "동의 내역"에서 보이도록(감사 가시성). 실패해도 전환 자체는 성공 처리.
+  // 상담 동의를 학생 레코드로 이관(감사 가시성). 실패해도 전환 자체는 성공 처리.
   const { data: priorConsents } = await db
     .from("consents")
     .select("item, policy_version, via")
@@ -190,8 +187,7 @@ export async function convertToStudent(
 }
 
 /**
- * 상담 브리핑 AI — 상담 내용을 가명화해 내부용(audience=internal) 요약을 생성하고 ai_reports에 저장한다.
- * 실명(신청자·보호자)은 프롬프트에 전달되지 않는다.
+ * 상담 브리핑 AI — 가명화해 내부용 요약 생성. 실명(신청자·보호자)은 프롬프트에 미전송.
  */
 export async function generateConsultBrief(
   id: string,

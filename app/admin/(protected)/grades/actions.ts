@@ -165,8 +165,7 @@ export async function deleteGrade(id: string): Promise<CrmActionResult> {
 }
 
 /**
- * 시험 리포트 AI — 성적과 최근 추이를 가명화해 학부모용·학생용 리포트 초안(draft)을 각각 생성한다.
- * 실명은 프롬프트에 전달되지 않는다(pseudonymize). 발송은 승인 후 별도 흐름에서만.
+ * 시험 리포트 AI — 학부모·학생용 초안을 각각 생성. 실명 미전송(pseudonymize), 발송은 승인 후에만.
  */
 export async function generateExamReport(
   id: string,
@@ -205,7 +204,6 @@ export async function generateExamReport(
   let context = lines.join("\n");
   context = pseudonymize(context, student.name);
 
-  // 대상별(학부모→학생) 리포트를 각각 생성해 초안으로 저장한다.
   const audiences: { audience: ReportAudience; guide: string }[] = [
     {
       audience: "parent",
@@ -230,7 +228,6 @@ export async function generateExamReport(
 
     const generated = await generateReport("exam", "basic", prompt);
     if (!generated.ok || !generated.content) {
-      // AI 키 미설정·호출 실패 시 초안을 만들지 않고 안전하게 실패 반환.
       return { ok: false, error: generated.error ?? "시험 리포트 생성에 실패했습니다." };
     }
 

@@ -1,8 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
-// 콘텐츠 항목별 백업 — 기획 고정: 항목(target)별 최근 12개 순환 + 시점 복원.
-// 각 관리자 모듈은 저장 직전 recordBackup(직전 상태 스냅샷)을 호출하고,
-// 복원은 모듈별 액션이 getBackup 스냅샷을 자기 저장 로직으로 되돌려 쓴다.
+// 콘텐츠 항목별 백업 — target별 최근 12개만 순환 보관하고 시점 복원을 지원(기획 고정).
 
 export const MAX_BACKUPS_PER_TARGET = 12;
 

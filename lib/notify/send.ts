@@ -8,9 +8,8 @@ import {
 } from "./solapi";
 import { getNotifyTemplateId } from "./templates";
 
-// 알림 발송 진입점 — 모든 모듈(AI 리포트 발송·결제 안내·상담 접수 등)은 이 함수만 호출한다.
-// 계약: 전 이력 notifications 로그 / 알림톡→SMS 폴백 / 야간(21~08) 예약 대기 / 광고성 게이트.
-// 현재는 기능 골격: Solapi 미설정 시 queued로 적재만 하고 실발송은 W7 구현부가 채운다.
+// 알림 발송 진입점 — 모든 모듈이 이 함수만 호출한다. 전 이력 로그 / 알림톡→SMS 폴백 / 야간(21~08) 광고성 대기.
+// Solapi 미설정 시 queued로 적재만, 실발송은 W7.
 
 export interface SendResult {
   ok: boolean;
@@ -67,7 +66,7 @@ export async function sendNotification(
   }
 
   if (!canSendNow) {
-    // Solapi 미설정 또는 야간 대기 — queued 상태로 남긴다(크론이 재시도).
+    // 미설정·야간 대기 — queued로 남겨 두면 크론이 재시도한다.
     return { ok: true, channel, queued: true };
   }
 
@@ -158,10 +157,7 @@ async function sendSms(req: DispatchRequest): Promise<SolapiSendResult> {
   }
 }
 
-/**
- * 실발송 구현부 — Solapi REST 호출(알림톡 우선→SMS 폴백) 후 notifications 상태 갱신.
- * export: notify_queue_flush 크론(app/api/cron/flush)이 이미 queued로 적재된 행을 재시도할 때 재사용한다.
- */
+/** 실발송 — Solapi 호출(알림톡 우선→SMS 폴백) 후 상태 갱신. flush 크론이 queued 행 재시도에도 재사용한다. */
 export async function dispatchQueued(
   notificationId: string,
   req: DispatchRequest,

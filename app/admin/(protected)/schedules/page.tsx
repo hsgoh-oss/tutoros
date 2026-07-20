@@ -17,10 +17,8 @@ import {
 } from "./constants";
 import { deleteSchedule, updateScheduleStatus } from "./actions";
 
-// week 검색 파라미터는 "YYYY-MM-DD" date-only 문자열이다. new Date(dateOnlyString)로 직접
-// 파싱하면 UTC 자정으로 해석되어 scheduled_at 저장 기준(new Date(datetime-local).toISOString(),
-// 로컬 시간 해석)과 어긋난다. 따라서 연/월/일을 직접 파싱해 로컬 Date 생성자(y, m-1, d)로만
-// 다뤄 저장·조회 기준을 통일한다.
+// week 파라미터("YYYY-MM-DD")를 new Date()로 파싱하면 UTC 자정이 되어 저장 기준(로컬 시간 해석)과
+// 어긋난다. 연/월/일을 직접 파싱해 로컬 Date로만 다뤄 저장·조회 기준을 통일한다.
 function parseDateOnly(value: string | undefined): Date | null {
   if (!value) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);

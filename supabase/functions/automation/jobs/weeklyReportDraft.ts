@@ -1,8 +1,5 @@
-// job=weekly_report_draft — 매주 월요일 09:00 KST(00:00 UTC): 재원(active) 학생 중
-// 지난주(KST 월~일) lessons 기록이 있는 학생에 한해 ai_reports draft 행만 삽입한다.
-// AI 키는 Next 서버 전용이므로 엣지에서 Anthropic을 직접 호출하지 않는다 — 실제 리포트
-// 생성은 관리자 화면(생성 대기 draft 확인 후 트리거)에서 이뤄진다.
-// 멱등성: 이번 주(KST 이번주 월요일 00:00 이후) 이미 같은 학생·type='weekly' draft가 있으면 스킵.
+// job=weekly_report_draft — 매주 월 09:00 KST: 지난주 lessons가 있는 active 학생에 ai_reports weekly draft만 삽입.
+// AI 키는 Next 서버 전용이라 엣지에서 생성하지 않는다(실제 생성은 관리자 화면). 멱등: 이번 주 weekly draft가 있으면 스킵.
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDateString, kstDayRangeUtc } from "../../_shared/kst.ts";

@@ -50,7 +50,6 @@ export function FaqExplorer({ faqs }: { faqs: Faq[] }) {
             type="button"
             onClick={() => setCategory(cat)}
             className={cn(
-              // min-h-11: 모바일 탭타깃 44px
               "inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-extrabold tracking-tight transition-colors",
               category === cat
                 ? "border-brand-600 bg-brand-600 text-white"

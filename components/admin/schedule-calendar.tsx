@@ -3,12 +3,10 @@ import { cn } from "@/lib/cn";
 import type { ScheduleItem } from "@/lib/types";
 import type { ScheduleListItem } from "@/lib/data/crm";
 
-// 월간 달력(서버 컴포넌트) — 한 달치 일정을 7열(일~토) 그리드로 렌더한다.
-// scheduledAt(ISO)은 앱 런타임 로컬 기준으로 날짜 그룹핑한다(주간 뷰와 동일 기준).
+// 월간 달력(서버 컴포넌트) — 한 달치 일정을 7열 그리드로 렌더. 날짜 그룹핑은 로컬 기준(주간 뷰와 동일).
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-// 상태별 칩 색상 — Badge 톤과 동일 계열(예정=brand, 완료=emerald, 취소=rose, 보강=amber).
 const STATUS_CHIP: Record<ScheduleItem["status"], string> = {
   planned: "bg-brand-50 text-brand-700",
   done: "bg-emerald-50 text-emerald-700",

@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { Dday } from "@/lib/types";
 
-// 시험 D-day 배너(복수 캡슐형) — 매일 자동 계산, 경과 자동 숨김, 임박(D-30) 컬러 강조.
-// 날짜 계산은 클라이언트(사용자 로컬, KST 가정)에서 수행해 하이드레이션 불일치를 피한다.
+// 날짜 계산은 클라이언트에서(KST 가정) — 서버/클라 시각차로 인한 하이드레이션 불일치 회피.
 
 function daysUntil(dateStr: string): number {
   const [y, m, d] = dateStr.split("-").map(Number);

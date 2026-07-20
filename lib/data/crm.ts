@@ -1,6 +1,5 @@
-// CRM 조회 헬퍼 — 상담·학생·수업·일정·성적·결제·자료 7개 모듈 공용.
-// DB 미연결(hasDb()=false) 시 전부 빈 배열/null 반환 — 페이지는 안내 배너+빈 상태 UI로 대응한다.
-// 컬럼은 snake_case, 반환 타입은 camelCase(lib/types.ts 정합). lesson_materials는 타입 미정의라 이 파일에서 자체 정의한다.
+// CRM 조회 헬퍼 — 상담·학생·수업·일정·성적·결제·자료 공용. snake_case DB ↔ camelCase 앱(lib/types.ts).
+// DB 미연결 시 전부 빈 배열/null 반환. lesson_materials는 타입 미정의라 이 파일에서 자체 정의한다.
 
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import type {
@@ -953,7 +952,6 @@ export async function listPaymentsDueSoon(
   });
 }
 
-/** 학생별 알림 이력(최근순). */
 export async function listStudentNotifications(
   tenantId: string,
   studentId: string,

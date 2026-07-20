@@ -2,7 +2,6 @@ import { Field, Input, Select } from "@/components/ui/form";
 import type { StudentOption } from "@/lib/data/crm";
 import type { GradeRecord } from "@/lib/types";
 
-// 신규 등록·상세 수정 공용 필드 — actions.ts parseGradeForm의 name 계약과 1:1.
 export function GradeFormFields({
   studentOptions,
   record,

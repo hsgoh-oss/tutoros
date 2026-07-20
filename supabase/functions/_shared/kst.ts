@@ -1,5 +1,4 @@
-// Asia/Seoul(KST) 기준 날짜 계산 — Edge Function 실행 서버의 로컬 타임존에 의존하지 않고
-// 항상 Intl로 KST 캘린더일을 뽑아 명시적으로 변환한다 (lib/notify/send.ts의 isNightWindow와 동일 원칙).
+// Asia/Seoul(KST) 날짜 계산 — 실행 서버의 로컬 타임존에 의존하지 않고 항상 Intl로 KST 캘린더일을 뽑아 변환한다.
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");

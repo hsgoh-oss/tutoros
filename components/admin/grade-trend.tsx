@@ -1,7 +1,6 @@
 import { Card } from "@/components/ui/card";
 
-// 성적 추이 라인 차트 — 외부 차트 라이브러리 없이 순수 인라인 SVG로 그린다.
-// 백분위 > 등급(1등급이 최상단이 되도록 반전) > 원점수 순으로 그릴 지표를 자동 선택한다.
+// 성적 추이 라인 차트 — 외부 라이브러리 없이 인라인 SVG. 백분위>등급>원점수 순으로 지표 자동 선택.
 
 export interface GradeTrendPoint {
   examName: string;
@@ -11,17 +10,16 @@ export interface GradeTrendPoint {
   rawScore: number | null;
 }
 
-// 뷰박스 좌표계(실제 렌더 크기는 width:100%로 반응형). 여백은 축 라벨 공간.
 const W = 680;
 const H = 280;
 const M = { top: 24, right: 20, bottom: 44, left: 48 };
 const PLOT_W = W - M.left - M.right;
 const PLOT_H = H - M.top - M.bottom;
 
-const LINE_COLOR = "#2b5ce6"; // brand-600
-const GRID_COLOR = "#e6ebf3"; // line
+const LINE_COLOR = "#2b5ce6";
+const GRID_COLOR = "#e6ebf3";
 const AXIS_COLOR = "#c9d2e3";
-const TEXT_COLOR = "#667085"; // muted
+const TEXT_COLOR = "#667085";
 
 interface Metric {
   label: string;
@@ -124,7 +122,7 @@ export function GradeTrend({ grades }: { grades: GradeTrendPoint[] }) {
   const x = (i: number) => M.left + (n === 1 ? PLOT_W / 2 : (i / (n - 1)) * PLOT_W);
   const y = (display: number) => {
     const t = (display - plotLo) / (plotHi - plotLo);
-    const frac = invert ? t : 1 - t; // invert면 값이 클수록(=나쁠수록) 아래로
+    const frac = invert ? t : 1 - t;
     return M.top + frac * PLOT_H;
   };
 
@@ -188,7 +186,6 @@ export function GradeTrend({ grades }: { grades: GradeTrendPoint[] }) {
           );
         })}
 
-        {/* 축선 */}
         <line
           x1={M.left}
           y1={M.top}
@@ -206,7 +203,6 @@ export function GradeTrend({ grades }: { grades: GradeTrendPoint[] }) {
           strokeWidth={1}
         />
 
-        {/* 추이 폴리라인 */}
         <polyline
           points={polyline}
           fill="none"

@@ -30,7 +30,6 @@ import {
 } from "../consultations/constants";
 import { scheduleStatusLabel, scheduleStatusTone } from "../schedules/constants";
 
-// components/ui/badge.tsx가 BadgeTone을 export하지 않아 동일한 값 집합을 로컬로 정의(constants 파일들과 동일 패턴).
 type BadgeTone = "brand" | "soft" | "success" | "warning" | "danger";
 
 // 이번 주 월요일 00:00 ~ 다음 주 월요일 00:00 (schedules 모듈의 주간 계산과 동일 기준).
@@ -44,7 +43,7 @@ function currentWeekRange(): { from: string; to: string } {
   return { from: monday.toISOString(), to: nextMonday.toISOString() };
 }
 
-// 오늘 00:00 ~ 내일 00:00 (currentWeekRange와 동일한 로컬 기준 — 저장된 scheduled_at 해석과 통일).
+// 오늘 00:00 ~ 내일 00:00 (currentWeekRange와 동일한 로컬 기준).
 function todayRange(): { from: string; to: string } {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -53,7 +52,7 @@ function todayRange(): { from: string; to: string } {
   return { from: start.toISOString(), to: tomorrow.toISOString() };
 }
 
-// examDate("YYYY-MM-DD") 기준 남은 일수 — 로컬 자정 기준으로 계산(시각 성분 제거).
+// examDate("YYYY-MM-DD") 기준 남은 일수 — 로컬 자정 기준 계산.
 function daysUntil(dateStr: string): number {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());

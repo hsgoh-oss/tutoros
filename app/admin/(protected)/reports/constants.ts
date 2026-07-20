@@ -1,7 +1,7 @@
 import type { AiReport, ReportAudience, ReportType } from "@/lib/types";
 import type { NotifyType } from "@/lib/notify/templates";
 
-// components/ui/badge.tsx가 BadgeTone을 export하지 않아 동일한 값 집합을 로컬로 정의(consultations/constants.ts와 동일 패턴).
+// badge.tsx가 BadgeTone을 export하지 않아 로컬 재정의.
 type BadgeTone = "brand" | "soft" | "success" | "warning" | "danger";
 
 export const REPORT_TYPE_OPTIONS: { value: ReportType; label: string }[] = [
@@ -49,9 +49,8 @@ export function reportStatusTone(status: AiReport["status"]): BadgeTone {
 }
 
 /**
- * ai_reports.type → 알림 발송 type 키 매핑. consult_brief(내부용)는 발송 대상이 없어 제외.
- * 값 타입은 반드시 NotifyType — string으로 두면 템플릿에 없는 키를 넣어도 컴파일이 통과한다
- * (실제로 exam_report가 그렇게 누락돼 시험 리포트가 알림톡으로 나가지 못했다).
+ * ai_reports.type → 알림 type 키 매핑(consult_brief는 발송 대상 없어 제외).
+ * 값 타입은 반드시 NotifyType — string이면 템플릿에 없는 키도 컴파일을 통과한다(과거 exam_report 누락 사고).
  */
 export const REPORT_NOTIFY_TYPE: Record<Exclude<ReportType, "consult_brief">, NotifyType> = {
   lesson: "lesson_report",
