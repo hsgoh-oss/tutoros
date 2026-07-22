@@ -513,8 +513,12 @@ export async function getPaymentSummary(
   const db = createServiceClient();
   if (!db) return { paidThisMonth: 0, overdueTotal: 0, pendingTotal: 0 };
 
-  const now = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  // 당월 경계는 KST(UTC+9) 기준으로 잡는다. 서버는 UTC라 now.getMonth()·bare date로 비교하면
+  // KST 월초 0~9시에 완납된 건이 전월로 새거나 누락된다. KST 그 달 1일 00:00의 UTC instant로 비교.
+  const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
+  const monthStart = new Date(
+    Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), 1) - 9 * 3600 * 1000,
+  ).toISOString();
 
   const [paidRes, overdueRes, pendingRes] = await Promise.all([
     db

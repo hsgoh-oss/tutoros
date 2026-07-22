@@ -21,6 +21,37 @@ const HEADER_MAP: Record<string, keyof BulkStudentRow> = {
   classtype: "classType",
 };
 
+// 따옴표로 감싼 필드(내부 쉼표·"" 이스케이프 포함)를 보존하는 CSV 한 줄 분해기.
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++; // "" → " 이스케이프
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
 function parseCsv(text: string): BulkStudentRow[] | { error: string } {
   const lines = text
     .replace(/^\uFEFF/, "")
@@ -31,15 +62,15 @@ function parseCsv(text: string): BulkStudentRow[] | { error: string } {
     return { error: "헤더와 1행 이상의 데이터가 필요합니다." };
   }
 
-  const headers = lines[0]
-    .split(",")
-    .map((h) => HEADER_MAP[h.trim().toLowerCase()] ?? HEADER_MAP[h.trim()]);
+  const headers = splitCsvLine(lines[0]).map(
+    (h) => HEADER_MAP[h.trim().toLowerCase()] ?? HEADER_MAP[h.trim()],
+  );
   if (!headers.includes("name") || !headers.includes("parentPhone")) {
     return { error: "헤더에 이름·학부모연락처 열이 필요합니다." };
   }
 
   return lines.slice(1).map((line) => {
-    const cells = line.split(",");
+    const cells = splitCsvLine(line);
     const row: BulkStudentRow = { name: "", parentPhone: "" };
     headers.forEach((key, i) => {
       if (!key) return;
