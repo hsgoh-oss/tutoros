@@ -8,6 +8,8 @@ import { logActivity } from "@/lib/data/activity";
 import { createReportRow } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
+import { sendNotification } from "@/lib/notify/send";
+import { renderTemplate } from "@/lib/notify/templates";
 import type { ConsultationStatus } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import { AI_REPORT_DISCLAIMER } from "../reports/constants";
@@ -90,6 +92,65 @@ export async function updateConsultationMemo(
     "consultation",
     id,
     "상담 메모 수정",
+  );
+
+  revalidateConsultation(id);
+  return { ok: true };
+}
+
+/**
+ * ③ 시범수업 확정 안내(→학부모, 관리자 버튼·수동). 일시를 입력받아 알림톡/SMS로 발송한다.
+ */
+export async function sendTrialScheduledNotice(
+  formData: FormData,
+): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+
+  const id = String(formData.get("id") ?? "");
+  const dateText = String(formData.get("date") ?? "").trim();
+  if (!id) return { ok: false, error: "잘못된 요청입니다." };
+  if (!dateText) return { ok: false, error: "시범수업 일시를 입력해 주세요." };
+
+  const db = createServiceClient()!;
+  const { data, error } = await db
+    .from("consultations")
+    .select("name, phone, guardian_phone, student_id")
+    .eq("tenant_id", session.tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) {
+    console.error("[consultations] trial-notice fetch failed", error);
+    return { ok: false, error: "상담 정보를 찾을 수 없습니다." };
+  }
+  const row = data as {
+    name: string;
+    phone: string;
+    guardian_phone: string | null;
+    student_id: string | null;
+  };
+  const phone = row.guardian_phone || row.phone;
+
+  const result = await sendNotification({
+    tenantId: session.tenantId,
+    studentId: row.student_id,
+    type: "trial_scheduled",
+    phone,
+    message: renderTemplate("trial_scheduled", { name: row.name, date: dateText }),
+    isAd: false,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "알림 발송에 실패했습니다." };
+  }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "notify",
+    "consultation",
+    id,
+    `시범수업 확정 안내 발송 (${dateText})`,
   );
 
   revalidateConsultation(id);

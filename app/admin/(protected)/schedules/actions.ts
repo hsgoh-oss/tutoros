@@ -5,6 +5,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { nextSessionNumber } from "@/lib/data/crm";
 import { logActivity } from "@/lib/data/activity";
+import { sendNotification } from "@/lib/notify/send";
 import type { ClassType, ScheduleItem } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -164,6 +165,65 @@ export async function updateScheduleStatus(
     "schedule",
     id,
     `상태 → ${status}`,
+  );
+
+  revalidateSchedules();
+  return { ok: true };
+}
+
+/**
+ * ⑨ 보강 안내(→학부모, 관리자 버튼·수동). 보강(makeup) 일정의 학부모에게 알림톡/SMS 발송.
+ */
+export async function sendMakeupNotice(id: string): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+
+  const db = createServiceClient()!;
+  const { data: sched, error: schedErr } = await db
+    .from("schedules")
+    .select("student_id, scheduled_at")
+    .eq("tenant_id", session.tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  if (schedErr || !sched) {
+    console.error("[schedules] makeup-notice fetch failed", schedErr);
+    return { ok: false, error: "일정을 찾을 수 없습니다." };
+  }
+  const s = sched as { student_id: string; scheduled_at: string };
+
+  const { data: stu, error: stuErr } = await db
+    .from("students")
+    .select("name, parent_phone")
+    .eq("tenant_id", session.tenantId)
+    .eq("id", s.student_id)
+    .maybeSingle();
+  if (stuErr || !stu) {
+    console.error("[schedules] makeup-notice student fetch failed", stuErr);
+    return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
+  }
+  const student = stu as { name: string; parent_phone: string };
+  const dateText = kstDateOnly(s.scheduled_at);
+
+  const result = await sendNotification({
+    tenantId: session.tenantId,
+    studentId: s.student_id,
+    type: "schedule_changed",
+    phone: student.parent_phone,
+    message: `${student.name}님, 보강 수업이 ${dateText}에 예정되었습니다. 확인 부탁드립니다.`,
+    isAd: false,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "알림 발송에 실패했습니다." };
+  }
+
+  await logActivity(
+    session.tenantId,
+    session.email,
+    "notify",
+    "schedule",
+    id,
+    `보강 안내 발송 (${dateText})`,
   );
 
   revalidateSchedules();

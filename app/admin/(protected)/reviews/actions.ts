@@ -137,6 +137,11 @@ export async function createReview(formData: FormData): Promise<CrmActionResult>
   const parsed = parseReviewForm(formData);
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
+  // 후기 게시 동의(기획 7-17) — 관리자가 작성자 동의를 받았음을 확인해야 게시할 수 있다.
+  if (formData.get("publishConsent") !== "on") {
+    return { ok: false, error: "후기 게시 동의 확인이 필요합니다." };
+  }
+
   const files = formData
     .getAll("screenshots")
     .filter((f): f is File => f instanceof File && f.size > 0);
@@ -176,6 +181,19 @@ export async function createReview(formData: FormData): Promise<CrmActionResult>
   if (error) {
     console.error("[reviews] insert failed", error);
     return { ok: false, error: "후기 등록 중 오류가 발생했습니다." };
+  }
+
+  // 게시 동의 이력 기록(기획 7-17 "전 동의는 consents 테이블에 보존"). subject는 후기 자체.
+  if (inserted?.id) {
+    const { error: consentError } = await db.from("consents").insert({
+      tenant_id: session.tenantId,
+      subject_type: "review",
+      subject_id: inserted.id,
+      item: "review",
+      policy_version: "v0.9",
+      via: "admin",
+    });
+    if (consentError) console.error("[reviews] 후기 게시 동의 기록 실패", consentError);
   }
 
   await logActivity(

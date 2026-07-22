@@ -56,6 +56,21 @@ function parseCsv(text: string): BulkStudentRow[] | { error: string } {
   });
 }
 
+// 업로드 파서가 인식하는 헤더(이름·학부모연락처·학교·학년·수업방식)와 예시 1행.
+const TEMPLATE_CSV =
+  "이름,학부모연락처,학교,학년,수업방식\n홍길동,010-1234-5678,OO고등학교,고2,대면\n";
+
+function downloadTemplate() {
+  // BOM을 붙여 Excel에서 한글이 깨지지 않게 한다.
+  const blob = new Blob([`﻿${TEMPLATE_CSV}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "students-template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function CsvUpload() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +112,13 @@ export function CsvUpload() {
           e.target.value = "";
         }}
       />
+      <button
+        type="button"
+        onClick={downloadTemplate}
+        className={buttonClass("ghost", "sm")}
+      >
+        템플릿 다운로드
+      </button>
       <button
         type="button"
         disabled={pending}

@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveTenant } from "@/lib/tenant";
+import { getSiteContent } from "@/lib/data/content";
 import { sendNotification } from "@/lib/notify/send";
 import {
   consultFormSchema,
@@ -106,7 +107,7 @@ export async function submitConsult(
     };
   }
 
-  // 접수 확인 알림 — 실패해도 접수는 성공 처리(알림은 이력 로그로 추적).
+  // ② 접수 확인 알림(→고객) — 실패해도 접수는 성공 처리(알림은 이력 로그로 추적).
   try {
     await sendNotification({
       tenantId: tenant.id,
@@ -118,6 +119,24 @@ export async function submitConsult(
     });
   } catch (notifyError) {
     console.error("[consult] 접수 알림 발송 실패", notifyError);
+  }
+
+  // ① 새 상담 접수 알림(→관리자) — 사업자 연락처(site_settings.phone)가 설정된 경우에만.
+  try {
+    const content = await getSiteContent(tenant.id);
+    const adminPhone = content.settings.phone;
+    if (adminPhone) {
+      await sendNotification({
+        tenantId: tenant.id,
+        studentId: null,
+        type: "consult_admin_alert",
+        phone: adminPhone,
+        message: `[${tenant.brandName}] 새 상담 신청이 접수되었습니다. (신청자: ${data.name}) 관리자 페이지에서 확인해 주세요.`,
+        isAd: false,
+      });
+    }
+  } catch (notifyError) {
+    console.error("[consult] 관리자 접수 알림 발송 실패", notifyError);
   }
 
   return { ok: true };

@@ -5,6 +5,9 @@ import { Container, Section, SectionHeading } from "@/components/public/section"
 import { Card } from "@/components/ui/card";
 import { RateToggle } from "@/components/public/classes/rate-toggle";
 import { RateCalculator } from "@/components/public/classes/rate-calculator";
+import { FieldTabs } from "@/components/public/classes/field-tabs";
+import { GradePath } from "@/components/public/classes/grade-path";
+import { DEFAULT_GRADE_PATH } from "@/lib/defaults";
 
 export const metadata: Metadata = { title: "수업 안내" };
 
@@ -23,26 +26,18 @@ export default async function ClassesPage() {
             desc="학생의 현재 위치를 먼저 진단하고, 시험에 나오는 것부터 순서대로 채워갑니다."
           />
 
-          <div className="grid gap-6 md:grid-cols-3">
-            {content.subjects.map((s) => (
-              <Card key={s.key} className="flex flex-col gap-3 p-7">
-                <p className="text-xs font-extrabold tracking-tight text-brand-600">
-                  {s.target}
-                </p>
-                <h3 className="text-xl font-black tracking-tight text-ink">
-                  {s.title}
-                </h3>
-                <p className="text-sm leading-[1.86] tracking-tight text-muted">
-                  {s.summary}
-                </p>
-                <ul className="mt-1 space-y-1.5 text-[13px] leading-relaxed text-ink-soft">
-                  {s.points.map((p) => (
-                    <li key={p}>· {p}</li>
-                  ))}
-                </ul>
-              </Card>
-            ))}
-          </div>
+          <FieldTabs subjects={content.subjects} />
+        </Container>
+      </Section>
+
+      <Section className="pt-0">
+        <Container>
+          <SectionHeading
+            eyebrow="성장 경로"
+            title="9등급에서 1등급까지, 단계별 로드맵"
+            desc="현재 위치에서 시작해 단계마다 목표를 확실히 넘기며 최상위권까지 올라갑니다."
+          />
+          <GradePath stages={DEFAULT_GRADE_PATH} />
         </Container>
       </Section>
 

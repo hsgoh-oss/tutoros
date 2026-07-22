@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { Review } from "@/lib/types";
@@ -23,6 +24,24 @@ export function ReviewCard({ review }: { review: Review }) {
       <p className="grow text-[15px] leading-[1.86] tracking-tight text-ink-soft">
         {review.content}
       </p>
+      {review.screenshots.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {review.screenshots.map((src) => (
+            <div
+              key={src}
+              className="relative h-20 w-20 overflow-hidden rounded-panel border border-line bg-soft sm:h-24 sm:w-24"
+            >
+              <Image
+                src={src}
+                alt="후기 스크린샷"
+                fill
+                sizes="(min-width: 640px) 96px, 80px"
+                className="object-cover"
+              />
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex items-center justify-between text-xs text-muted">
         <span>{review.source && `${review.source} 후기`}</span>
         <span>{review.reviewedAt}</span>

@@ -4,7 +4,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { getConsultation, listConsents, formatKDate } from "@/lib/data/crm";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/form";
+import { Field, Input, Textarea } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { InlineSelect } from "@/components/admin/crm/inline-select";
 import {
@@ -12,7 +12,11 @@ import {
   consentItemLabel,
   consultationStatusTone,
 } from "../constants";
-import { updateConsultationMemo, updateConsultationStatus } from "../actions";
+import {
+  sendTrialScheduledNotice,
+  updateConsultationMemo,
+  updateConsultationStatus,
+} from "../actions";
 import { ConvertButton } from "../convert-button";
 import { ConsultBriefButton } from "../consult-brief-button";
 
@@ -173,6 +177,24 @@ export default async function ConsultationDetailPage({
                 <ConvertButton consultationId={consultation.id} />
               </div>
             )}
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 text-sm font-black text-ink-soft">시범수업 확정 안내</h2>
+            <p className="mb-3 text-sm text-muted">
+              일시를 입력하고 발송하면 학부모({consultation.guardianPhone ?? consultation.phone})에게
+              시범수업 확정 알림톡(실패 시 SMS)이 전송됩니다.
+            </p>
+            <SubmitForm action={sendTrialScheduledNotice} submitLabel="확정 안내 발송">
+              <input type="hidden" name="id" value={consultation.id} />
+              <Field label="시범수업 일시">
+                <Input
+                  name="date"
+                  placeholder="예: 8월 20일(수) 오후 5시"
+                  required
+                />
+              </Field>
+            </SubmitForm>
           </Card>
 
           <Card>

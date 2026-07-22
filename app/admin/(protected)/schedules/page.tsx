@@ -15,7 +15,7 @@ import {
   classTypeLabel,
   scheduleStatusTone,
 } from "./constants";
-import { deleteSchedule, updateScheduleStatus } from "./actions";
+import { deleteSchedule, sendMakeupNotice, updateScheduleStatus } from "./actions";
 
 // week 파라미터("YYYY-MM-DD")를 new Date()로 파싱하면 UTC 자정이 되어 저장 기준(로컬 시간 해석)과
 // 어긋난다. 연/월/일을 직접 파싱해 로컬 Date로만 다뤄 저장·조회 기준을 통일한다.
@@ -264,13 +264,23 @@ export default async function SchedulesPage({
                     </Badge>
                   </Td>
                   <Td>
-                    <ActionButton
-                      action={deleteSchedule}
-                      id={s.id}
-                      label="삭제"
-                      confirmText="이 일정을 삭제하시겠습니까?"
-                      tone="danger"
-                    />
+                    <div className="flex items-center gap-3">
+                      {s.status === "makeup" && (
+                        <ActionButton
+                          action={sendMakeupNotice}
+                          id={s.id}
+                          label="보강 안내"
+                          confirmText="보강 안내를 학부모에게 발송하시겠습니까?"
+                        />
+                      )}
+                      <ActionButton
+                        action={deleteSchedule}
+                        id={s.id}
+                        label="삭제"
+                        confirmText="이 일정을 삭제하시겠습니까?"
+                        tone="danger"
+                      />
+                    </div>
                   </Td>
                 </tr>
               ))}

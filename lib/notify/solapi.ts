@@ -13,6 +13,11 @@ export interface NotifyRequest {
   phone: string;
   message: string;
   isAd: boolean; // 광고성 — 별도 수신동의·(광고) 표기·야간(21~08) 발송 금지
+  /**
+   * 광고성(isAd=true) 발송 시 마케팅 수신동의를 확인할 대상(consents 조회 키).
+   * 미지정이거나 해당 동의가 없으면 send.ts가 발송을 차단한다(정보통신망법 opt-in).
+   */
+  consentSubject?: { type: "consultation" | "student" | "guardian"; id: string };
 }
 
 /**

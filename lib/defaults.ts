@@ -33,6 +33,7 @@ export const DEFAULT_CONTENT: SiteContent = {
       "https://kimstudy.com/tutor/s/e0d107b4-c91a-4aca-9381-717157e99ecb?O3WRXJQK9E=D1072AQ1A",
     tutorReportNo: null,
     gaId: "G-TEKQVSK73W",
+    bankAccount: null,
     seoDescription:
       "김과외 전국 상위 0.2% 튜터의 1:1 수학 과외. 내신·수능·수리논술 맞춤 수업, 매 수업 학부모 리포트 발송. 대면·화상 수업 상담 환영.",
   },
@@ -318,3 +319,35 @@ export const DEFAULT_CONTENT: SiteContent = {
     { id: "chk-7", text: "수학 때문에 다른 과목 공부 시간까지 흔들린다" },
   ],
 };
+
+/* ---------- 1~9등급 성장 경로 (수업 안내 페이지) ---------- */
+// 관리자 편집 대상이 아닌 정적 콘텐츠 — 이 배열만 고치면 로드맵이 바뀐다.
+
+export interface GradePathStage {
+  range: string; // 예: "9~7등급"
+  title: string; // 예: "기초 정립"
+  desc: string;
+}
+
+export const DEFAULT_GRADE_PATH: GradePathStage[] = [
+  {
+    range: "9~7등급",
+    title: "기초 정립",
+    desc: "개념의 뿌리부터 다시 세웁니다. 왜 그렇게 되는지 스스로 설명할 수 있을 때까지 기본기를 채웁니다.",
+  },
+  {
+    range: "6~4등급",
+    title: "개념 완성",
+    desc: "단원별 개념을 빈틈없이 연결하고, 유형별 접근법을 손에 익혀 안정적으로 문제를 풉니다.",
+  },
+  {
+    range: "3~2등급",
+    title: "실전 훈련",
+    desc: "기출·모의고사로 시간 관리와 실수 요인을 잡고, 준킬러(4점) 정답률을 끌어올립니다.",
+  },
+  {
+    range: "1등급",
+    title: "최상위권 심화",
+    desc: "킬러 문항과 서술형까지, 어떤 문제에도 흔들리지 않는 안정성을 완성합니다.",
+  },
+];

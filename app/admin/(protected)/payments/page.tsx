@@ -6,12 +6,15 @@ import {
   getPaymentSummary,
   hasDb,
   listPayments,
+  listStudentOptions,
 } from "@/lib/data/crm";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Field, Select } from "@/components/ui/form";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { ActionButton } from "@/components/admin/crm/action-button";
+import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
@@ -21,7 +24,7 @@ import {
   paymentStatusLabel,
   paymentStatusTone,
 } from "./constants";
-import { markPaid } from "./actions";
+import { createNextCycle, markPaid } from "./actions";
 import type { PaymentStatus } from "@/lib/types";
 
 export default async function PaymentsPage({
@@ -42,6 +45,8 @@ export default async function PaymentsPage({
   const summary = session
     ? await getPaymentSummary(session.tenantId)
     : { paidThisMonth: 0, overdueTotal: 0, pendingTotal: 0 };
+
+  const studentOptions = session ? await listStudentOptions(session.tenantId) : [];
 
   return (
     <div>
@@ -79,6 +84,27 @@ export default async function PaymentsPage({
           </p>
         </Card>
       </div>
+
+      {studentOptions.length > 0 && (
+        <Card className="mb-6">
+          <h2 className="text-sm font-black text-ink-soft">4주 청구 사이클 생성</h2>
+          <p className="mt-1 mb-3 text-sm text-muted">
+            선택한 학생의 직전 청구를 이어 다음 4주 청구를 생성합니다(금액·수단 승계, 발송은 수동).
+          </p>
+          <SubmitForm action={createNextCycle} submitLabel="다음 4주 청구 생성">
+            <Field label="학생">
+              <Select name="studentId" required defaultValue="">
+                <option value="">학생 선택</option>
+                {studentOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </SubmitForm>
+        </Card>
+      )}
 
       <Card className="mb-6">
         <FilterChips

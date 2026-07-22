@@ -33,6 +33,23 @@ export function isNightWindow(now: Date = new Date()): boolean {
   return hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR;
 }
 
+/** 광고성 발송 전 마케팅 수신동의 확인(정보통신망법 opt-in). 대상 미지정·동의 없음이면 false. */
+async function hasMarketingConsent(
+  db: NonNullable<ReturnType<typeof createServiceClient>>,
+  req: NotifyRequest,
+): Promise<boolean> {
+  if (!req.consentSubject) return false;
+  const { data } = await db
+    .from("consents")
+    .select("id")
+    .eq("tenant_id", req.tenantId)
+    .eq("subject_type", req.consentSubject.type)
+    .eq("subject_id", req.consentSubject.id)
+    .eq("item", "marketing")
+    .limit(1);
+  return Boolean(data && data.length > 0);
+}
+
 export async function sendNotification(
   req: NotifyRequest,
 ): Promise<SendResult> {
@@ -40,6 +57,17 @@ export async function sendNotification(
   const db = createServiceClient();
   if (!db) {
     return { ok: false, channel, queued: false, error: "DB 미연결" };
+  }
+
+  // 광고성은 마케팅 수신동의가 있는 대상에게만 발송한다(수신거부=동의 철회 시 자동 차단).
+  if (req.isAd && !(await hasMarketingConsent(db, req))) {
+    console.warn("[notify] 광고성 발송 차단 — 마케팅 수신동의 없음", req.type);
+    return {
+      ok: false,
+      channel,
+      queued: false,
+      error: "마케팅 수신동의가 없어 발송하지 않았습니다.",
+    };
   }
 
   // 광고성은 야간(21~08) 발송 금지 — 다음 발송 슬롯까지 큐 대기.
@@ -185,6 +213,7 @@ export async function dispatchQueued(
         status: "sent",
         sent_at: new Date().toISOString(),
         channel: finalChannel,
+        error: null,
       })
       .eq("id", notificationId);
     return { ok: true, channel: finalChannel, queued: false };
@@ -203,6 +232,7 @@ export async function dispatchQueued(
       status: "failed",
       retry_count: ((row as { retry_count: number } | null)?.retry_count ?? 0) + 1,
       channel: finalChannel,
+      error: result.error ?? "발송 실패",
     })
     .eq("id", notificationId);
   return { ok: false, channel: finalChannel, queued: false, error: result.error };

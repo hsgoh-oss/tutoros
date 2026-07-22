@@ -85,6 +85,17 @@ export default async function SettingsPage() {
                 placeholder="G-XXXXXXXXXX"
               />
             </Field>
+            <Field
+              label="입금 계좌 안내"
+              hint="계좌이체 청구 안내에 노출됩니다"
+              className="md:col-span-2"
+            >
+              <Input
+                name="bankAccount"
+                defaultValue={content.settings.bankAccount ?? ""}
+                placeholder="국민은행 123456-78-901234 (예금주: 고현서)"
+              />
+            </Field>
           </div>
         </SubmitForm>
         <BackupPanel entries={entries} restoreAction={restoreSetting} />

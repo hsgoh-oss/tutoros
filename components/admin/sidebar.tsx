@@ -29,6 +29,7 @@ const GROUPS = [
       { href: "/admin/payments", label: "결제 관리" },
       { href: "/admin/materials", label: "자료 관리" },
       { href: "/admin/reports", label: "AI 리포트" },
+      { href: "/admin/messages", label: "메시지 발송" },
     ],
   },
 ] as const;

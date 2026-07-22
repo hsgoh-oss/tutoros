@@ -39,6 +39,7 @@ export async function updateSiteInfo(formData: FormData): Promise<CrmActionResul
   const kimReviewUrl = String(formData.get("kimReviewUrl") ?? "").trim();
   const tutorReportNo = String(formData.get("tutorReportNo") ?? "").trim() || null;
   const gaId = String(formData.get("gaId") ?? "").trim() || null;
+  const bankAccount = String(formData.get("bankAccount") ?? "").trim() || null;
 
   const current = await getSiteContent(session.tenantId);
   await recordBackup(session.tenantId, "settings:site_info", current.settings);
@@ -58,6 +59,7 @@ export async function updateSiteInfo(formData: FormData): Promise<CrmActionResul
     kimReviewUrl,
     tutorReportNo,
     gaId,
+    bankAccount,
   };
 
   const { error } = await upsertSetting(session.tenantId, "site_info", updated);

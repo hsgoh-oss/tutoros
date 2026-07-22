@@ -105,6 +105,21 @@ export function ReviewFormFields({ review }: { review?: Review }) {
         />
       </Field>
 
+      {!review && (
+        <label className="flex items-start gap-2 rounded-panel bg-soft p-4 text-sm">
+          <input
+            type="checkbox"
+            name="publishConsent"
+            required
+            className="mt-0.5 h-4 w-4"
+          />
+          <span className="font-bold text-ink-soft">
+            작성자로부터 후기 게시 동의를 받았음을 확인합니다.
+            <span className="ml-1 text-brand-600">*</span>
+          </span>
+        </label>
+      )}
+
       {review && review.aiTags.length > 0 && (
         <div>
           <p className="mb-2 text-sm font-bold text-ink-soft">AI 태그 (읽기 전용)</p>
