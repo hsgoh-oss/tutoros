@@ -27,8 +27,14 @@ SQL, 실 Solapi 발송이 필요한 잡은 Next API. 이유:
 
 ## 1. 배포 전 준비 (수동, 1회)
 
-마이그레이션(`00002_automation.sql`)은 아래 시크릿이 없어도 **에러 없이 적용**된다 — 다만 각
-크론 함수가 실행될 때 Vault 시크릿이 비어 있으면 `NOTICE`만 남기고 조용히 스킵한다(§4 참조).
+마이그레이션은 아래 시크릿이 없어도 **에러 없이 적용**된다. 다만 시크릿이 비어 있으면 크론
+실행 시점에 `automation_call_edge_function`/`automation_call_flush`가 **예외를 던져
+`cron.job_run_details.status='failed'`로 남는다**(00012).
+
+> 이전에는 `NOTICE`만 남기고 조용히 스킵했다. NOTICE는 `job_run_details`에 남지 않아
+> 크론 12잡이 전부 `succeeded`인데 `net._http_response`는 0건인 상태가 12일간 방치됐다.
+> 실패를 실패로 보고하도록 바꿨으므로, **시크릿 등록 전에는 크론이 실패하는 것이 정상**이다.
+
 운영 전환 전 Supabase SQL Editor에서 1회 실행:
 
 ```sql
@@ -48,7 +54,34 @@ select vault.create_secret('<CRON_SECRET 값>', 'cron_secret');
 그리고:
 1. `supabase functions deploy automation` (Supabase CLI) — 엣지 함수 배포
 2. Vercel 환경변수에 `CRON_SECRET` 등록 (`.env.local`과 동일 값 — `scripts/env.template` 참조)
-3. `select * from cron.job;`로 8개 잡이 등록됐는지 확인 (docs/supabase-setup.md 체크리스트에도 포함됨)
+3. `select * from cron.job;`로 12개 잡이 등록됐는지 확인 (docs/supabase-setup.md 체크리스트에도 포함됨)
+
+### 배포 후 실동작 검증
+
+크론이 `succeeded`라는 것만으로는 아무것도 증명되지 않는다(위 사고의 교훈). 아래 3단으로 본다:
+
+```sql
+-- ① 강제 1회 발사 — 시크릿이 없으면 여기서 바로 예외가 난다
+select public.automation_call_edge_function('dday_recalc');
+
+-- ② 발사 기록 — request_id가 남아야 실제로 쐈다는 증거다(automation_runs, 00012)
+select job_name, request_id, created_at
+  from public.automation_runs order by created_at desc limit 5;
+
+-- ③ 응답 — 200이어야 엣지 함수가 정상 수신했다는 뜻
+--    net._http_response는 TTL(기본 6시간)로 지워지므로 발사 직후에 볼 것
+select status_code, left(content, 200)
+  from net._http_response order by created desc limit 5;
+```
+
+엣지 함수만 따로 확인하려면 (anon 키로도 게이트 통과 여부를 볼 수 있다):
+
+```bash
+curl -s -X POST -H "Authorization: Bearer <anon-key>" \
+  "https://<project-ref>.supabase.co/functions/v1/automation?job=dday_recalc"
+# → {"ok":true,"job":"dday_recalc","hidden":0}
+# 인증 없이 호출하면 401, 없는 job이면 400 + 사용 가능한 job 목록
+```
 
 ## 2. 잡 정의
 
