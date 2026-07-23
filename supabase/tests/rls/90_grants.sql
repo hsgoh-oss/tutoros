@@ -3,3 +3,8 @@
 -- "차단됨"이 RLS 덕분인지 grant 부재 탓인지 구별할 수 없다 — 테스트를 무의미하게 만드는 함정.
 grant all on all tables in schema public to anon, authenticated, service_role;
 grant all on all sequences in schema public to anon, authenticated, service_role;
+
+-- 함수 권한은 여기서 주지 않는다. 이 파일은 마이그레이션 "이후"에 돌기 때문에,
+-- 여기서 grant하면 마이그레이션의 revoke를 되돌려 검증이 뒤집힌다.
+-- 대신 00_shim.sql이 default privileges를 걸어 Supabase처럼 "생성 시점 자동 부여"를
+-- 재현하고, 마이그레이션의 revoke가 실제로 회수하는지를 본다.

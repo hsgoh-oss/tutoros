@@ -31,3 +31,9 @@ grant usage on schema public to anon, authenticated, service_role;
 -- RLS 정책이 auth.jwt()를 호출하므로 두 역할 모두 auth 스키마를 쓸 수 있어야 한다(Supabase 기본값).
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.jwt() to anon, authenticated, service_role;
+
+-- Supabase는 alter default privileges로 새로 만들어지는 public 함수에 anon·authenticated
+-- EXECUTE를 자동 부여한다. 이걸 재현하지 않으면 "크론 함수 실행 차단" 테스트가 revoke 덕분이
+-- 아니라 grant 부재 탓에 통과해 버린다(실제로 그래서 00011 결함을 놓쳤다).
+-- 마이그레이션보다 먼저 걸어야 이후 create function들이 이 기본 권한을 받는다.
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
