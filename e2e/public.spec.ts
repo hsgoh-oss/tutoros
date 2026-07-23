@@ -26,12 +26,34 @@ test.describe("공개 사이트", () => {
     }
   });
 
-  test("수업료 계산기: 회당 시간 변경 시 총액 갱신", async ({ page }) => {
+  test("수업료 계산기: 스테퍼 재계산 · 경계값 비활성 · 프리필", async ({ page }) => {
     await page.goto("/classes");
     const calc = page.locator("#calculator");
-    await expect(calc).toContainText("1,600,000"); // 대면 2.5h × 주2회 × 4주 기본값
-    await calc.locator("select").first().selectOption("3"); // 회당 3시간
+
+    // 대면 80,000 × 2.5h × 주2회 × 4주 = 1,600,000 (기본값) + 산식 병기(기획 7-6 필수)
+    await expect(calc).toContainText("1,600,000");
+    await expect(calc).toContainText("시간당 80,000원 × 2.5시간 × 주 2회 × 4주 = 1,600,000원");
+
+    await calc.getByLabel("회당 시간 30분 늘리기").click(); // 3.0h
     await expect(calc).toContainText("1,920,000"); // 80,000 × 3 × 2 × 4
+
+    await calc.getByLabel("주당 횟수 늘리기").click(); // 주 3회
+    await expect(calc).toContainText("2,880,000"); // 80,000 × 3 × 3 × 4
+
+    await calc.getByRole("button", { name: "화상", exact: true }).click();
+    await expect(calc).toContainText("2,160,000"); // 60,000 × 3 × 3 × 4
+
+    // 상담 폼 프리필(mode/hours/freq)
+    await expect(calc.getByRole("link", { name: "이 구성으로 상담 신청" })).toHaveAttribute(
+      "href",
+      "/consult?mode=video&hours=3&freq=3",
+    );
+
+    // 경계값 비활성 — 최소 2시간에서 감소 버튼 disabled
+    const dec = calc.getByLabel("회당 시간 30분 줄이기");
+    await dec.click(); // 2.5
+    await dec.click(); // 2.0
+    await expect(dec).toBeDisabled();
   });
 
   test("상담 폼: 빈 제출 검증 + 만14세 보호자 게이팅", async ({ page }) => {

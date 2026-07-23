@@ -1,0 +1,11 @@
+-- 00010: admin_accounts RLS 누락 수정
+--
+-- 00007이 이 테이블을 추가하면서 00001의 RLS 일괄 활성화 목록에 넣지 않아,
+-- public 스키마에서 유일하게 RLS가 꺼진 채 남아 있었다. Supabase 기본 grant로
+-- anon·authenticated에 SELECT/INSERT/UPDATE/DELETE가 열려 있으므로, anon 키를 가진
+-- 사람이 임의 테넌트에 자신의 이메일을 관리자로 등록한 뒤 OTP 로그인 → 테넌트 탈취가 가능했다.
+--
+-- 00007 주석은 "admin_otps와 동일 범주라 RLS 없이 service_role 전용"이라고 적었으나,
+-- 정작 admin_otps는 00001에서 RLS가 켜져 있다. 인증 전 단계 테이블의 올바른 패턴은
+-- "RLS 켜고 정책은 만들지 않는 것" — authenticated/anon은 전부 거부되고 service_role(BYPASSRLS)만 통과한다.
+alter table public.admin_accounts enable row level security;

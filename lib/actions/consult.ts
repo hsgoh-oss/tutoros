@@ -90,6 +90,8 @@ export async function submitConsult(
     ...(isMinorGuardian ? [{ ...consentBase, item: "guardian" }] : []),
   ];
 
+  // tenant-scope-ok: consentBase가 tenant_id를 담고 전 행이 이를 스프레드한다(위 78행).
+  // 감사기는 insert 인자 변수의 선언 블록에서 리터럴 tenant_id만 찾아 2단계 간접참조를 보지 못한다.
   const { error: consentError } = await db.from("consents").insert(consentRows);
   if (consentError) {
     console.error("[consult] consents insert failed", consentError);
