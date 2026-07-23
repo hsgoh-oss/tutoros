@@ -44,11 +44,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# nq/claude 작업 파일
+# 로컬 도구 작업 파일
 .claude/
 .omc/
+.gjc/
+.mcp.json
 
-# 테스트/검증 산출물 (Playwright MCP 스크린샷·스냅샷·콘솔 로그, 루트 스크린샷)
+# 테스트/검증 산출물 (스크린샷·스냅샷·콘솔 로그, 루트 스크린샷)
 .playwright-mcp/
 /*.png
 
