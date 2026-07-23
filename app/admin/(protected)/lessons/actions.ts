@@ -7,6 +7,7 @@ import { getLesson, getStudent, nextSessionNumber } from "@/lib/data/crm";
 import { createReportRow } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
+import { REPORT_PROMPT_RULES } from "@/lib/ai/validate";
 import { logActivity } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import { RATING_OPTIONS } from "./constants";
@@ -213,7 +214,7 @@ export async function generateLessonReport(
   const parentPrompt = [
     "다음은 한 학생의 한 회차 수업 기록입니다. 학부모님께 전달할 수업 리포트를 한국어로 작성해 주세요.",
     "이번 수업에서 다룬 내용, 학생의 집중도·태도, 숙제, 가정에서 봐주시면 좋을 점을 3~5문장으로 정중하고 따뜻하게 정리해 주세요.",
-    "학생 이름은 실명이 아닌 표기(예: 김○○)로 되어 있으니, 그 표기를 그대로 사용해 자연스럽게 작성하세요.",
+    REPORT_PROMPT_RULES,
     "",
     context,
   ].join("\n");
@@ -238,7 +239,7 @@ export async function generateLessonReport(
   const studentPrompt = [
     "다음은 한 학생의 한 회차 수업 기록입니다. 학생 본인에게 전달할 수업 리포트를 한국어로, 친근하고 격려하는 말투로 작성해 주세요.",
     "이번에 배운 내용 요약, 잘한 점, 숙제와 다음 수업에서 더 신경 쓰면 좋을 점을 3~5문장으로 정리해 주세요.",
-    "학생 이름은 실명이 아닌 표기(예: 김○○)로 되어 있으니, 그 표기를 그대로 사용해 자연스럽게 작성하세요.",
+    REPORT_PROMPT_RULES,
     "",
     context,
   ].join("\n");

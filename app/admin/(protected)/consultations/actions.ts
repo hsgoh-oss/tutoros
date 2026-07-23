@@ -8,6 +8,7 @@ import { logActivity } from "@/lib/data/activity";
 import { createReportRow } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
+import { REPORT_PROMPT_RULES } from "@/lib/ai/validate";
 import { sendNotification } from "@/lib/notify/send";
 import { renderTemplate } from "@/lib/notify/templates";
 import type { ConsultationStatus } from "@/lib/types";
@@ -287,7 +288,8 @@ export async function generateConsultBrief(
   const prompt = [
     "다음은 한 상담 신청 내용입니다. 선생님이 상담 전 참고할 수 있는 내부용 브리핑을 한국어로 작성해 주세요.",
     "신청자 배경, 핵심 니즈, 상담 시 확인할 체크리스트를 정리해 주세요.",
-    "이름은 실명이 아닌 표기(예: 김○○)로 되어 있으니, 그 표기를 그대로 사용해 자연스럽게 작성하세요.",
+    "신청서의 자기보고 성적은 확정 사실이 아니므로 '신청서에 기입함'으로 표시하세요.",
+    REPORT_PROMPT_RULES,
     "",
     context,
   ].join("\n");

@@ -7,6 +7,11 @@ import { getStudent, listGrades, listLessons } from "@/lib/data/crm";
 import { createReportRow, getReport } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize, restore } from "@/lib/ai/pseudonym";
+import {
+  REPORT_PROMPT_RULES,
+  hasBlockingIssue,
+  validateReportContent,
+} from "@/lib/ai/validate";
 import { sendNotification } from "@/lib/notify/send";
 import type { NotifyType } from "@/lib/notify/templates";
 import type {
@@ -87,7 +92,7 @@ function buildPrompt(
   return [
     `다음은 한 학생의 학습 데이터입니다. ${AUDIENCE_LABEL[audience]}에게 전달할 ${TYPE_LABEL[type]} 리포트를 한국어로 작성해 주세요.`,
     depthNote,
-    "학생 이름은 실명이 아닌 표기(예: 김○○)로 되어 있으니, 그 표기를 그대로 사용해 자연스럽게 작성하세요.",
+    REPORT_PROMPT_RULES,
     "",
     context,
   ].join("\n");
@@ -223,6 +228,20 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
 
   const phone = report.audience === "student" ? student.studentPhone : student.parentPhone;
   if (!phone) return { ok: false, error: "발송할 연락처가 없습니다." };
+
+  // 발송 클린 검사(기획안 §8) — 내부 표기·빈 섹션·실명이 남은 본문은 외부로 내보내지 않는다.
+  // 승인 이후에도 본문을 수정할 수 있으므로 승인 시점이 아니라 발송 직전에 다시 본다.
+  const issues = validateReportContent(report.content, {
+    studentName: student.name,
+    audience: report.audience,
+  });
+  if (hasBlockingIssue(issues)) {
+    const reasons = issues
+      .filter((i) => i.level === "block")
+      .map((i) => (i.excerpt ? `${i.message} (${i.excerpt})` : i.message))
+      .join(" / ");
+    return { ok: false, error: `발송 전 확인이 필요합니다 — ${reasons}` };
+  }
 
   const message = restore(report.content, student.name);
   const db = createServiceClient()!;

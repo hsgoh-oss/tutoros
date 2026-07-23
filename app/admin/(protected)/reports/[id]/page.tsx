@@ -15,6 +15,7 @@ import {
   reportTypeLabel,
 } from "../constants";
 import { approveReport, sendReport, updateReportContent } from "../actions";
+import { validateReportContent } from "@/lib/ai/validate";
 
 export default async function ReportDetailPage({
   params,
@@ -32,6 +33,14 @@ export default async function ReportDetailPage({
   const canSend =
     (report.status === "approved" || report.status === "failed") &&
     report.audience !== "internal";
+
+  // 룰 검증(기획서 7-3 ①) — 발송 시에도 재검사하지만, 선생님이 승인 전에 고칠 수 있게 여기서 먼저 보여 준다.
+  const issues = validateReportContent(report.content, {
+    studentName: student?.name,
+    audience: report.audience,
+  });
+  const blockingIssues = issues.filter((i) => i.level === "block");
+  const warnIssues = issues.filter((i) => i.level === "warn");
 
   return (
     <div>
@@ -70,6 +79,30 @@ export default async function ReportDetailPage({
         </div>
 
         <div className="space-y-6">
+          {issues.length > 0 && (
+            <Card>
+              <h2 className="mb-3 text-sm font-black text-ink-soft">품질 검사</h2>
+              <ul className="space-y-3">
+                {[...blockingIssues, ...warnIssues].map((issue) => (
+                  <li key={issue.rule} className="text-sm">
+                    <Badge tone={issue.level === "block" ? "danger" : "warning"}>
+                      {issue.level === "block" ? "발송 차단" : "확인 권장"}
+                    </Badge>
+                    <p className="mt-1.5 leading-relaxed text-ink-soft">{issue.message}</p>
+                    {issue.excerpt && (
+                      <p className="mt-1 break-all text-xs text-muted">해당 표현: {issue.excerpt}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {blockingIssues.length > 0 && (
+                <p className="mt-4 text-xs font-bold text-rose-600">
+                  차단 항목이 남아 있으면 발송되지 않습니다. 본문을 수정한 뒤 다시 저장해 주세요.
+                </p>
+              )}
+            </Card>
+          )}
+
           <Card>
             <h2 className="mb-3 text-sm font-black text-ink-soft">발송 처리</h2>
             <p className="mb-4 text-sm text-muted">
