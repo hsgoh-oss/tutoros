@@ -25,7 +25,6 @@ test.describe("관리자", () => {
       "/admin/dday",
       "/admin/recruit",
       "/admin/settings",
-      "/admin/page",
       "/admin/reports",
       "/admin/activity",
     ];

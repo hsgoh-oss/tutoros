@@ -33,7 +33,7 @@ pnpm dev
 
 1. `pnpm dev` → `/consult` 상담 제출 → `/admin/consultations` 목록에 표시
 2. 상담 상세 → "학생 전환" → `/admin/students`에 생성 확인
-3. `/admin/page`에서 시간당 단가 수정 → 공개 `/classes` 계산기 즉시 반영
+3. 시간당 단가는 `site_settings.rates`(DB) 값이 공개 `/classes` 계산기·수업료 표·구조화 데이터에 연동된다. 관리자 편집 UI는 없으므로 값 변경은 DB에서 직접 수행한다(페이지 편집 기능 제거됨)
 4. `/admin/dday` 수정 → 공개 사이트 배너 반영
 5. 자료 업로드(`/admin/materials`) → Storage `materials` 버킷에 파일 생성
 6. RLS 교차 접근 0건: SQL Editor에서

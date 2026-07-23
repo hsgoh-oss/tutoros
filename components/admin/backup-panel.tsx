@@ -9,7 +9,7 @@ export interface BackupPanelEntry {
   createdAt: string;
 }
 
-// 페이지 편집·사이트 설정 공용 백업/복원 UI — target별 최근 12개 스냅샷을 펼쳐 보여주고
+// 사이트 설정 백업/복원 UI — target별 최근 12개 스냅샷을 펼쳐 보여주고
 // 선택 시 restoreAction(backupId)으로 즉시 복원한다.
 export function BackupPanel({
   entries,

@@ -12,7 +12,6 @@ const GROUPS = [
       { href: "/admin/dashboard", label: "대시보드" },
       { href: "/admin/dday", label: "D-day 관리" },
       { href: "/admin/recruit", label: "모집 현황" },
-      { href: "/admin/page", label: "페이지 편집" },
       { href: "/admin/reviews", label: "후기 관리" },
       { href: "/admin/faq", label: "FAQ 관리" },
       { href: "/admin/settings", label: "사이트 설정" },

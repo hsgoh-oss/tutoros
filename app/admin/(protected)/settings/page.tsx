@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
-import { BackupPanel } from "../page/backup-panel";
+import { BackupPanel } from "@/components/admin/backup-panel";
 import { updateSiteInfo, restoreSetting } from "./actions";
 
 export default async function SettingsPage() {
