@@ -26,9 +26,15 @@ export interface NotifyRequest {
  */
 export type DispatchRequest = Omit<NotifyRequest, "type"> & { type: string };
 
+// 발신번호까지 있어야 "설정됨"이다. 키 2개만 채우면 isConfigured()가 true로 뒤집혀 즉시 발송을
+// 시도하는데, sendSms/sendAlimtalk은 SOLAPI_SENDER_PHONE 없이는 무조건 실패한다. 그러면 안전하게
+// queued로 쌓여 있던 알림이 failed로 바뀌고 notify_retry가 상한(3)까지 태운 뒤 영구 폐기된다
+// — 키를 넣기 전보다 나빠진다. 발신번호는 Solapi 콘솔에서 사전등록(통신사 인증)이 필요하다.
 export function isConfigured(): boolean {
   return Boolean(
-    process.env.SOLAPI_API_KEY && process.env.SOLAPI_API_SECRET,
+    process.env.SOLAPI_API_KEY &&
+      process.env.SOLAPI_API_SECRET &&
+      process.env.SOLAPI_SENDER_PHONE,
   );
 }
 

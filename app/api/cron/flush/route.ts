@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { isNightWindow, dispatchQueued } from "@/lib/notify/send";
 import { isNotifyType } from "@/lib/notify/templates";
-import type { NotifyChannel } from "@/lib/notify/solapi";
+import { isConfigured, type NotifyChannel } from "@/lib/notify/solapi";
 
 // job=notify_queue_flush — 매시 10분 pg_cron. queued 상태 및 야간 대기 알림을 dispatchQueued로 재발송한다.
 
@@ -29,6 +29,12 @@ export async function POST(request: Request) {
   const db = createServiceClient();
   if (!db) {
     return NextResponse.json({ error: "db not configured" }, { status: 400 });
+  }
+
+  // Solapi 미설정 상태로 큐를 돌리면 전 건이 failed로 뒤집히고 retry_count만 태운다.
+  // 설정 전까지는 queued로 두는 편이 안전하다 — 키가 들어오면 그대로 이어서 발송된다.
+  if (!isConfigured()) {
+    return NextResponse.json({ ok: true, skipped: "solapi not configured" });
   }
 
   // tenant-scope-ok: 큐 플러시 크론은 전 테넌트의 queued 알림을 처리한다(플랫폼 경로).
