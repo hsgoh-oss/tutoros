@@ -74,15 +74,18 @@ test.describe("공개 사이트", () => {
     expect(await ld.textContent()).toContain('"FAQPage"');
   });
 
-  test("상담 폼 제출: DB 미연결 시 graceful 에러 표시", async ({ page }) => {
+  // .env.local의 SUPABASE_* 를 상속해 실 DB에 접수한다(현 Supabase는 테스트 환경).
+  // 남는 행은 이름 접두사 E2E상담- 으로 식별한다.
+  test("상담 폼 제출: 접수 완료 화면까지 도달", async ({ page }) => {
     await page.goto("/consult");
-    await page.getByPlaceholder("홍길동").fill("테스트학생");
+    await page.getByPlaceholder("홍길동").fill(`E2E상담-${Date.now()}`);
     await page.locator('input[inputmode="numeric"]').first().fill("01012345678");
     // [필수] 개인정보 동의 체크박스 — 라벨 내 링크 오클릭 방지 위해 input 직접 체크
     await page.locator('input[name="privacyConsent"]').check();
     await page.getByRole("button", { name: "상담 신청하기" }).click();
+
     await expect(
-      page.getByText(/데이터베이스 미연결|오류가 발생/),
+      page.getByRole("heading", { name: "상담 신청이 접수되었습니다" }),
     ).toBeVisible();
   });
 

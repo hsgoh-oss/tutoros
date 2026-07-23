@@ -17,9 +17,22 @@ export const HOURS_OPTIONS = [
 ] as const;
 export const FREQ_OPTIONS = ["1", "2", "3", "4", "5", "6", "7"] as const;
 
-// 학생 본인 신청 시 출생년도 선택 범위 (기획 고정)
-export const BIRTH_YEAR_MIN = 2005;
-export const BIRTH_YEAR_MAX = 2016;
+// 학생 본인 신청 시 출생년도 선택 범위 — 만 나이 기준 상대값으로 잡는다.
+// 연도를 고정하면 해가 바뀔 때 실제 대상 학생이 자기 생년을 못 고르게 되고,
+// 그러면 만 14세 게이트(isMinorBirthYear)가 아예 발동하지 못한다.
+const OLDEST_AGE = 21; // 재수·N수 상단
+const YOUNGEST_AGE = 10; // 만 14세 미만 판별이 가능하도록 충분히 낮게
+
+export function birthYearRange(): { min: number; max: number } {
+  const currentYear = new Date().getFullYear();
+  return { min: currentYear - OLDEST_AGE, max: currentYear - YOUNGEST_AGE };
+}
+
+/** <select> 옵션용 — 최신 연도부터 내림차순. */
+export function birthYearOptions(): number[] {
+  const { min, max } = birthYearRange();
+  return Array.from({ length: max - min + 1 }, (_, i) => max - i);
+}
 
 const PHONE_REGEX = /^01[016789]-\d{3,4}-\d{4}$/;
 

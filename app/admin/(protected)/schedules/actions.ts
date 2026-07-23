@@ -121,7 +121,7 @@ export async function createSchedule(formData: FormData): Promise<CrmActionResul
   await logActivity(
     session.tenantId,
     session.email,
-    "일정 등록",
+    "create",
     "schedule",
     (data as { id: string } | null)?.id ?? null,
     "새 일정 등록",
@@ -161,7 +161,7 @@ export async function updateScheduleStatus(
   await logActivity(
     session.tenantId,
     session.email,
-    "일정 상태 변경",
+    "update",
     "schedule",
     id,
     `상태 → ${status}`,
@@ -249,7 +249,7 @@ export async function deleteSchedule(id: string): Promise<CrmActionResult> {
   await logActivity(
     session.tenantId,
     session.email,
-    "일정 삭제",
+    "delete",
     "schedule",
     id,
     "일정 삭제",

@@ -8,6 +8,30 @@ import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 
+// activity_log.action·target_type은 영문 키로 적재한다(집계·필터용 안정 값).
+// 화면에는 여기서만 한글로 옮긴다 — 미등록 키는 원문을 그대로 보여 준다.
+const ACTION_LABEL: Record<string, string> = {
+  create: "등록",
+  update: "수정",
+  delete: "삭제",
+  notify: "알림 발송",
+  generate_exam_report: "시험 리포트 생성",
+};
+
+const TARGET_LABEL: Record<string, string> = {
+  consultation: "상담",
+  student: "학생",
+  lesson: "수업",
+  schedule: "일정",
+  grade: "성적",
+  material: "자료",
+  report: "리포트",
+  review: "후기",
+  faq: "FAQ",
+  dday: "D-day",
+  recruit: "모집 현황",
+};
+
 export default async function ActivityPage() {
   const session = await getAdminSession();
   if (!session) notFound();
@@ -55,12 +79,16 @@ export default async function ActivityPage() {
                     <Td className="whitespace-nowrap text-muted">
                       {formatKDateTime(e.createdAt)}
                     </Td>
-                    <Td className="font-bold text-ink">{e.action}</Td>
+                    <Td className="font-bold text-ink">
+                      {ACTION_LABEL[e.action] ?? e.action}
+                    </Td>
                     <Td>
-                      <span className="text-ink-soft">{e.targetType}</span>
+                      <span className="text-ink-soft">
+                        {TARGET_LABEL[e.targetType] ?? e.targetType}
+                      </span>
                       {e.targetId && (
                         <span className="ml-1 text-xs text-muted">
-                          {e.targetId}
+                          {e.targetId.slice(0, 8)}
                         </span>
                       )}
                     </Td>

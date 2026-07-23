@@ -9,11 +9,10 @@ import { buttonClass } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { submitConsult } from "@/lib/actions/consult";
 import {
-  BIRTH_YEAR_MAX,
-  BIRTH_YEAR_MIN,
   FREQ_OPTIONS,
   HOURS_OPTIONS,
   SUBJECT_OPTIONS,
+  birthYearOptions,
   consultFormSchema,
   isMinorBirthYear,
   type ConsultFormInput,
@@ -21,10 +20,6 @@ import {
 } from "@/components/public/consult/schema";
 
 const CHECKLIST_STORAGE_KEY = "axiom-checklist";
-const BIRTH_YEARS = Array.from(
-  { length: BIRTH_YEAR_MAX - BIRTH_YEAR_MIN + 1 },
-  (_, i) => BIRTH_YEAR_MAX - i,
-);
 
 function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, "").slice(0, 11);
@@ -94,6 +89,7 @@ export function ConsultForm({
   const birthYear = watch("birthYear");
   const checklistItems = watch("checklistItems");
   const isMinor = isStudentSelf && birthYear ? isMinorBirthYear(Number(birthYear)) : false;
+  const birthYears = birthYearOptions();
 
   // 메인 자기진단(sessionStorage)에서 선택한 항목을 상담 폼에 함께 전달한다.
   useEffect(() => {
@@ -278,7 +274,7 @@ export function ConsultForm({
                 }
               >
                 <option value="">선택해 주세요</option>
-                {BIRTH_YEARS.map((y) => (
+                {birthYears.map((y) => (
                   <option key={y} value={y}>
                     {y}년
                   </option>

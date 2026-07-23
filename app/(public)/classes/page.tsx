@@ -77,8 +77,8 @@ export default async function ClassesPage() {
             <Card className="p-7">
               <p className="text-sm font-extrabold text-brand-600">결제 수단</p>
               <p className="mt-3 text-[15px] leading-[1.86] tracking-tight text-ink-soft">
-                결제 링크(카드·간편결제) 또는 계좌이체로 결제하실 수
-                있습니다. 결제 링크는 담당 선생님이 직접 발송합니다.
+                계좌이체 또는 결제선생(카드·간편결제)으로 결제하실 수
+                있습니다. 청구서는 담당 선생님이 직접 발송합니다.
               </p>
             </Card>
             <Card className="p-7">

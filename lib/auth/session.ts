@@ -1,5 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from "crypto";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { isMailConfigured, sendOtpMail } from "@/lib/notify/mail";
 
@@ -119,20 +119,11 @@ export interface OtpResult {
   devCode?: string;
 }
 
-// ⚠️ 테스트 전용 스위치 — 프리뷰/테스트 배포(*.vercel.app)에서 OTP를 화면에 표시한다(메일 미설정 우회).
-// 실도메인(커스텀 도메인)에서는 host 게이트로 항상 꺼지지만, *.vercel.app URL은 실 DB를 공유하므로
-// 실런칭(M1) 전에는 반드시 false로 되돌리거나 이 커밋을 제거할 것.
-const PREVIEW_OTP_ON_SCREEN = true;
-
-// OTP를 메일 대신 화면에 표시할지 결정. 로컬(AUTH_DEV_MODE) 또는 *.vercel.app 테스트 배포에서만 true.
-async function devOtpVisible(): Promise<boolean> {
-  if (process.env.AUTH_DEV_MODE === "true") return true;
-  if (!PREVIEW_OTP_ON_SCREEN) return false;
-  const h = await headers();
-  const host = (h.get("x-tenant-host") ?? h.get("host") ?? "")
-    .split(":")[0]
-    .toLowerCase();
-  return host.endsWith(".vercel.app");
+// OTP를 메일 대신 화면에 표시할지 — AUTH_DEV_MODE 하나로만 통제한다(미설정=꺼짐).
+// 이전엔 host가 *.vercel.app이면 자동으로 켜지는 게이트가 있었는데, 프리뷰 배포도 실 DB를 공유해
+// 관리자 이메일만 알면 로그인이 뚫리는 백도어였다. 호스트 기반 활성화는 제거한다.
+function devOtpVisible(): boolean {
+  return process.env.AUTH_DEV_MODE === "true";
 }
 
 export async function issueOtp(tenantId: string, email: string): Promise<OtpResult> {
@@ -182,7 +173,7 @@ export async function issueOtp(tenantId: string, email: string): Promise<OtpResu
     });
   }
 
-  if (await devOtpVisible()) {
+  if (devOtpVisible()) {
     console.warn(`[dev] OTP for ${email}: ${code}`);
     return { ok: true, devCode: code };
   }
