@@ -5,9 +5,13 @@ import {
   getStudentByPortalToken,
   listPortalReports,
 } from "@/lib/data/crm";
+import { restore } from "@/lib/ai/pseudonym";
 
 // 네이티브 학생/학부모 리포트 포털 (Notion API 대체 — 기획 7-10).
 // 비공개 토큰 링크로 접근, 승인된 리포트만 읽기 전용 조회. 검색 색인 금지.
+//
+// 저장된 본문은 가명(김○○) 상태다 — AI에 실명을 넘기지 않기 위해서다.
+// 실명 복원은 최종 렌더링 서버에서만 한다(AI 리포트 기획안 v1.0 §15).
 export const metadata: Metadata = {
   title: "학습 리포트",
   robots: { index: false, follow: false },
@@ -66,11 +70,8 @@ export default async function PortalPage({
                 </span>
               </div>
               <div className="whitespace-pre-wrap text-[15px] leading-[1.9] tracking-tight text-ink-soft">
-                {r.content}
+                {restore(r.content, student.name)}
               </div>
-              <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
-                ※ 본 리포트는 AI가 생성한 참고용 자료입니다.
-              </p>
             </article>
           ))}
         </div>

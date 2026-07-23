@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
-// 라틴 서브셋으로 1MB→416KB. 원본은 4G에서 LCP를 밀어 Lighthouse 모바일 90+를 깬다.
+// 서브셋(KS X 1001 한글+라틴) + 가변 축을 실사용 굵기 구간으로 제한해 1MB→296KB.
+// 축 45~930을 그대로 두면 쓰지도 않는 구간의 델타까지 실려 122KB를 더 받는다.
+// 실제 사용 굵기는 400(본문)·600·700·800·900뿐이라 400~900이면 충분하다(scripts/subset-font.sh).
 const pretendard = localFont({
   src: "./fonts/PretendardVariable.woff2",
   display: "swap",
-  weight: "45 920",
+  weight: "400 900",
   variable: "--font-pretendard",
 });
+// preload:false도 재봤지만 Load Delay가 준 만큼 Render Delay가 늘어(94→389ms) 상쇄돼 되돌렸다.
 
 export const metadata: Metadata = {
   title: {

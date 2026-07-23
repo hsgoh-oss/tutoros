@@ -6,14 +6,15 @@ import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getStudent, listGrades, listLessons } from "@/lib/data/crm";
 import { createReportRow, getReport } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
-import { pseudonymize, restore } from "@/lib/ai/pseudonym";
+import { pseudonymize } from "@/lib/ai/pseudonym";
+import { getSiteContent } from "@/lib/data/content";
 import {
   REPORT_PROMPT_RULES,
   hasBlockingIssue,
   validateReportContent,
 } from "@/lib/ai/validate";
 import { sendNotification } from "@/lib/notify/send";
-import type { NotifyType } from "@/lib/notify/templates";
+import { renderTemplate, type NotifyType } from "@/lib/notify/templates";
 import type {
   GradeRecord,
   Lesson,
@@ -25,6 +26,8 @@ import type { CrmActionResult } from "@/components/admin/crm/types";
 import { AI_REPORT_DISCLAIMER, REPORT_NOTIFY_TYPE } from "./constants";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
+// 학생 상세의 포털 링크 카드와 같은 값을 써야 문자로 간 링크와 관리자가 복사한 링크가 일치한다.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
 const REPORT_TYPES: ReportType[] = ["lesson", "weekly", "monthly", "exam", "consult_brief"];
 const REPORT_AUDIENCES: ReportAudience[] = ["parent", "student", "internal"];
 
@@ -243,7 +246,22 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
     return { ok: false, error: `발송 전 확인이 필요합니다 — ${reasons}` };
   }
 
-  const message = restore(report.content, student.name);
+  if (!student.portalToken) {
+    return {
+      ok: false,
+      error: "열람 링크가 없습니다. 학생 상세에서 리포트 링크를 재발급해 주세요.",
+    };
+  }
+
+  // 리포트 전문을 문자로 보내지 않는다. 성적·학습 기록이 평문으로 단말·통신사 로그에 남고,
+  // 카카오 알림톡은 사전 심사 고정 템플릿이라 가변 장문을 실을 수도 없다.
+  // 고정 문구 + 열람 링크만 보내고 본문은 포털에서 읽게 한다(기획 7-10 · 알림 12종 ⑤⑥).
+  const { settings } = await getSiteContent(session.tenantId);
+  const portalUrl = `${SITE_URL}/portal/${student.portalToken}`;
+  const message = `[${settings.brandName}] ${renderTemplate(notifyType, {
+    name: student.name,
+  })}\n${portalUrl}`;
+
   const db = createServiceClient()!;
 
   const result = await sendNotification({
