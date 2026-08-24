@@ -12,6 +12,8 @@ import { FilterChips } from "@/components/admin/crm/filter-chips";
 import {
   REPORT_TYPE_OPTIONS,
   reportAudienceLabel,
+  reportDeliveryLabel,
+  reportDeliveryTone,
   reportStatusLabel,
   reportStatusTone,
   reportTypeLabel,
@@ -89,6 +91,7 @@ export default async function ReportsPage({
                 <Th>대상</Th>
                 <Th>깊이</Th>
                 <Th>상태</Th>
+                <Th>전달</Th>
                 <Th>모델</Th>
                 <Th>생성일</Th>
               </tr>
@@ -109,6 +112,16 @@ export default async function ReportsPage({
                   <Td>{r.depth === "deep" ? "심화" : "기본"}</Td>
                   <Td>
                     <Badge tone={reportStatusTone(r.status)}>{reportStatusLabel(r.status)}</Badge>
+                  </Td>
+                  <Td>
+                    {/* 전달 상태 — 업무 상태와 분리(N-02). 미발송은 뱃지 대신 "-"로 소음을 줄인다. */}
+                    {r.deliveryStatus === "none" ? (
+                      <span className="text-xs text-muted">-</span>
+                    ) : (
+                      <Badge tone={reportDeliveryTone(r.deliveryStatus)}>
+                        {reportDeliveryLabel(r.deliveryStatus)}
+                      </Badge>
+                    )}
                   </Td>
                   <Td className="text-xs text-muted">{r.modelUsed ?? "-"}</Td>
                   <Td>{formatKDate(r.createdAt)}</Td>

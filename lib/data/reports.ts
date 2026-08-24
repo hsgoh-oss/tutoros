@@ -12,6 +12,7 @@ interface AiReportRow {
   model_used: string | null;
   token_usage: number | null;
   status: AiReport["status"];
+  delivery_status: AiReport["deliveryStatus"];
   sent_at: string | null;
   created_at: string;
 }
@@ -31,6 +32,7 @@ function mapReport(row: AiReportRow): AiReport {
     modelUsed: row.model_used,
     tokenUsage: row.token_usage,
     status: row.status,
+    deliveryStatus: row.delivery_status,
     sentAt: row.sent_at,
     createdAt: row.created_at,
   };

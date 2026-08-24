@@ -10,6 +10,8 @@ import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { ActionButton } from "@/components/admin/crm/action-button";
 import {
   reportAudienceLabel,
+  reportDeliveryLabel,
+  reportDeliveryTone,
   reportStatusLabel,
   reportStatusTone,
   reportTypeLabel,
@@ -30,9 +32,12 @@ export default async function ReportDetailPage({
   if (!report) notFound();
 
   const student = report.studentId ? await getStudent(session.tenantId, report.studentId) : null;
+  // 업무 상태(승인)와 전달 상태를 분리 판정(N-02) — 발송 실패해도 승인 상태는 유지되므로
+  // 전달 상태가 미발송(none)·실패(failed)일 때 발송 버튼을 노출한다. queued는 크론 발송 예정(중복 방지).
   const canSend =
-    (report.status === "approved" || report.status === "failed") &&
-    report.audience !== "internal";
+    report.audience !== "internal" &&
+    (report.status === "approved" || report.status === "sent") &&
+    (report.deliveryStatus === "none" || report.deliveryStatus === "failed");
 
   // 룰 검증(기획서 7-3 ①) — 발송 시에도 재검사하지만, 선생님이 승인 전에 고칠 수 있게 여기서 먼저 보여 준다.
   const issues = validateReportContent(report.content, {
@@ -49,6 +54,12 @@ export default async function ReportDetailPage({
           <h1 className="flex items-center gap-3 text-xl font-black tracking-tight">
             {reportTypeLabel(report.type)} 리포트
             <Badge tone={reportStatusTone(report.status)}>{reportStatusLabel(report.status)}</Badge>
+            {/* 전달 상태 뱃지 — 업무 상태와 분리 표시. 미발송(none)은 헤더에서 생략(초안·내부용 소음 방지). */}
+            {report.deliveryStatus !== "none" && (
+              <Badge tone={reportDeliveryTone(report.deliveryStatus)}>
+                {reportDeliveryLabel(report.deliveryStatus)}
+              </Badge>
+            )}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {student?.name ?? "학생 미연결"} · {reportAudienceLabel(report.audience)} ·{" "}
@@ -121,19 +132,23 @@ export default async function ReportDetailPage({
                 <p className="text-xs text-muted">내부용 리포트는 발송 대상이 없습니다.</p>
               ) : canSend ? (
                 <>
-                  {report.status === "failed" && (
+                  {report.deliveryStatus === "failed" && (
                     <p className="text-xs font-bold text-rose-600">
-                      이전 발송이 실패했습니다. 다시 시도해 주세요.
+                      이전 발송이 실패했습니다. 다시 시도해 주세요. (리포트는 승인 상태로 유지됩니다)
                     </p>
                   )}
                   <ActionButton
                     action={sendReport}
                     id={report.id}
-                    label="발송"
+                    label={report.deliveryStatus === "failed" ? "재발송" : "발송"}
                     confirmText="실명 복원 후 발송합니다. 계속할까요?"
                   />
                 </>
-              ) : report.status === "sent" ? (
+              ) : report.deliveryStatus === "queued" ? (
+                <p className="text-xs text-muted">
+                  발송 대기 중 — 다음 발송 슬롯에서 자동 발송됩니다.
+                </p>
+              ) : report.deliveryStatus === "sent" ? (
                 <p className="text-xs text-muted">{formatKDate(report.sentAt)} 발송 완료</p>
               ) : (
                 <p className="text-xs text-muted">승인 후 발송할 수 있습니다.</p>

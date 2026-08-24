@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getConsultation } from "@/lib/data/crm";
-import { logActivity } from "@/lib/data/activity";
+import { logActivity, runCritical } from "@/lib/data/activity";
 import { createReportRow } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
@@ -183,69 +183,121 @@ export async function convertToStudent(
     return { ok: false, error: "이미 학생으로 전환된 상담입니다." };
   }
 
-  const { data: student, error: insertError } = await db
-    .from("students")
-    .insert({
-      tenant_id: session.tenantId,
-      name: consultation.name,
-      parent_phone: consultation.guardian_phone || consultation.phone,
-      student_phone: null,
-      class_type: consultation.class_type || "inperson",
-      status: "trial",
-    })
-    .select("id")
-    .single();
-  if (insertError || !student) {
-    console.error("[consultations] student insert failed", insertError);
-    return { ok: false, error: "학생 전환 중 오류가 발생했습니다." };
-  }
+  // 상담→학생 전환은 개인정보 전환(privacy) — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "create",
+      targetType: "student",
+      targetId: null, // insert 전 선기록이라 새 학생 id는 아직 없다 — before/after로 식별.
+      summary: "상담→학생 전환",
+      category: "privacy",
+      before: { consultation_id: id, status: consultation.status },
+      after: {
+        consultation_id: id,
+        status: "registered",
+        class_type: consultation.class_type || "inperson",
+      },
+    },
+    async (): Promise<
+      { ok: true; studentId: string } | { ok: false; error: string }
+    > => {
+      const { data: student, error: insertError } = await db
+        .from("students")
+        .insert({
+          tenant_id: session.tenantId,
+          name: consultation.name,
+          parent_phone: consultation.guardian_phone || consultation.phone,
+          student_phone: null,
+          class_type: consultation.class_type || "inperson",
+          status: "trial",
+        })
+        .select("id")
+        .single();
+      if (insertError || !student) {
+        console.error("[consultations] student insert failed", insertError);
+        return { ok: false, error: "학생 전환 중 오류가 발생했습니다." };
+      }
 
-  const { error: updateError } = await db
-    .from("consultations")
-    .update({ student_id: student.id, status: "registered" })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (updateError) {
-    console.error("[consultations] link update failed", updateError);
-    return { ok: false, error: "상담 연결 중 오류가 발생했습니다." };
-  }
+      // 전환 실패 시 전환 전 상태로 되돌리는 보상 롤백(lib/actions/consult.ts 보상 삭제 선례).
+      const rollbackConversion = async () => {
+        const { error: revertError } = await db
+          .from("consultations")
+          .update({ student_id: null, status: consultation.status })
+          .eq("tenant_id", session.tenantId)
+          .eq("id", id);
+        if (revertError) console.error("[consultations] link revert failed", revertError);
+        const { error: cleanupError } = await db
+          .from("students")
+          .delete()
+          .eq("tenant_id", session.tenantId)
+          .eq("id", student.id);
+        if (cleanupError) console.error("[consultations] student cleanup failed", cleanupError);
+      };
 
-  // 상담 동의를 학생 레코드로 이관(감사 가시성). 실패해도 전환 자체는 성공 처리.
-  const { data: priorConsents } = await db
-    .from("consents")
-    .select("item, policy_version, via")
-    .eq("tenant_id", session.tenantId)
-    .eq("subject_type", "consultation")
-    .eq("subject_id", id);
-  if (priorConsents && priorConsents.length > 0) {
-    const { error: consentCopyError } = await db.from("consents").insert(
-      priorConsents.map((c) => ({
-        tenant_id: session.tenantId,
-        subject_type: "student",
-        subject_id: student.id,
-        item: c.item,
-        policy_version: c.policy_version,
-        via: c.via,
-      })),
-    );
-    if (consentCopyError) {
-      console.error("[consultations] consent copy failed", consentCopyError);
-    }
-  }
+      const { error: updateError } = await db
+        .from("consultations")
+        .update({ student_id: student.id, status: "registered" })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (updateError) {
+        console.error("[consultations] link update failed", updateError);
+        // 연결 실패 — 방금 만든 학생 행을 보상 삭제해 반쪽 전환을 남기지 않는다.
+        const { error: cleanupError } = await db
+          .from("students")
+          .delete()
+          .eq("tenant_id", session.tenantId)
+          .eq("id", student.id);
+        if (cleanupError) console.error("[consultations] student cleanup failed", cleanupError);
+        return { ok: false, error: "상담 연결 중 오류가 발생했습니다." };
+      }
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "student",
-    student.id,
-    "상담→학생 전환",
+      // 상담 동의를 학생 레코드로 이관(감사 가시성). 동의 이력은 감사 성격이라
+      // 조회·이관 실패 시 전환 전체를 롤백하고 실패 처리한다(동의 이관 없는 전환 확정 금지).
+      const { data: priorConsents, error: consentFetchError } = await db
+        .from("consents")
+        .select("item, policy_version, via")
+        .eq("tenant_id", session.tenantId)
+        .eq("subject_type", "consultation")
+        .eq("subject_id", id);
+      if (consentFetchError) {
+        console.error("[consultations] consent fetch failed", consentFetchError);
+        await rollbackConversion();
+        return {
+          ok: false,
+          error: "동의 이력 확인에 실패해 학생 전환을 실행하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+        };
+      }
+      if (priorConsents && priorConsents.length > 0) {
+        const { error: consentCopyError } = await db.from("consents").insert(
+          priorConsents.map((c) => ({
+            tenant_id: session.tenantId,
+            subject_type: "student",
+            subject_id: student.id,
+            item: c.item,
+            policy_version: c.policy_version,
+            via: c.via,
+          })),
+        );
+        if (consentCopyError) {
+          console.error("[consultations] consent copy failed", consentCopyError);
+          await rollbackConversion();
+          return {
+            ok: false,
+            error: "동의 이력 이관에 실패해 학생 전환을 실행하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+          };
+        }
+      }
+      return { ok: true, studentId: student.id };
+    },
   );
+  if (!result.ok) return result;
 
   revalidateConsultation(id);
   revalidatePath("/admin/students");
-  revalidatePath(`/admin/students/${student.id}`);
-  return { ok: true, studentId: student.id };
+  revalidatePath(`/admin/students/${result.studentId}`);
+  return result;
 }
 
 /**
@@ -294,32 +346,41 @@ export async function generateConsultBrief(
     context,
   ].join("\n");
 
-  const generated = await generateReport("consult_brief", "basic", prompt);
-  if (!generated.ok || !generated.content) {
-    return { ok: false, error: generated.error ?? "브리핑 생성에 실패했습니다." };
-  }
+  // 상담 브리핑 생성은 성적·평가 정보 전환(grade) — 감사 선기록 없이는 생성하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "generate_consult_brief",
+      targetType: "consultation",
+      targetId: id,
+      summary: "상담 브리핑 생성",
+      category: "grade",
+    },
+    async (): Promise<
+      { ok: true; reportId: string } | { ok: false; error: string }
+    > => {
+      const generated = await generateReport("consult_brief", "basic", prompt);
+      if (!generated.ok || !generated.content) {
+        return { ok: false, error: generated.error ?? "브리핑 생성에 실패했습니다." };
+      }
 
-  const created = await createReportRow({
-    tenantId: session.tenantId,
-    studentId: consultation.studentId,
-    type: "consult_brief",
-    audience: "internal",
-    depth: "basic",
-    content: generated.content + AI_REPORT_DISCLAIMER,
-    modelUsed: generated.modelUsed ?? null,
-    tokenUsage: generated.tokenUsage ?? null,
-  });
-  if (!created.ok) return created;
-
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "report",
-    created.id,
-    "상담 브리핑 생성",
+      const created = await createReportRow({
+        tenantId: session.tenantId,
+        studentId: consultation.studentId,
+        type: "consult_brief",
+        audience: "internal",
+        depth: "basic",
+        content: generated.content + AI_REPORT_DISCLAIMER,
+        modelUsed: generated.modelUsed ?? null,
+        tokenUsage: generated.tokenUsage ?? null,
+      });
+      if (!created.ok) return created;
+      return { ok: true, reportId: created.id };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/reports");
-  return { ok: true, reportId: created.id };
+  return result;
 }

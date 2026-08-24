@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
-import { logActivity } from "@/lib/data/activity";
+import { runCritical } from "@/lib/data/activity";
 import type { ClassType, Student } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -59,19 +59,28 @@ function parseStudentForm(formData: FormData): StudentFormPayload | { error: str
   };
 }
 
+/** 학생 본인 연락처 수집 동의 기록 — 동의 이력은 감사 성격이라 실패를 삼키지 않고 호출부에 알린다. */
 async function recordStudentPhoneConsent(
   tenantId: string,
   studentId: string,
-): Promise<void> {
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const db = createServiceClient()!;
-  const { error } = await db.from("consents").insert({
-    tenant_id: tenantId,
-    subject_type: "student",
-    subject_id: studentId,
-    item: "student_phone",
-    via: "admin",
-  });
-  if (error) console.error("[students] student_phone consent insert failed", error);
+  const { data, error } = await db
+    .from("consents")
+    .insert({
+      tenant_id: tenantId,
+      subject_type: "student",
+      subject_id: studentId,
+      item: "student_phone",
+      via: "admin",
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("[students] student_phone consent insert failed", error);
+    return { ok: false, error: "학생 연락처 수집 동의 기록에 실패했습니다." };
+  }
+  return { ok: true, id: (data as { id: string }).id };
 }
 
 export async function createStudent(formData: FormData): Promise<CrmActionResult> {
@@ -83,41 +92,76 @@ export async function createStudent(formData: FormData): Promise<CrmActionResult
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
   const db = createServiceClient()!;
-  const { data: student, error } = await db
-    .from("students")
-    .insert({
-      tenant_id: session.tenantId,
-      name: parsed.name,
-      parent_phone: parsed.parentPhone,
-      student_phone: parsed.studentPhone,
-      school: parsed.school,
-      grade: parsed.grade,
-      class_type: parsed.classType,
-      subject_type: parsed.subjectType,
-      status: parsed.status,
-    })
-    .select("id")
-    .single();
-  if (error || !student) {
-    console.error("[students] insert failed", error);
-    return { ok: false, error: "학생 등록 중 오류가 발생했습니다." };
-  }
+  // 학생 등록은 개인정보 전환(privacy) — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "create",
+      targetType: "student",
+      targetId: null, // insert 전 선기록이라 새 행 id는 아직 없다 — after_data로 식별.
+      summary: `학생 '${parsed.name}' 등록`,
+      category: "privacy",
+      // 연락처 원문은 감사 로그에 남기지 않는다 — 보유 여부만 기록(필드 서브셋).
+      after: {
+        name: parsed.name,
+        school: parsed.school,
+        grade: parsed.grade,
+        class_type: parsed.classType,
+        subject_type: parsed.subjectType,
+        status: parsed.status,
+        has_student_phone: Boolean(parsed.studentPhone),
+        student_phone_consent: parsed.studentPhoneConsent,
+      },
+    },
+    async () => {
+      const { data: student, error } = await db
+        .from("students")
+        .insert({
+          tenant_id: session.tenantId,
+          name: parsed.name,
+          parent_phone: parsed.parentPhone,
+          student_phone: parsed.studentPhone,
+          school: parsed.school,
+          grade: parsed.grade,
+          class_type: parsed.classType,
+          subject_type: parsed.subjectType,
+          status: parsed.status,
+        })
+        .select("id")
+        .single();
+      if (error || !student) {
+        console.error("[students] insert failed", error);
+        return { ok: false, error: "학생 등록 중 오류가 발생했습니다." };
+      }
 
-  if (parsed.studentPhone && parsed.studentPhoneConsent) {
-    await recordStudentPhoneConsent(session.tenantId, student.id);
-  }
-
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "student",
-    student.id,
-    `학생 '${parsed.name}' 등록`,
+      // 동의 기록 실패 시 방금 등록한 학생을 보상 삭제하고 등록 자체를 실패 처리한다
+      // (동의 이력 없는 학생 연락처 보유 금지 — lib/actions/consult.ts 보상 삭제 선례).
+      if (parsed.studentPhone && parsed.studentPhoneConsent) {
+        const consent = await recordStudentPhoneConsent(session.tenantId, student.id);
+        if (!consent.ok) {
+          const { error: cleanupError } = await db
+            .from("students")
+            .delete()
+            .eq("tenant_id", session.tenantId)
+            .eq("id", student.id);
+          if (cleanupError) {
+            console.error("[students] student cleanup failed", cleanupError);
+          }
+          return {
+            ok: false,
+            error:
+              "학생 연락처 수집 동의 기록에 실패해 등록을 실행하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+          };
+        }
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/students");
-  return { ok: true };
+  return result;
 }
 
 export async function updateStudent(formData: FormData): Promise<CrmActionResult> {
@@ -132,41 +176,100 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
   const db = createServiceClient()!;
-  const { error } = await db
+  // 수정 전 행을 before_data로 남기기 위해 먼저 조회한다(연락처 원문은 보유 여부로만 요약).
+  const { data: existing, error: fetchError } = await db
     .from("students")
-    .update({
-      name: parsed.name,
-      parent_phone: parsed.parentPhone,
-      student_phone: parsed.studentPhone,
-      school: parsed.school,
-      grade: parsed.grade,
-      class_type: parsed.classType,
-      subject_type: parsed.subjectType,
-      status: parsed.status,
-    })
+    .select("name, school, grade, class_type, subject_type, status, student_phone")
     .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[students] update failed", error);
-    return { ok: false, error: "학생 정보 수정 중 오류가 발생했습니다." };
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError || !existing) {
+    console.error("[students] fetch before update failed", fetchError);
+    return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
   }
 
-  if (parsed.studentPhone && parsed.studentPhoneConsent) {
-    await recordStudentPhoneConsent(session.tenantId, id);
-  }
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "update",
+      targetType: "student",
+      targetId: id,
+      summary: `학생 '${parsed.name}' 정보 수정`,
+      category: "privacy",
+      before: {
+        name: existing.name,
+        school: existing.school,
+        grade: existing.grade,
+        class_type: existing.class_type,
+        subject_type: existing.subject_type,
+        status: existing.status,
+        has_student_phone: Boolean(existing.student_phone),
+      },
+      after: {
+        name: parsed.name,
+        school: parsed.school,
+        grade: parsed.grade,
+        class_type: parsed.classType,
+        subject_type: parsed.subjectType,
+        status: parsed.status,
+        has_student_phone: Boolean(parsed.studentPhone),
+        student_phone_consent: parsed.studentPhoneConsent,
+      },
+    },
+    async () => {
+      // 동의 기록은 감사 성격 — 수정 반영 전에 선기록하고, 실패하면 수정 자체를 실행하지 않는다.
+      let consentId: string | null = null;
+      if (parsed.studentPhone && parsed.studentPhoneConsent) {
+        const consent = await recordStudentPhoneConsent(session.tenantId, id);
+        if (!consent.ok) {
+          return {
+            ok: false,
+            error:
+              "학생 연락처 수집 동의 기록에 실패해 수정을 실행하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+          };
+        }
+        consentId = consent.id;
+      }
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "update",
-    "student",
-    id,
-    `학생 '${parsed.name}' 정보 수정`,
+      const { error } = await db
+        .from("students")
+        .update({
+          name: parsed.name,
+          parent_phone: parsed.parentPhone,
+          student_phone: parsed.studentPhone,
+          school: parsed.school,
+          grade: parsed.grade,
+          class_type: parsed.classType,
+          subject_type: parsed.subjectType,
+          status: parsed.status,
+        })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[students] update failed", error);
+        // 수정이 반영되지 않았으므로 방금 선기록한 동의도 보상 삭제한다 —
+        // 반영되지 않은 변경에 대한 동의 이력을 적립하지 않는다(createStudent 보상 삭제와 동일 정책).
+        if (consentId) {
+          const { error: cleanupError } = await db
+            .from("consents")
+            .delete()
+            .eq("tenant_id", session.tenantId)
+            .eq("id", consentId);
+          if (cleanupError) {
+            console.error("[students] consent cleanup failed", cleanupError);
+          }
+        }
+        return { ok: false, error: "학생 정보 수정 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/students");
   revalidatePath(`/admin/students/${id}`);
-  return { ok: true };
+  return result;
 }
 
 /** 리포트 포털 링크 재발급 — 기존 토큰을 새 값으로 회전(이전 링크 즉시 무효화). */
@@ -177,27 +280,35 @@ export async function regeneratePortalToken(id: string): Promise<CrmActionResult
   if (!id) return { ok: false, error: "잘못된 요청입니다." };
 
   const db = createServiceClient()!;
-  const { error } = await db
-    .from("students")
-    .update({ portal_token: randomBytes(16).toString("hex") })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[students] portal token regenerate failed", error);
-    return { ok: false, error: "링크 재발급 중 오류가 발생했습니다." };
-  }
-
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "update",
-    "student",
-    id,
-    "포털 링크 재발급",
+  // 토큰 회전은 접근 권한 전환(permission) — 감사 선기록 없이는 실행하지 않는다. 토큰 값은 기록 금지.
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "update",
+      targetType: "student",
+      targetId: id,
+      summary: "포털 링크 재발급",
+      category: "permission",
+      reason: "기존 포털 링크 무효화 후 새 토큰 발급",
+    },
+    async () => {
+      const { error } = await db
+        .from("students")
+        .update({ portal_token: randomBytes(16).toString("hex") })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[students] portal token regenerate failed", error);
+        return { ok: false, error: "링크 재발급 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath(`/admin/students/${id}`);
-  return { ok: true };
+  return result;
 }
 
 export interface BulkStudentRow {
@@ -222,33 +333,41 @@ export async function bulkCreateStudents(
   }
 
   const db = createServiceClient()!;
-  const { error } = await db.from("students").insert(
-    valid.map((r) => ({
-      tenant_id: session.tenantId,
-      name: r.name.trim(),
-      parent_phone: r.parentPhone.trim(),
-      school: r.school?.trim() || null,
-      grade: r.grade?.trim() || null,
-      class_type: VALID_CLASS_TYPES.includes(r.classType as ClassType)
-        ? (r.classType as ClassType)
-        : "inperson",
-      status: "trial",
-    })),
+  // 일괄 등록도 개인정보 전환(privacy) — 감사 선기록 없이는 실행하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "create",
+      targetType: "student",
+      targetId: null, // 일괄 insert라 개별 행 id는 없다 — after_data의 건수로 요약.
+      summary: `학생 CSV 일괄 등록 (${valid.length}건)`,
+      category: "privacy",
+      after: { count: valid.length, skipped },
+    },
+    async () => {
+      const { error } = await db.from("students").insert(
+        valid.map((r) => ({
+          tenant_id: session.tenantId,
+          name: r.name.trim(),
+          parent_phone: r.parentPhone.trim(),
+          school: r.school?.trim() || null,
+          grade: r.grade?.trim() || null,
+          class_type: VALID_CLASS_TYPES.includes(r.classType as ClassType)
+            ? (r.classType as ClassType)
+            : "inperson",
+          status: "trial",
+        })),
+      );
+      if (error) {
+        console.error("[students] bulk insert failed", error);
+        return { ok: false, error: "CSV 일괄 등록 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
-  if (error) {
-    console.error("[students] bulk insert failed", error);
-    return { ok: false, error: "CSV 일괄 등록 중 오류가 발생했습니다." };
-  }
-
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "student",
-    null,
-    `학생 CSV 일괄 등록 (${valid.length}건)`,
-  );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/students");
-  return { ok: true, created: valid.length, skipped };
+  return { ...result, created: valid.length, skipped };
 }

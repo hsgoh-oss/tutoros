@@ -9,6 +9,7 @@ import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { BackupPanel } from "@/components/admin/backup-panel";
 import { updateSiteInfo, restoreSetting } from "./actions";
+import { SecurityCard } from "./security-card";
 
 export default async function SettingsPage() {
   const session = await getAdminSession();
@@ -99,6 +100,15 @@ export default async function SettingsPage() {
           </div>
         </SubmitForm>
         <BackupPanel entries={entries} restoreAction={restoreSetting} />
+      </Card>
+
+      {/* 관리자 보안 — 전 세션 로그아웃·운영자 이메일 교체 (P-10). DB 미연결이면 동작하지 않는다(액션이 안내). */}
+      <Card className="mt-8 max-w-3xl">
+        <h2 className="text-lg font-black tracking-tight">관리자 보안</h2>
+        <p className="mt-1 mb-6 text-sm text-muted">
+          세션 회수와 운영자 승계를 관리합니다. 두 작업 모두 완료 후 재로그인이 필요합니다.
+        </p>
+        <SecurityCard currentEmail={session.email} />
       </Card>
     </div>
   );

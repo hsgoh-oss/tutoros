@@ -15,6 +15,8 @@ import {
 } from "@/lib/ai/validate";
 import { sendNotification } from "@/lib/notify/send";
 import { renderTemplate, type NotifyType } from "@/lib/notify/templates";
+import { runCritical } from "@/lib/data/activity";
+import { createWorkItem } from "@/lib/data/work";
 import type {
   GradeRecord,
   Lesson,
@@ -140,16 +142,29 @@ export async function createReport(
     return { ok: false, error: generated.error ?? "리포트 생성에 실패했습니다." };
   }
 
-  const created = await createReportRow({
-    tenantId: session.tenantId,
-    studentId,
-    type,
-    audience,
-    depth,
-    content: generated.content + AI_REPORT_DISCLAIMER,
-    modelUsed: generated.modelUsed ?? null,
-    tokenUsage: generated.tokenUsage ?? null,
-  });
+  // 성적 데이터 기반 리포트 생성은 중요행위(category=grade) — 감사 선기록 실패 시 저장하지 않는다(fail-closed).
+  const created = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "report_create",
+      targetType: "ai_report",
+      targetId: null, // 생성 전이라 id 미정 — 원본 학생을 summary로 남긴다.
+      summary: `${student.name} ${TYPE_LABEL[type]} 리포트 생성(${AUDIENCE_LABEL[audience]}·${depth === "deep" ? "심화" : "기본"})`,
+      category: "grade",
+    },
+    () =>
+      createReportRow({
+        tenantId: session.tenantId,
+        studentId,
+        type,
+        audience,
+        depth,
+        content: generated.content + AI_REPORT_DISCLAIMER,
+        modelUsed: generated.modelUsed ?? null,
+        tokenUsage: generated.tokenUsage ?? null,
+      }),
+  );
   if (!created.ok) return created;
 
   revalidatePath("/admin/reports");
@@ -171,18 +186,34 @@ export async function updateReportContent(formData: FormData): Promise<CrmAction
   if (report.status === "sent") return { ok: false, error: "발송 완료된 리포트는 수정할 수 없습니다." };
 
   const db = createServiceClient()!;
-  const { error } = await db
-    .from("ai_reports")
-    .update({ content })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[reports] content update failed", error);
-    return { ok: false, error: "리포트 저장 중 오류가 발생했습니다." };
-  }
+  // 성적 리포트 본문 수정도 중요행위(category=grade) — 감사 선기록 실패 시 수정하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "report_update_content",
+      targetType: "ai_report",
+      targetId: id,
+      summary: `리포트 본문 수정(${TYPE_LABEL[report.type]}·${AUDIENCE_LABEL[report.audience]})`,
+      category: "grade",
+    },
+    async (): Promise<CrmActionResult> => {
+      const { error } = await db
+        .from("ai_reports")
+        .update({ content })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[reports] content update failed", error);
+        return { ok: false, error: "리포트 저장 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
 
   revalidateReport(id);
-  return { ok: true };
+  return result;
 }
 
 export async function approveReport(id: string): Promise<CrmActionResult> {
@@ -195,18 +226,36 @@ export async function approveReport(id: string): Promise<CrmActionResult> {
   if (report.status !== "draft") return { ok: false, error: "초안 상태만 승인할 수 있습니다." };
 
   const db = createServiceClient()!;
-  const { error } = await db
-    .from("ai_reports")
-    .update({ status: "approved" })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[reports] approve failed", error);
-    return { ok: false, error: "승인 처리 중 오류가 발생했습니다." };
-  }
+  // 승인은 학부모 포털 노출(approved부터 열람 가능)로 이어지는 성적 전환 — 감사 선기록 실패 시 승인하지 않는다.
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "report_approve",
+      targetType: "ai_report",
+      targetId: id,
+      summary: `리포트 승인(${TYPE_LABEL[report.type]}·${AUDIENCE_LABEL[report.audience]})`,
+      category: "grade",
+      before: { status: report.status },
+      after: { status: "approved" },
+    },
+    async (): Promise<CrmActionResult> => {
+      const { error } = await db
+        .from("ai_reports")
+        .update({ status: "approved" })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[reports] approve failed", error);
+        return { ok: false, error: "승인 처리 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
 
   revalidateReport(id);
-  return { ok: true };
+  return result;
 }
 
 export async function sendReport(id: string): Promise<CrmActionResult> {
@@ -216,9 +265,14 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
 
   const report = await getReport(session.tenantId, id);
   if (!report) return { ok: false, error: "리포트를 찾을 수 없습니다." };
-  // 승인 상태 또는 이전 발송 실패(재시도) 상태에서만 발송 가능.
-  if (report.status !== "approved" && report.status !== "failed") {
+  // 승인 이후에만 발송 가능. 발송 실패는 업무 상태가 아니라 전달 상태이므로(N-02)
+  // approved(첫 발송·실패 재발송)와 sent(전달 실패 후 역전파 전 재발송) 모두 허용하되,
+  // queued(야간 대기·Solapi 미설정 대기)는 크론 발송 예정 — 중복 발송을 막는다.
+  if (report.status !== "approved" && report.status !== "sent") {
     return { ok: false, error: "승인된 리포트만 발송할 수 있습니다." };
+  }
+  if (report.deliveryStatus === "queued") {
+    return { ok: false, error: "발송 대기 중인 리포트입니다. 다음 발송 슬롯에서 자동 발송됩니다." };
   }
   if (report.audience === "internal") return { ok: false, error: "내부용 리포트는 발송 대상이 없습니다." };
   if (!report.studentId) return { ok: false, error: "연결된 학생 정보가 없습니다." };
@@ -264,36 +318,87 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
 
   const db = createServiceClient()!;
 
-  const result = await sendNotification({
-    tenantId: session.tenantId,
-    studentId: student.id,
-    type: notifyType,
-    phone,
-    message,
-    isAd: false,
-  });
+  // 성적 리포트의 외부 발송은 중요행위(category=grade) — 감사 선기록 실패 시 발송하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "report_send",
+      targetType: "ai_report",
+      targetId: id,
+      summary: `${student.name} ${TYPE_LABEL[report.type]} 리포트 외부 발송(${AUDIENCE_LABEL[report.audience]})`,
+      category: "grade",
+    },
+    async (): Promise<CrmActionResult> => {
+      const sendResult = await sendNotification({
+        tenantId: session.tenantId,
+        studentId: student.id,
+        type: notifyType,
+        phone,
+        message,
+        isAd: false,
+        reportId: id, // notifications.report_id — 큐 재발송의 지연 성공·실패도 delivery_status로 역전파된다.
+      });
 
-  if (!result.ok) {
-    console.error("[reports] send failed", result.error);
-    await db
-      .from("ai_reports")
-      .update({ status: "failed" })
-      .eq("tenant_id", session.tenantId)
-      .eq("id", id);
-    revalidateReport(id);
-    return { ok: false, error: result.error ?? "발송에 실패했습니다." };
-  }
+      if (!sendResult.ok) {
+        if (sendResult.skipped) {
+          // flush 크론이 같은 알림을 먼저 클레임한 경합 — 실패가 아니라 발송 진행 중이다.
+          // delivery_status·오늘 업무를 건드리면 거짓 실패 신호가 되므로 그대로 두고 안내만 한다.
+          return {
+            ok: false,
+            error: "이미 발송이 진행 중입니다 — 잠시 후 전달 상태를 확인해 주세요.",
+          };
+        }
+        // 발송 실패 — 게시 상태(status)는 유지하고 전달 상태만 실패로 남긴다(N-02).
+        // 승인된 리포트는 포털(approved·sent 노출)에서 계속 열람 가능해야 한다.
+        console.error("[reports] send failed", sendResult.error);
+        const { error } = await db
+          .from("ai_reports")
+          .update({ delivery_status: "failed" })
+          .eq("tenant_id", session.tenantId)
+          .eq("id", id);
+        if (error) console.error("[reports] delivery_status failed 갱신 실패", error);
+        // 열린 실패에는 담당자의 다음 행동이 있어야 한다 — 오늘 업무 큐로 수렴(한 사건 한 업무는 dedup이 보장).
+        await createWorkItem(session.tenantId, {
+          kind: "report_send_failed",
+          title: `리포트 발송 실패 — ${student.name} ${TYPE_LABEL[report.type]}`,
+          sourceType: "ai_report",
+          sourceId: id,
+          nextAction: "발송 실패 확인 후 재발송",
+          detail: sendResult.error ?? null,
+          priority: "normal",
+        });
+        return { ok: false, error: sendResult.error ?? "발송에 실패했습니다." };
+      }
 
-  const { error } = await db
-    .from("ai_reports")
-    .update({ status: "sent", sent_at: new Date().toISOString() })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[reports] sent status update failed", error);
-    return { ok: false, error: "발송은 완료됐으나 상태 갱신에 실패했습니다." };
-  }
+      if (sendResult.queued) {
+        // Solapi 미설정·야간 대기 — 실발송 전이므로 sent로 확정하지 않는다(결과 불명은 성공이 아니다).
+        // 업무 상태는 approved 그대로, 전달 상태만 queued. 실발송 성공 시 dispatchQueued가 sent로 역전파한다.
+        const { error } = await db
+          .from("ai_reports")
+          .update({ delivery_status: "queued" })
+          .eq("tenant_id", session.tenantId)
+          .eq("id", id);
+        if (error) console.error("[reports] delivery_status queued 갱신 실패", error);
+        return { ok: true };
+      }
+
+      // 실발송 성공 — 이때만 업무 상태를 sent로 확정한다.
+      const { error } = await db
+        .from("ai_reports")
+        .update({ status: "sent", delivery_status: "sent", sent_at: new Date().toISOString() })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        // 발송 자체는 성공(외부 API 응답 확인) — 여기서 실패로 되돌리면 실제 발송과 기록이 어긋난다.
+        // 직전에 dispatchQueued의 역전파(propagateReportDelivery)가 같은 갱신을 이미 시도했으므로
+        // 보통은 반영돼 있다. 성공은 유지하고 로그만 남긴다(업무 성공과 기록 갱신을 분리).
+        console.error("[reports] sent status update failed", error);
+      }
+      return { ok: true };
+    },
+  );
 
   revalidateReport(id);
-  return { ok: true };
+  return result;
 }

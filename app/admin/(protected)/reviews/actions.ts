@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
-import { logActivity } from "@/lib/data/activity";
+import { logActivity, runCritical } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import type { Review } from "@/lib/types";
 import { reviewerTypeLabel } from "./constants";
@@ -163,50 +163,74 @@ export async function createReview(formData: FormData): Promise<CrmActionResult>
 
   await backupReviews(db, session.tenantId);
 
-  const { data: inserted, error } = await db
-    .from("reviews")
-    .insert({
-      tenant_id: session.tenantId,
-      reviewer_type: parsed.reviewerType,
-      content: parsed.content,
-      rating: parsed.rating,
-      before_grade: parsed.beforeGrade,
-      after_grade: parsed.afterGrade,
-      meta: metaPayload(parsed),
-      screenshots: uploaded,
-      sort_order: count ?? 0,
-    })
-    .select("id")
-    .maybeSingle();
-  if (error) {
-    console.error("[reviews] insert failed", error);
-    return { ok: false, error: "후기 등록 중 오류가 발생했습니다." };
-  }
+  // 후기 게시는 게시 동의를 동반한 개인정보 전환(privacy) — 감사 선기록 없이는 게시하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "create",
+      targetType: "review",
+      targetId: null, // insert 전 선기록이라 새 행 id는 아직 없다 — after_data로 식별.
+      summary: `${reviewerTypeLabel(parsed.reviewerType)} 후기 등록`,
+      category: "privacy",
+      after: {
+        reviewer_type: parsed.reviewerType,
+        rating: parsed.rating,
+        screenshot_count: uploaded.length,
+        publish_consent: true,
+      },
+    },
+    async () => {
+      const { data: inserted, error } = await db
+        .from("reviews")
+        .insert({
+          tenant_id: session.tenantId,
+          reviewer_type: parsed.reviewerType,
+          content: parsed.content,
+          rating: parsed.rating,
+          before_grade: parsed.beforeGrade,
+          after_grade: parsed.afterGrade,
+          meta: metaPayload(parsed),
+          screenshots: uploaded,
+          sort_order: count ?? 0,
+        })
+        .select("id")
+        .single();
+      if (error || !inserted) {
+        console.error("[reviews] insert failed", error);
+        return { ok: false, error: "후기 등록 중 오류가 발생했습니다." };
+      }
 
-  // 게시 동의 이력 기록(기획 7-17 "전 동의는 consents 테이블에 보존"). subject는 후기 자체.
-  if (inserted?.id) {
-    const { error: consentError } = await db.from("consents").insert({
-      tenant_id: session.tenantId,
-      subject_type: "review",
-      subject_id: inserted.id,
-      item: "review",
-      policy_version: "v0.9",
-      via: "admin",
-    });
-    if (consentError) console.error("[reviews] 후기 게시 동의 기록 실패", consentError);
-  }
-
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "review",
-    inserted?.id ?? null,
-    `${reviewerTypeLabel(parsed.reviewerType)} 후기 등록`,
+      // 게시 동의 이력 기록(기획 7-17 "전 동의는 consents 테이블에 보존"). subject는 후기 자체.
+      // 동의 이력은 감사 성격 — 기록 실패 시 방금 게시한 후기를 보상 삭제하고 게시를 실패 처리한다.
+      const { error: consentError } = await db.from("consents").insert({
+        tenant_id: session.tenantId,
+        subject_type: "review",
+        subject_id: inserted.id,
+        item: "review",
+        policy_version: "v0.9",
+        via: "admin",
+      });
+      if (consentError) {
+        console.error("[reviews] 후기 게시 동의 기록 실패", consentError);
+        const { error: cleanupError } = await db
+          .from("reviews")
+          .delete()
+          .eq("tenant_id", session.tenantId)
+          .eq("id", inserted.id);
+        if (cleanupError) console.error("[reviews] review cleanup failed", cleanupError);
+        return {
+          ok: false,
+          error: "후기 게시 동의 기록에 실패해 후기를 게시하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+        };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidateReviews();
-  return { ok: true };
+  return result;
 }
 
 export async function updateReview(formData: FormData): Promise<CrmActionResult> {
@@ -473,29 +497,53 @@ export async function restoreReviewsBackup(backupId: string): Promise<CrmActionR
   }
 
   const db = createServiceClient()!;
-  const { error: deleteError } = await db
-    .from("reviews")
-    .delete()
-    .eq("tenant_id", session.tenantId);
-  if (deleteError) {
-    console.error("[reviews] restore delete failed", deleteError);
-    return { ok: false, error: "복원 중 오류가 발생했습니다." };
-  }
-
   // snapshot은 jsonb라 내용이 스키마를 보장하지 않는다. service_role은 RLS를 우회하므로
   // 복원 행의 tenant_id를 현재 세션 테넌트로 강제해 타테넌트로 새는 경로를 원천 차단한다.
   const rows = ((backup.snapshot as ReviewSnapshotRow[]) ?? []).map((row) => ({
     ...row,
     tenant_id: session.tenantId,
   }));
-  if (rows.length > 0) {
-    const { error: insertError } = await db.from("reviews").insert(rows);
-    if (insertError) {
-      console.error("[reviews] restore insert failed", insertError);
-      return { ok: false, error: "복원 중 오류가 발생했습니다." };
-    }
-  }
+
+  // 복원 전 현재 규모를 before_data 요약으로 남긴다(전문 스냅샷은 backups 테이블 몫).
+  const { count: currentCount } = await db
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", session.tenantId);
+
+  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "restore",
+      targetType: "review",
+      targetId: backupId,
+      summary: `후기 백업 복원 (${rows.length}건)`,
+      category: "privacy",
+      before: { review_count: currentCount ?? 0 },
+      after: { backup_id: backupId, restored_count: rows.length },
+    },
+    async () => {
+      const { error: deleteError } = await db
+        .from("reviews")
+        .delete()
+        .eq("tenant_id", session.tenantId);
+      if (deleteError) {
+        console.error("[reviews] restore delete failed", deleteError);
+        return { ok: false, error: "복원 중 오류가 발생했습니다." };
+      }
+      if (rows.length > 0) {
+        const { error: insertError } = await db.from("reviews").insert(rows);
+        if (insertError) {
+          console.error("[reviews] restore insert failed", insertError);
+          return { ok: false, error: "복원 중 오류가 발생했습니다." };
+        }
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
 
   revalidateReviews();
-  return { ok: true };
+  return result;
 }

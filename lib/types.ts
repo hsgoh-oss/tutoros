@@ -171,7 +171,7 @@ export interface GradeRecord {
 }
 
 export type PaymentMethod = "payssaem" | "bank"; // 토스 제거 — 무통장입금(bank)+결제선생(payssaem)
-export type PaymentStatus = "draft" | "pending" | "paid" | "overdue";
+export type PaymentStatus = "draft" | "pending" | "paid" | "overdue" | "refunded"; // refunded: 00014 결제선생 전액환불
 
 export interface Payment {
   id: string;
@@ -239,6 +239,9 @@ export type ReportType =
   | "consult_brief";
 export type ReportAudience = "parent" | "student" | "internal";
 
+/** 전달 상태 — 업무 상태(status)와 분리(N-02). 발송 실패는 여기에만 기록되고 게시 상태는 유지된다. */
+export type ReportDeliveryStatus = "none" | "queued" | "sent" | "failed";
+
 export interface AiReport {
   id: string;
   studentId: string | null;
@@ -248,7 +251,9 @@ export interface AiReport {
   content: string;
   modelUsed: string | null;
   tokenUsage: number | null;
-  status: "draft" | "approved" | "sent" | "failed";
+  /** 업무 상태 — 초안→승인→발송완료. 'failed'는 업무 상태가 아니다(전달 실패는 deliveryStatus 담당). */
+  status: "draft" | "approved" | "sent";
+  deliveryStatus: ReportDeliveryStatus;
   sentAt: string | null;
   createdAt: string;
 }
@@ -260,7 +265,8 @@ export interface NotificationLog {
   channel: "alimtalk" | "sms";
   phone: string;
   message: string;
-  status: "queued" | "sent" | "failed";
+  /** sending = 발송 직전 클레임(이중 발송 방지). 장기 체류는 결과 불명 — 크론이 업무 큐로 수렴시킨다. */
+  status: "queued" | "sending" | "sent" | "failed";
   isAd: boolean;
   retryCount: number;
   sentAt: string | null;

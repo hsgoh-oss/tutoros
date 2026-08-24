@@ -18,12 +18,19 @@ import {
   type ScheduleListItem,
 } from "@/lib/data/crm";
 import { listActivity, type ActivityEntry } from "@/lib/data/activity";
+import {
+  listOpenWorkItems,
+  type WorkItem,
+  type WorkItemPriority,
+} from "@/lib/data/work";
 import type { Dday, RecruitState, RecruitStatus, Student } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
+import { WorkItemActions } from "@/components/admin/work-item-actions";
+import { resolveWorkItemAction } from "./actions";
 import {
   consultationStatusLabel,
   consultationStatusTone,
@@ -87,6 +94,39 @@ const EMPTY_PAYMENT_SUMMARY: PaymentSummary = {
   pendingTotal: 0,
 };
 
+// 오늘 업무 우선순위 라벨·톤 — risk·money·privacy는 강조 톤으로 구분한다.
+const WORK_PRIORITY_LABEL: Record<WorkItemPriority, string> = {
+  risk: "위험",
+  money: "금전",
+  privacy: "개인정보",
+  normal: "일반",
+};
+
+const WORK_PRIORITY_TONE: Record<WorkItemPriority, BadgeTone> = {
+  risk: "danger",
+  money: "warning",
+  privacy: "brand",
+  normal: "soft",
+};
+
+// 업무 원본 딥링크 — source_type별로 사건을 확인할 화면으로 보낸다.
+// (notification은 큐 id로 학생 상세를 특정할 수 없어 메시지 이력으로 이동.)
+function workSourceHref(item: WorkItem): string | null {
+  switch (item.sourceType) {
+    case "ai_report":
+    case "report":
+      return item.sourceId ? `/admin/reports/${item.sourceId}` : "/admin/reports";
+    case "notification":
+    case "notify_queue":
+      return "/admin/messages";
+    case "cron":
+    case "automation_run":
+      return "/admin/schedules";
+    default:
+      return null;
+  }
+}
+
 export default async function DashboardPage() {
   const session = await getAdminSession();
   const connected = hasDb();
@@ -101,6 +141,7 @@ export default async function DashboardPage() {
   let ddays: Dday[] = [];
   let recruit: RecruitStatus | null = null;
   let recentActivity: ActivityEntry[] = [];
+  let openWork: WorkItem[] = [];
 
   if (session) {
     [
@@ -114,6 +155,7 @@ export default async function DashboardPage() {
       ddays,
       recruit,
       recentActivity,
+      openWork,
     ] = await Promise.all([
       listConsultations(session.tenantId, { status: "new" }),
       listStudents(session.tenantId, { status: "active" }),
@@ -125,6 +167,7 @@ export default async function DashboardPage() {
       listTenantDdays(session.tenantId),
       getRecruitStatus(session.tenantId),
       listActivity(session.tenantId, 8),
+      listOpenWorkItems(session.tenantId),
     ]);
   }
 
@@ -139,6 +182,63 @@ export default async function DashboardPage() {
       </div>
 
       {!connected && <DbBanner />}
+
+      <Card className="mb-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-black tracking-tight">오늘 업무</h2>
+          <span className="text-xs font-bold text-muted">
+            열린 업무 {openWork.length}건
+          </span>
+        </div>
+        {openWork.length === 0 ? (
+          <EmptyState
+            title="처리할 업무가 없습니다"
+            description="발송 실패·자동화 오류 등 사람 손이 필요한 일감이 이곳에 모입니다."
+          />
+        ) : (
+          <ul className="divide-y divide-line">
+            {openWork.map((w) => {
+              const href = workSourceHref(w);
+              return (
+                <li
+                  key={w.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Badge tone={WORK_PRIORITY_TONE[w.priority]}>
+                        {WORK_PRIORITY_LABEL[w.priority]}
+                      </Badge>
+                      {w.status === "in_progress" && (
+                        <Badge tone="soft">진행 중</Badge>
+                      )}
+                      <p className="truncate text-sm font-bold text-ink">
+                        {w.title}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      다음 행동: {w.nextAction}
+                      <span className="mx-1.5">·</span>
+                      {formatKDateTime(w.createdAt)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {href && (
+                      <Link
+                        href={href}
+                        className="text-xs font-bold text-brand-700 hover:underline"
+                      >
+                        원본 보기
+                      </Link>
+                    )}
+                    <WorkItemActions id={w.id} resolveAction={resolveWorkItemAction} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/admin/consultations">

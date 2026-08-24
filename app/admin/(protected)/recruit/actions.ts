@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
-import { logActivity } from "@/lib/data/activity";
+import { logActivity, runCritical } from "@/lib/data/activity";
 import type { RecruitState } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -99,18 +99,37 @@ export async function restoreRecruitBackup(backupId: string): Promise<CrmActionR
   await recordBackup(session.tenantId, BACKUP_TARGET, previous);
 
   const db = createServiceClient()!;
-  const { error } = await db.from("recruit_status").upsert({
-    tenant_id: session.tenantId,
-    status: snapshot.status,
-    message: snapshot.message,
-    seat_count: snapshot.seat_count,
-    is_banner_visible: snapshot.is_banner_visible,
-  });
-  if (error) {
-    console.error("[recruit] restore failed", error);
-    return { ok: false, error: "복원 중 오류가 발생했습니다." };
-  }
+  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "restore",
+      targetType: "recruit",
+      targetId: backupId,
+      summary: `모집 현황 백업 복원 (${snapshot.status})`,
+      category: "privacy",
+      // 복원 전 행 요약(4필드 전부) — null이면 복원 전 저장된 모집 현황이 없던 상태.
+      before: previous,
+      after: snapshot,
+    },
+    async () => {
+      const { error } = await db.from("recruit_status").upsert({
+        tenant_id: session.tenantId,
+        status: snapshot.status,
+        message: snapshot.message,
+        seat_count: snapshot.seat_count,
+        is_banner_visible: snapshot.is_banner_visible,
+      });
+      if (error) {
+        console.error("[recruit] restore failed", error);
+        return { ok: false, error: "복원 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
 
   revalidateRecruit();
-  return { ok: true };
+  return result;
 }

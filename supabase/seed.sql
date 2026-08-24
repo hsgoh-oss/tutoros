@@ -11,13 +11,15 @@ values
   ('00000000-0000-0000-0000-000000000003', '테스트 국어과외', 'test-korean@example.com', 'standard', 'trial', null, 'test-kor')
 on conflict (id) do nothing;
 
-/* ---------- 관리자 계정 (테넌트당 다중 허용 — 00007) ---------- */
+/* ---------- 관리자 계정 (단일 활성 운영자 — 00013 P-10) ---------- */
 -- 이메일은 소문자로 저장(authorizeAdmin이 소문자 정규화 후 대조).
-insert into public.admin_accounts (tenant_id, email) values
-  ('00000000-0000-0000-0000-000000000001', 'hsgoh05@gmail.com'),
-  ('00000000-0000-0000-0000-000000000001', 'seolwon@nqsolution.kr'),
-  ('00000000-0000-0000-0000-000000000002', 'test-english@example.com'),
-  ('00000000-0000-0000-0000-000000000003', 'test-korean@example.com')
+-- 테넌트당 활성 운영자는 1명뿐(admin_accounts_one_active_per_tenant 부분 유니크) —
+-- 1호 테넌트의 보조 계정은 inactive로 심는다(활성 전환은 admin_replace_operator 승계로만).
+insert into public.admin_accounts (tenant_id, email, status) values
+  ('00000000-0000-0000-0000-000000000001', 'hsgoh05@gmail.com', 'active'),
+  ('00000000-0000-0000-0000-000000000001', 'seolwon@nqsolution.kr', 'inactive'),
+  ('00000000-0000-0000-0000-000000000002', 'test-english@example.com', 'active'),
+  ('00000000-0000-0000-0000-000000000003', 'test-korean@example.com', 'active')
 on conflict (tenant_id, email) do nothing;
 
 /* ---------- 1호 테넌트: 사이트 설정 ---------- */

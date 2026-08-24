@@ -17,6 +17,7 @@ interface QueuedRow {
   phone: string;
   message: string;
   is_ad: boolean;
+  report_id: string | null; // 리포트 알림이면 전달 결과를 ai_reports.delivery_status로 역전파(N-02)
 }
 
 export async function POST(request: Request) {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   // 각 행의 tenant_id는 dispatchQueued로 그대로 전달되며, 테넌트 간 데이터가 섞이지 않는다.
   let query = db
     .from("notifications")
-    .select("id, tenant_id, student_id, type, channel, phone, message, is_ad")
+    .select("id, tenant_id, student_id, type, channel, phone, message, is_ad, report_id")
     .eq("status", "queued")
     .order("created_at", { ascending: true })
     .limit(FLUSH_LIMIT);
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
 
   let sent = 0;
   let failed = 0;
+  let skipped = 0; // 다른 워커가 먼저 클레임한 행 — 성공도 실패도 아니다
   let unknownType = 0;
   for (const row of (data ?? []) as QueuedRow[]) {
     // 미지의 type은 코드-SQL 불일치 신호 — 로그만 남기고 발송은 막지 않는다(정상 알림 유실 방지).
@@ -77,10 +79,12 @@ export async function POST(request: Request) {
         phone: row.phone,
         message: row.message,
         isAd: row.is_ad,
+        reportId: row.report_id ?? undefined,
       },
       row.channel,
     );
     if (result.ok) sent++;
+    else if (result.skipped) skipped++;
     else failed++;
   }
 
@@ -89,6 +93,7 @@ export async function POST(request: Request) {
     processed: data?.length ?? 0,
     sent,
     failed,
+    skipped,
     unknownType,
   });
 }

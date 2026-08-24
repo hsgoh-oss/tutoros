@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
-import { logActivity } from "@/lib/data/activity";
+import { logActivity, runCritical } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
@@ -251,32 +251,51 @@ export async function restoreDdayBackup(backupId: string): Promise<CrmActionResu
   await recordBackup(session.tenantId, BACKUP_TARGET, rows);
 
   const db = createServiceClient()!;
-  const { error: delError } = await db
-    .from("ddays")
-    .delete()
-    .eq("tenant_id", session.tenantId);
-  if (delError) {
-    console.error("[dday] restore delete failed", delError);
-    return { ok: false, error: "복원 중 오류가 발생했습니다." };
-  }
+  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "restore",
+      targetType: "dday",
+      targetId: backupId,
+      summary: `D-day 백업 복원 (${snapshotRows.length}건)`,
+      category: "privacy",
+      // 복원 전 현재 규모 요약 — 전문 스냅샷은 위 recordBackup(backups 테이블) 몫.
+      before: { dday_count: rows.length },
+      after: { backup_id: backupId, restored_count: snapshotRows.length },
+    },
+    async () => {
+      const { error: delError } = await db
+        .from("ddays")
+        .delete()
+        .eq("tenant_id", session.tenantId);
+      if (delError) {
+        console.error("[dday] restore delete failed", delError);
+        return { ok: false, error: "복원 중 오류가 발생했습니다." };
+      }
 
-  if (snapshotRows.length > 0) {
-    const { error: insError } = await db.from("ddays").insert(
-      snapshotRows.map((r) => ({
-        id: r.id,
-        tenant_id: session.tenantId,
-        name: r.name,
-        exam_date: r.exam_date,
-        is_visible: r.is_visible,
-        sort_order: r.sort_order,
-      })),
-    );
-    if (insError) {
-      console.error("[dday] restore insert failed", insError);
-      return { ok: false, error: "복원 중 오류가 발생했습니다." };
-    }
-  }
+      if (snapshotRows.length > 0) {
+        const { error: insError } = await db.from("ddays").insert(
+          snapshotRows.map((r) => ({
+            id: r.id,
+            tenant_id: session.tenantId,
+            name: r.name,
+            exam_date: r.exam_date,
+            is_visible: r.is_visible,
+            sort_order: r.sort_order,
+          })),
+        );
+        if (insError) {
+          console.error("[dday] restore insert failed", insError);
+          return { ok: false, error: "복원 중 오류가 발생했습니다." };
+        }
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
 
   revalidateDday();
-  return { ok: true };
+  return result;
 }

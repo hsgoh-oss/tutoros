@@ -4,6 +4,12 @@
 > ④후기요청·⑥월간리포트·⑦D-day재계산·⑧발송실패재시도를 `00005_automation_extra.sql`로 추가했다
 > (모두 automation 엣지 잡, §2 표 9~12). 이로써 기획 7-9의 8종을 모두 커버한다.
 
+> **2026-08 갱신(00013 M0):** 잡 12종 자체는 그대로다. 발송 경로와 실패 수렴이 바뀌었다 —
+> ① flush(5)가 발송 직전 `queued→sending` 클레임으로 이중 발송을 막고, 실패 시 `retry_count` +1은
+> `dispatchQueued`에서만 한다. ② notify_retry(12)는 재큐잉만 하며(이중 증가 제거), 10분 이상
+> `sending`에 머문 행(결과 불명)을 `work_items`로 수렴시킨다. ③ schedule_autoclean(8)은 알림과
+> 무관하게 `work_items`(오늘 업무)를 적재한다 — 연락처 미설정으로 알림이 못 나가도 업무는 남는다.
+
 > **주의: 기획서 원문(TUTOR_OS_기능기획서_v2.1) 자동화 8종 상세 절이 이 세션에 제공되지 않아,
 > 아래 8종은 계약서 §14 검수 기준 문구("D-3 예정 안내만 자동", "청구 발송은 수동", "Make·구글시트
 > 금지 — pg_cron+엣지 함수")만 확인한 상태에서 작성한 "계약 확정 전 초안"이다.**
@@ -24,6 +30,13 @@ SQL, 실 Solapi 발송이 필요한 잡은 Next API. 이유:
 실제 Solapi 발송은 오직 두 경로로만 일어난다: ① `lib/notify/send.ts`의 `sendNotification()`이
 호출 즉시 디스패치(관리자 화면 액션 등에서 사용), ② 이 문서의 job 5(`notify_queue_flush`)가
 남아있는 queued 행을 재시도. 엣지 함수 자신은 Solapi를 절대 호출하지 않는다.
+
+두 경로 모두 `dispatchQueued`를 거치며, 00013 이후 발송 직전 `queued→sending` 조건부 클레임을
+먼저 잡는다 — 같은 행을 두 워커(즉시 발송과 flush 크론 등)가 집어도 한쪽만 발송하고, 다른 쪽은
+skipped로 비켜난다(성공도 실패도 아님). 결과에 따라 `sending→sent|failed`로 확정하고, 발송은
+됐는데 확정 갱신이 실패하면 행을 `sending`에 그대로 둔다 — **결과 불명은 성공이 아니므로**
+재발송하지 않고 job 12가 오늘 업무로 수렴시킨다(§2 표 12). 리포트 알림(`report_id` 보유)은
+전달 결과가 `ai_reports.delivery_status`로 역전파된다(N-02 — 업무 상태와 전달 상태의 분리).
 
 ## 1. 배포 전 준비 (수동, 1회)
 
@@ -93,22 +106,27 @@ curl -s -X POST -H "Authorization: Bearer <anon-key>" \
 | 2 | `payment_d3` | 결제 D-3 예정 안내(계약: 자동은 이것만) | 매일 10:00 (01:00) | `payments.status='pending' AND due_date = 오늘+3(KST)` | `notifications` 큐잉(type=`payment_d3`) | 오늘(KST) 동일 학생·타입 알림 존재 시 스킵 |
 | 3 | `payment_overdue_flag` | 연체 상태 전환 | 매일 00:30 (전일 15:30) | `payments.status='pending' AND due_date < 오늘(KST)` | `UPDATE payments SET status='overdue'` (알림 없음, 순수 SQL) | `status` 전환은 자연히 멱등(이미 overdue면 재대상 아님) |
 | 4 | `payment_overdue_notice` | 미납 안내 | 매일 10:30 (01:30) | `payments.status='overdue'` 전체 | `notifications` 큐잉(type=`payment_overdue`) | 최근 7일 내 동일 학생·타입 알림 존재 시 스킵(주 1회) |
-| 5 | `notify_queue_flush` | 큐잉된 알림 실제 재발송 | 매시 10분 | `notifications.status='queued'` (야간엔 `is_ad=false`만) 최대 50건 | `lib/notify/send.ts`의 `dispatchQueued` 재사용 → `sent`/`failed`로 갱신 | 상태 전환형이라 재실행해도 이미 처리된 행은 대상에서 빠짐 |
+| 5 | `notify_queue_flush` | 큐잉된 알림 실제 재발송 | 매시 10분 | `notifications.status='queued'` (야간엔 `is_ad=false`만) 최대 50건 | `lib/notify/send.ts`의 `dispatchQueued` 재사용 — `queued→sending` 클레임 후 발송, `sent`/`failed`로 확정(00013). 실패 시 `retry_count` +1은 **이 지점에서만** 하고, 상한(3) 소진 시 `work_items`(kind=`notify_exhausted`, 결제 계열은 priority=`money`) 적재. `report_id` 보유 행은 결과를 `ai_reports.delivery_status`로 역전파 | 상태 전환형이라 재실행해도 이미 처리된 행은 대상에서 빠짐 + `sending` 클레임으로 두 워커가 같은 행을 집어도 한쪽만 발송(다른 쪽은 skipped 집계) |
 | 6 | `weekly_report_draft` | 주간 리포트 생성 대기열 | 매주 월 09:00 (월 00:00) | `students.status='active'` 중 지난주(KST 월~일) `lessons` 존재 | `ai_reports` draft 행 삽입(내용은 비움 — AI 생성은 Next 서버가 별도 트리거) | 이번주(KST 이번주 월요일 이후) 동일 학생·`type='weekly'` draft 존재 시 스킵 |
 | 7 | `content_backup_daily` | 설정 일일 백업 | 매일 03:00 (전일 18:00) | tenant별 `site_settings` 전 키 | `backups`(target=`settings:daily`) 스냅샷 1건/tenant + 12개 초과분 삭제 | 순수 SQL, 매일 새 스냅샷 추가 후 정리라 재실행해도 안전 |
-| 8 | `schedule_autoclean` | 미처리 일정 집계 알림 | 매일 04:00 (전일 19:00) | `schedules.status='planned' AND scheduled_at < 오늘(KST)` | tenant별 미처리 건수 집계 → `notifications`(type=`schedule_unresolved`, channel=`sms`) 큐잉 | **연락처(`site_settings.site_info.phone`) 미설정 tenant는 자동 알림을 스킵하고 `NOTICE`만 남긴다 — 이 경우 관리자 대시보드에서 미처리 일정을 수동으로 확인할 것을 권장한다.** 일정 자체의 상태는 변경하지 않음(자동 취소·삭제 없음) |
+| 8 | `schedule_autoclean` | 미처리 일정 집계 → 오늘 업무 + 알림 | 매일 04:00 (전일 19:00) | `schedules.status='planned' AND scheduled_at < 오늘(KST)` | tenant별 미처리 건수 집계 → **알림과 무관하게** `work_items`(kind=`schedule_unresolved`, source_id=실행일자 KST) 적재(00013) + `notifications`(type=`schedule_unresolved`, channel=`sms`) 큐잉 | **연락처(`site_settings.site_info.phone`) 미설정 tenant는 자동 알림만 스킵하고 `NOTICE`를 남긴다 — 업무(`work_items`)는 그래도 적재되므로 사건이 은폐되지 않는다(N-02: 업무 성공과 알림 전달 성공의 분리).** 업무는 실행일자 기준 하루 한 건(같은 사건의 열린 업무가 있으면 미생성 — 한 사건 한 업무). 일정 자체의 상태는 변경하지 않음(자동 취소·삭제 없음) |
 | 9 | `review_request` | 후기 요청(기획 7-9 ④) | 매일 11:00 (02:00) | `students.status='active'` 중 첫 수업 `lesson_date`가 28일 이전 | `notifications` 큐잉(type=`review_request`) | 학생당 `review_request` 존재 시 스킵(1회성) |
 | 10 | `monthly_report_draft` | 월간 리포트 초안(기획 7-9 ⑥) | 매월 1일 09:00 (1일 00:00) | active 학생 중 지난 30일 `lessons` 존재 | `ai_reports` draft(type=`monthly`) 삽입 | 이번 달(KST 1일 이후) 동일 학생·`type='monthly'` draft 존재 시 스킵 |
 | 11 | `dday_recalc` | 경과 시험 자동 숨김(기획 7-9 ⑦) | 매일 00:20 (전일 15:20) | `ddays.exam_date < 오늘(KST) AND is_visible=true` | `UPDATE ddays SET is_visible=false` | 이미 숨김이면 재대상 아님(임박 강조는 렌더 시점 계산) |
-| 12 | `notify_retry` | 발송 실패 재큐잉(기획 7-9 ⑧) | 매시 40분 | `notifications.status='failed' AND retry_count<3` | `status='queued'`로 되돌리고 `retry_count+1` → flush가 재발송 | 상태 전환형 + `retry_count` 상한(3) |
+| 12 | `notify_retry` | 발송 실패 재큐잉 + 결과 불명 수렴(기획 7-9 ⑧) | 매시 40분 | `notifications.status='failed' AND retry_count<3` / 10분 이상 `status='sending'` 체류 행 | `status='queued'`로만 되돌린다 → flush가 재발송. **`retry_count`는 건드리지 않는다** — 실패 확정 시 `dispatchQueued`가 이미 +1 했고, 여기서 또 올리면 이중 증가로 상한 3이 실제 시도 1~2회로 준다(00013 개정). 추가로 `sending` 장기 체류 행(발송 결과 불명)은 상태를 그대로 두고 `work_items`(kind=`notify_unknown_result`) 적재 — failed로 내리면 재큐잉→이중 발송, sent로 올리면 미발송 은폐 | 상태 전환형 + `retry_count` 상한(3 = 실제 시도 3회). 결과 불명 업무는 `work_items` 부분 유니크가 중복 생성 차단(23505 무시) |
 
 ## 3. 알려진 한계 (정직하게 명시)
 
-- **job 8은 부분 구현이다.** 원 지시에는 "선생님 내부 알림"을 보내라고 되어 있으나, DB에는
+- **job 8의 알림은 여전히 부분 구현이다.** 원 지시에는 "선생님 내부 알림"을 보내라고 되어 있으나, DB에는
   선생님 본인의 통지용 연락처가 별도로 없다(`tenants`엔 email만 있고, `site_settings.site_info.phone`은
   공개 사이트 대표번호 필드라 항상 채워져 있다는 보장이 없다). 그래서 해당 필드가 비어 있으면
   **알림을 억지로 만들어 보내지 않고(빈 문자열 phone 삽입 금지) 스킵 + NOTICE**로 처리했다.
-  운영 중 이 알림이 필요하면 tenants에 내부 연락처 컬럼을 추가하는 CR을 권한다.
+  다만 00013 이후로는 이 경우에도 `work_items`(오늘 업무)에는 적재되므로, 예전처럼 NOTICE로만
+  남아 은폐되지는 않는다 — 관리자 대시보드의 오늘 업무에서 확인된다. 알림까지 필요하면
+  tenants에 내부 연락처 컬럼을 추가하는 CR을 권한다.
+- **job 12의 결과 불명(`sending` 체류) 판정은 `created_at` 기준 근사다.** `notifications`에
+  `updated_at`이 없어 클레임 시각을 정확히 알 수 없다 — 클레임은 적재 직후~다음 flush(매시) 안에
+  일어나므로 "적재 10분 경과 + 여전히 sending"을 결과 불명으로 본다.
 - **job 6은 리포트를 생성하지 않는다.** `ai_reports`에 `status='draft'`, `content=''` 행만
   넣는다 — 실제 AI 호출(`lib/ai/adapter.ts`)은 관리자 승인 플로우 쪽에서 이 draft를 집어 처리하는
   구조를 전제한다(가명화·모델 라우팅 등은 그쪽 계약 범위).
@@ -171,7 +189,9 @@ select id, status from public.notifications where status='queued' limit 1;
 curl -s -X POST "https://<production-domain>/api/cron/flush" -H "Authorization: Bearer <CRON_SECRET>"
 ```
 검증: 해당 행의 `status`가 `sent`(Solapi 키 설정 시) 또는 `failed`(미설정 시, `retry_count` 증가)로
-바뀌는지 확인. `Authorization` 헤더 없이 호출 시 401 확인(보호 동작 검증).
+바뀌는지 확인 — 발송 중에는 잠깐 `sending`으로 클레임된다(00013). `Authorization` 헤더 없이 호출 시
+401 확인(보호 동작 검증). `retry_count`가 3에 이른 행은 `work_items`(kind=`notify_exhausted`)에
+업무가 생겼는지도 함께 확인.
 
 ### job 6: weekly_report_draft
 ```sql
@@ -195,5 +215,25 @@ insert into public.schedules (tenant_id, student_id, scheduled_at, status)
 values ('<tenant_id>', '<student_id>', now() - interval '2 days', 'planned');
 select public.automation_schedule_autoclean();
 ```
+공통(연락처 유무 무관): `work_items`에 kind=`schedule_unresolved` 업무가 생겼는지 확인하고,
+같은 날 한 번 더 실행해 **중복 업무가 생기지 않음**(실행일자 기준 하루 한 건)을 확인.
+```sql
+select kind, title, source_id, status from public.work_items
+ where kind='schedule_unresolved' order by created_at desc limit 3;
+```
 `site_settings(key='site_info').value->>'phone'`이 있는 테넌트: `notifications`(type=`schedule_unresolved`)
-신규 행 확인. 없는 테넌트: 알림 미생성 + SQL Editor 로그에 `NOTICE`(수동 확인 권장 문구) 확인.
+신규 행 확인. 없는 테넌트: 알림 미생성 + SQL Editor 로그에 `NOTICE`(오늘 업무 적재 안내 문구) 확인.
+
+### job 12: notify_retry (00013 개정분)
+```sql
+-- 결과 불명 행: 10분 넘게 sending에 머문 것처럼 만든다
+update public.notifications
+   set status='sending', created_at = now() - interval '15 minutes'
+ where id = '<notification_id>';
+```
+엣지 함수 `?job=notify_retry` 수동 호출 후 확인:
+- 해당 행의 `status`는 **여전히 `sending`**(자동으로 failed/sent로 뒤집지 않음 — 결과 불명은 사람 확인 대상).
+- `work_items`에 kind=`notify_unknown_result`, source_id=해당 알림 id 업무 신규 1건.
+- 같은 호출을 한 번 더 실행해 **중복 업무가 생기지 않음**(부분 유니크) 확인.
+- `status='failed' AND retry_count<3`인 행은 `queued`로 돌아가되 **`retry_count`가 그대로**임을 확인
+  (+1은 다음 flush의 실패 확정 시점에만 일어난다).

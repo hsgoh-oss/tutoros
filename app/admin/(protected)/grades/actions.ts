@@ -8,7 +8,7 @@ import { createReportRow } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
 import { REPORT_PROMPT_RULES } from "@/lib/ai/validate";
-import { logActivity } from "@/lib/data/activity";
+import { runCritical } from "@/lib/data/activity";
 import type { ReportAudience } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import { AI_REPORT_DISCLAIMER } from "../reports/constants";
@@ -61,36 +61,47 @@ export async function createGrade(formData: FormData): Promise<CrmActionResult> 
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
   const db = createServiceClient()!;
-  const { data, error } = await db
-    .from("grade_records")
-    .insert({
-      tenant_id: session.tenantId,
-      student_id: parsed.studentId,
-      exam_name: parsed.examName,
-      raw_score: parsed.rawScore,
-      percentile: parsed.percentile,
-      grade: parsed.grade,
-      exam_date: parsed.examDate,
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    console.error("[grades] insert failed", error);
-    return { ok: false, error: "성적 등록 중 오류가 발생했습니다." };
-  }
-
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "grade",
-    data.id,
-    `성적 등록: ${parsed.examName}`,
+  // 성적은 중요 전환(grade) — 감사 선기록(pending) 없이는 등록하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "create",
+      targetType: "grade",
+      targetId: null, // insert 전 선기록이라 새 행 id는 아직 없다 — after_data로 식별.
+      summary: `성적 등록: ${parsed.examName}`,
+      category: "grade",
+      after: {
+        student_id: parsed.studentId,
+        exam_name: parsed.examName,
+        raw_score: parsed.rawScore,
+        percentile: parsed.percentile,
+        grade: parsed.grade,
+        exam_date: parsed.examDate,
+      },
+    },
+    async () => {
+      const { error } = await db.from("grade_records").insert({
+        tenant_id: session.tenantId,
+        student_id: parsed.studentId,
+        exam_name: parsed.examName,
+        raw_score: parsed.rawScore,
+        percentile: parsed.percentile,
+        grade: parsed.grade,
+        exam_date: parsed.examDate,
+      });
+      if (error) {
+        console.error("[grades] insert failed", error);
+        return { ok: false, error: "성적 등록 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/grades");
   revalidatePath(`/admin/students/${parsed.studentId}`);
-  return { ok: true };
+  return result;
 }
 
 export async function updateGrade(formData: FormData): Promise<CrmActionResult> {
@@ -104,36 +115,62 @@ export async function updateGrade(formData: FormData): Promise<CrmActionResult> 
   const parsed = parseGradeForm(formData);
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
-  const db = createServiceClient()!;
-  const { error } = await db
-    .from("grade_records")
-    .update({
-      student_id: parsed.studentId,
-      exam_name: parsed.examName,
-      raw_score: parsed.rawScore,
-      percentile: parsed.percentile,
-      grade: parsed.grade,
-      exam_date: parsed.examDate,
-    })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[grades] update failed", error);
-    return { ok: false, error: "성적 수정 중 오류가 발생했습니다." };
-  }
+  // 수정 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록에 포함).
+  const existing = await getGrade(session.tenantId, id);
+  if (!existing) return { ok: false, error: "성적 정보를 찾을 수 없습니다." };
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "update",
-    "grade",
-    id,
-    `성적 수정: ${parsed.examName}`,
+  const db = createServiceClient()!;
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "update",
+      targetType: "grade",
+      targetId: id,
+      summary: `성적 수정: ${parsed.examName}`,
+      category: "grade",
+      before: {
+        student_id: existing.studentId,
+        exam_name: existing.examName,
+        raw_score: existing.rawScore,
+        percentile: existing.percentile,
+        grade: existing.grade,
+        exam_date: existing.examDate,
+      },
+      after: {
+        student_id: parsed.studentId,
+        exam_name: parsed.examName,
+        raw_score: parsed.rawScore,
+        percentile: parsed.percentile,
+        grade: parsed.grade,
+        exam_date: parsed.examDate,
+      },
+    },
+    async () => {
+      const { error } = await db
+        .from("grade_records")
+        .update({
+          student_id: parsed.studentId,
+          exam_name: parsed.examName,
+          raw_score: parsed.rawScore,
+          percentile: parsed.percentile,
+          grade: parsed.grade,
+          exam_date: parsed.examDate,
+        })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[grades] update failed", error);
+        return { ok: false, error: "성적 수정 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidateGrade(id);
   revalidatePath(`/admin/students/${parsed.studentId}`);
-  return { ok: true };
+  return result;
 }
 
 export async function deleteGrade(id: string): Promise<CrmActionResult> {
@@ -141,28 +178,46 @@ export async function deleteGrade(id: string): Promise<CrmActionResult> {
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
 
-  const db = createServiceClient()!;
-  const { error } = await db
-    .from("grade_records")
-    .delete()
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[grades] delete failed", error);
-    return { ok: false, error: "성적 삭제 중 오류가 발생했습니다." };
-  }
+  // 삭제 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록에 포함).
+  const existing = await getGrade(session.tenantId, id);
+  if (!existing) return { ok: false, error: "성적 정보를 찾을 수 없습니다." };
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "delete",
-    "grade",
-    id,
-    "성적 삭제",
+  const db = createServiceClient()!;
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "delete",
+      targetType: "grade",
+      targetId: id,
+      summary: "성적 삭제",
+      category: "grade",
+      before: {
+        student_id: existing.studentId,
+        exam_name: existing.examName,
+        raw_score: existing.rawScore,
+        percentile: existing.percentile,
+        grade: existing.grade,
+        exam_date: existing.examDate,
+      },
+    },
+    async () => {
+      const { error } = await db
+        .from("grade_records")
+        .delete()
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[grades] delete failed", error);
+        return { ok: false, error: "성적 삭제 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/grades");
-  return { ok: true };
+  return result;
 }
 
 /**
@@ -218,42 +273,49 @@ export async function generateExamReport(
     },
   ];
 
-  for (const { audience, guide } of audiences) {
-    const prompt = [
-      "다음은 한 학생의 시험 성적 리포트를 작성하기 위한 자료입니다.",
-      guide,
-      REPORT_PROMPT_RULES,
-      "",
-      context,
-    ].join("\n");
-
-    const generated = await generateReport("exam", "basic", prompt);
-    if (!generated.ok || !generated.content) {
-      return { ok: false, error: generated.error ?? "시험 리포트 생성에 실패했습니다." };
-    }
-
-    const created = await createReportRow({
+  // 성적 기반 리포트 생성도 성적 전환(grade) — 감사 선기록 없이는 생성하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
       tenantId: session.tenantId,
-      studentId: grade.studentId,
-      type: "exam",
-      audience,
-      depth: "basic",
-      content: generated.content + AI_REPORT_DISCLAIMER,
-      modelUsed: generated.modelUsed ?? null,
-      tokenUsage: generated.tokenUsage ?? null,
-    });
-    if (!created.ok) return created;
-  }
+      actorEmail: session.email,
+      action: "generate_exam_report",
+      targetType: "grade",
+      targetId: grade.id,
+      summary: `${grade.examName} 시험 리포트 생성(학부모·학생)`,
+      category: "grade",
+    },
+    async () => {
+      for (const { audience, guide } of audiences) {
+        const prompt = [
+          "다음은 한 학생의 시험 성적 리포트를 작성하기 위한 자료입니다.",
+          guide,
+          REPORT_PROMPT_RULES,
+          "",
+          context,
+        ].join("\n");
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "generate_exam_report",
-    "grade",
-    grade.id,
-    `${grade.examName} 시험 리포트 생성(학부모·학생)`,
+        const generated = await generateReport("exam", "basic", prompt);
+        if (!generated.ok || !generated.content) {
+          return { ok: false, error: generated.error ?? "시험 리포트 생성에 실패했습니다." };
+        }
+
+        const created = await createReportRow({
+          tenantId: session.tenantId,
+          studentId: grade.studentId,
+          type: "exam",
+          audience,
+          depth: "basic",
+          content: generated.content + AI_REPORT_DISCLAIMER,
+          modelUsed: generated.modelUsed ?? null,
+          tokenUsage: generated.tokenUsage ?? null,
+        });
+        if (!created.ok) return created;
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/reports");
-  return { ok: true, studentId: grade.studentId };
+  return { ...result, studentId: grade.studentId };
 }

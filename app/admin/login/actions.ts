@@ -5,12 +5,12 @@ import { resolveTenant } from "@/lib/tenant";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
   SESSION_COOKIE,
-  createSessionToken,
+  SESSION_MAX_AGE_S,
+  createSession,
   issueOtp,
   verifyOtp,
 } from "@/lib/auth/session";
-
-const SESSION_MAX_AGE_S = 7 * 24 * 60 * 60; // 세션 7일 — lib/auth/session.ts TTL과 동일
+import { logActivity } from "@/lib/data/activity";
 
 export interface LoginActionResult {
   ok: boolean;
@@ -19,9 +19,10 @@ export interface LoginActionResult {
   devCode?: string;
 }
 
-// 현재 Host의 테넌트에 등록된 관리자 이메일일 때만 OTP를 발급한다(테넌트당 관리자 다중 허용).
-// admin_accounts(00007)에 (tenant_id, email)로 등록된 계정을 인가한다. tenants.email(소유자)은
-// 마이그레이션 백필로 이 테이블에 포함된다. OTP 레코드도 (tenant_id, email)로 격리되므로 함께 돌려준다.
+// 현재 Host의 테넌트에서 status='active'인 관리자 이메일일 때만 OTP를 발급한다.
+// 00013 이후 활성 운영자는 테넌트당 1인(admin_accounts_one_active_per_tenant) — inactive로
+// 전환된 구 운영자는 인가하지 않는다. 소유자(tenants.email) 폴백은 "해당 테넌트에 active 행이
+// 하나도 없을 때"만 허용한다(마이그레이션 직후 안전망 — 정상 운영에선 발동하지 않아야 한다).
 interface AuthorizedAdmin {
   tenantId: string;
   email: string;
@@ -40,9 +41,25 @@ async function authorizeAdmin(email: string): Promise<AuthorizedAdmin | null> {
       .select("email")
       .eq("tenant_id", tenant.id)
       .eq("email", normalized)
+      .eq("status", "active")
       .maybeSingle();
-    // 등록된 관리자이거나, (방어적으로) 백필 누락 시에도 소유자 이메일은 항상 허용.
-    if (data || isOwner) return { tenantId: tenant.id, email: normalized };
+    if (data) return { tenantId: tenant.id, email: normalized };
+
+    // 소유자 폴백 — active 관리자가 0명일 때만(백필 누락·초기 상태 안전망).
+    // active가 1명이라도 있으면 소유자라도 그 운영자만 인가한다(단일 활성 운영자 원칙).
+    if (isOwner) {
+      const { count } = await db
+        .from("admin_accounts")
+        .select("email", { count: "exact", head: true })
+        .eq("tenant_id", tenant.id)
+        .eq("status", "active");
+      if ((count ?? 0) === 0) {
+        console.warn(
+          `[auth] tenant ${tenant.id}에 active 관리자 없음 — 소유자(${normalized}) 폴백 인가`,
+        );
+        return { tenantId: tenant.id, email: normalized };
+      }
+    }
     return null;
   }
 
@@ -75,13 +92,29 @@ export async function verifyLoginOtp(
   const result = await verifyOtp(admin.tenantId, admin.email, code.trim());
   if (!result.ok) return { ok: false, error: result.error };
 
+  // 서버측 세션 발급 — insert 실패면 쿠키를 만들지 않고 로그인 실패로 처리(불명 상태 인가 금지).
+  const session = await createSession(admin.email, admin.tenantId);
+  if (!session.ok) return { ok: false, error: session.error };
+
   const store = await cookies();
-  store.set(SESSION_COOKIE, createSessionToken(admin.email, admin.tenantId), {
+  store.set(SESSION_COOKIE, session.token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE_S,
   });
+
+  // 로그인 성공 기록 — 세션 발급은 권한 '변경'이 아닌 인증 이벤트라 fail-open logActivity로
+  // 충분하다(기록 실패가 로그인을 막을 이유가 없다). 연속 실패 5회 잠금 같은 이상 징후
+  // 대응은 M8(보안 관제) 몫 — 여기서는 성공 이벤트만 남긴다.
+  await logActivity(
+    admin.tenantId,
+    admin.email,
+    "admin_login",
+    "admin_account",
+    null,
+    `관리자 로그인: ${admin.email}`,
+  );
   return { ok: true };
 }

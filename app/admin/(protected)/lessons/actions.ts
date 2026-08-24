@@ -8,7 +8,7 @@ import { createReportRow } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
 import { REPORT_PROMPT_RULES } from "@/lib/ai/validate";
-import { logActivity } from "@/lib/data/activity";
+import { runCritical } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import { RATING_OPTIONS } from "./constants";
 import { AI_REPORT_DISCLAIMER } from "../reports/constants";
@@ -63,37 +63,49 @@ export async function createLesson(formData: FormData): Promise<CrmActionResult>
   const sessionNumber = await nextSessionNumber(session.tenantId, parsed.studentId);
 
   const db = createServiceClient()!;
-  const { data, error } = await db
-    .from("lessons")
-    .insert({
-      tenant_id: session.tenantId,
-      student_id: parsed.studentId,
-      lesson_date: parsed.lessonDate,
-      session_number: sessionNumber,
-      content: parsed.content,
-      homework: parsed.homework,
-      concentration: parsed.concentration,
-      attitude: parsed.attitude,
-      absent: parsed.absent,
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    console.error("[lessons] insert failed", error);
-    return { ok: false, error: "수업 기록 등록 중 오류가 발생했습니다." };
-  }
-
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "lesson",
-    data.id,
-    `${sessionNumber}회차 수업 기록 등록`,
+  // 수업 기록은 성적 전환(grade) — 감사 선기록(pending) 없이는 등록하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "create",
+      targetType: "lesson",
+      targetId: null, // insert 전 선기록이라 새 행 id는 아직 없다 — after_data로 식별.
+      summary: `${sessionNumber}회차 수업 기록 등록`,
+      category: "grade",
+      // 수업 내용 전문은 lessons 행 몫 — 감사에는 식별·평가 필드 서브셋만 남긴다.
+      after: {
+        student_id: parsed.studentId,
+        lesson_date: parsed.lessonDate,
+        session_number: sessionNumber,
+        concentration: parsed.concentration,
+        attitude: parsed.attitude,
+        absent: parsed.absent,
+      },
+    },
+    async () => {
+      const { error } = await db.from("lessons").insert({
+        tenant_id: session.tenantId,
+        student_id: parsed.studentId,
+        lesson_date: parsed.lessonDate,
+        session_number: sessionNumber,
+        content: parsed.content,
+        homework: parsed.homework,
+        concentration: parsed.concentration,
+        attitude: parsed.attitude,
+        absent: parsed.absent,
+      });
+      if (error) {
+        console.error("[lessons] insert failed", error);
+        return { ok: false, error: "수업 기록 등록 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/lessons");
-  return { ok: true };
+  return result;
 }
 
 /** 수업 기록 수정 — 학생(student_id)·회차(session_number)는 등록 시점에 고정되어 수정 대상에서 제외한다. */
@@ -108,36 +120,60 @@ export async function updateLesson(formData: FormData): Promise<CrmActionResult>
   const parsed = parseLessonForm(formData);
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
-  const db = createServiceClient()!;
-  const { error } = await db
-    .from("lessons")
-    .update({
-      lesson_date: parsed.lessonDate,
-      content: parsed.content,
-      homework: parsed.homework,
-      concentration: parsed.concentration,
-      attitude: parsed.attitude,
-      absent: parsed.absent,
-    })
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[lessons] update failed", error);
-    return { ok: false, error: "수업 기록 수정 중 오류가 발생했습니다." };
-  }
+  // 수정 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록에 포함).
+  const existing = await getLesson(session.tenantId, id);
+  if (!existing) return { ok: false, error: "수업 기록을 찾을 수 없습니다." };
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "update",
-    "lesson",
-    id,
-    "수업 기록 수정",
+  const db = createServiceClient()!;
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "update",
+      targetType: "lesson",
+      targetId: id,
+      summary: "수업 기록 수정",
+      category: "grade",
+      before: {
+        student_id: existing.studentId,
+        lesson_date: existing.lessonDate,
+        session_number: existing.sessionNumber,
+        concentration: existing.concentration,
+        attitude: existing.attitude,
+        absent: existing.absent,
+      },
+      after: {
+        lesson_date: parsed.lessonDate,
+        concentration: parsed.concentration,
+        attitude: parsed.attitude,
+        absent: parsed.absent,
+      },
+    },
+    async () => {
+      const { error } = await db
+        .from("lessons")
+        .update({
+          lesson_date: parsed.lessonDate,
+          content: parsed.content,
+          homework: parsed.homework,
+          concentration: parsed.concentration,
+          attitude: parsed.attitude,
+          absent: parsed.absent,
+        })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[lessons] update failed", error);
+        return { ok: false, error: "수업 기록 수정 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/lessons");
   revalidatePath(`/admin/lessons/${id}`);
-  return { ok: true };
+  return result;
 }
 
 export async function deleteLesson(id: string): Promise<CrmActionResult> {
@@ -145,28 +181,46 @@ export async function deleteLesson(id: string): Promise<CrmActionResult> {
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
 
-  const db = createServiceClient()!;
-  const { error } = await db
-    .from("lessons")
-    .delete()
-    .eq("tenant_id", session.tenantId)
-    .eq("id", id);
-  if (error) {
-    console.error("[lessons] delete failed", error);
-    return { ok: false, error: "수업 기록 삭제 중 오류가 발생했습니다." };
-  }
+  // 삭제 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록에 포함).
+  const existing = await getLesson(session.tenantId, id);
+  if (!existing) return { ok: false, error: "수업 기록을 찾을 수 없습니다." };
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "delete",
-    "lesson",
-    id,
-    "수업 기록 삭제",
+  const db = createServiceClient()!;
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "delete",
+      targetType: "lesson",
+      targetId: id,
+      summary: "수업 기록 삭제",
+      category: "grade",
+      before: {
+        student_id: existing.studentId,
+        lesson_date: existing.lessonDate,
+        session_number: existing.sessionNumber,
+        concentration: existing.concentration,
+        attitude: existing.attitude,
+        absent: existing.absent,
+      },
+    },
+    async () => {
+      const { error } = await db
+        .from("lessons")
+        .delete()
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[lessons] delete failed", error);
+        return { ok: false, error: "수업 기록 삭제 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/lessons");
-  return { ok: true };
+  return result;
 }
 
 /** 한 회차 수업 기록을 가명화해 학부모용·학생용 리포트 초안 2건을 한 번에 생성한다(항상 draft — 선생님 승인 후 발송). */
@@ -219,23 +273,6 @@ export async function generateLessonReport(
     context,
   ].join("\n");
 
-  const parentGenerated = await generateReport("lesson", "basic", parentPrompt);
-  if (!parentGenerated.ok || !parentGenerated.content) {
-    return { ok: false, error: parentGenerated.error ?? "리포트 생성에 실패했습니다." };
-  }
-
-  const parentCreated = await createReportRow({
-    tenantId: session.tenantId,
-    studentId: lesson.studentId,
-    type: "lesson",
-    audience: "parent",
-    depth: "basic",
-    content: parentGenerated.content + AI_REPORT_DISCLAIMER,
-    modelUsed: parentGenerated.modelUsed ?? null,
-    tokenUsage: parentGenerated.tokenUsage ?? null,
-  });
-  if (!parentCreated.ok) return parentCreated;
-
   const studentPrompt = [
     "다음은 한 학생의 한 회차 수업 기록입니다. 학생 본인에게 전달할 수업 리포트를 한국어로, 친근하고 격려하는 말투로 작성해 주세요.",
     "이번에 배운 내용 요약, 잘한 점, 숙제와 다음 수업에서 더 신경 쓰면 좋을 점을 3~5문장으로 정리해 주세요.",
@@ -244,32 +281,56 @@ export async function generateLessonReport(
     context,
   ].join("\n");
 
-  const studentGenerated = await generateReport("lesson", "basic", studentPrompt);
-  if (!studentGenerated.ok || !studentGenerated.content) {
-    return { ok: false, error: studentGenerated.error ?? "리포트 생성에 실패했습니다." };
-  }
+  // 수업 기반 리포트 생성도 성적 전환(grade) — 감사 선기록 없이는 생성하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "generate_lesson_report",
+      targetType: "lesson",
+      targetId: id,
+      summary: `${lesson.sessionNumber}회차 수업 리포트 초안 생성(학부모·학생)`,
+      category: "grade",
+    },
+    async () => {
+      const parentGenerated = await generateReport("lesson", "basic", parentPrompt);
+      if (!parentGenerated.ok || !parentGenerated.content) {
+        return { ok: false, error: parentGenerated.error ?? "리포트 생성에 실패했습니다." };
+      }
 
-  const studentCreated = await createReportRow({
-    tenantId: session.tenantId,
-    studentId: lesson.studentId,
-    type: "lesson",
-    audience: "student",
-    depth: "basic",
-    content: studentGenerated.content + AI_REPORT_DISCLAIMER,
-    modelUsed: studentGenerated.modelUsed ?? null,
-    tokenUsage: studentGenerated.tokenUsage ?? null,
-  });
-  if (!studentCreated.ok) return studentCreated;
+      const parentCreated = await createReportRow({
+        tenantId: session.tenantId,
+        studentId: lesson.studentId,
+        type: "lesson",
+        audience: "parent",
+        depth: "basic",
+        content: parentGenerated.content + AI_REPORT_DISCLAIMER,
+        modelUsed: parentGenerated.modelUsed ?? null,
+        tokenUsage: parentGenerated.tokenUsage ?? null,
+      });
+      if (!parentCreated.ok) return parentCreated;
 
-  await logActivity(
-    session.tenantId,
-    session.email,
-    "create",
-    "report",
-    null,
-    `${lesson.sessionNumber}회차 수업 리포트 초안 생성(학부모·학생)`,
+      const studentGenerated = await generateReport("lesson", "basic", studentPrompt);
+      if (!studentGenerated.ok || !studentGenerated.content) {
+        return { ok: false, error: studentGenerated.error ?? "리포트 생성에 실패했습니다." };
+      }
+
+      const studentCreated = await createReportRow({
+        tenantId: session.tenantId,
+        studentId: lesson.studentId,
+        type: "lesson",
+        audience: "student",
+        depth: "basic",
+        content: studentGenerated.content + AI_REPORT_DISCLAIMER,
+        modelUsed: studentGenerated.modelUsed ?? null,
+        tokenUsage: studentGenerated.tokenUsage ?? null,
+      });
+      if (!studentCreated.ok) return studentCreated;
+      return { ok: true };
+    },
   );
+  if (!result.ok) return result;
 
   revalidatePath("/admin/reports");
-  return { ok: true, studentId: lesson.studentId };
+  return { ...result, studentId: lesson.studentId };
 }

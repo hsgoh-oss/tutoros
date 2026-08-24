@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
-import { logActivity } from "@/lib/data/activity";
+import { logActivity, runCritical } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
@@ -241,29 +241,53 @@ export async function restoreFaqsBackup(backupId: string): Promise<CrmActionResu
   }
 
   const db = createServiceClient()!;
-  const { error: deleteError } = await db
-    .from("faqs")
-    .delete()
-    .eq("tenant_id", session.tenantId);
-  if (deleteError) {
-    console.error("[faq] restore delete failed", deleteError);
-    return { ok: false, error: "복원 중 오류가 발생했습니다." };
-  }
-
   // snapshot은 jsonb라 내용이 스키마를 보장하지 않는다. service_role은 RLS를 우회하므로
   // 복원 행의 tenant_id를 현재 세션 테넌트로 강제해 타테넌트로 새는 경로를 원천 차단한다.
   const rows = ((backup.snapshot as FaqSnapshotRow[]) ?? []).map((row) => ({
     ...row,
     tenant_id: session.tenantId,
   }));
-  if (rows.length > 0) {
-    const { error: insertError } = await db.from("faqs").insert(rows);
-    if (insertError) {
-      console.error("[faq] restore insert failed", insertError);
-      return { ok: false, error: "복원 중 오류가 발생했습니다." };
-    }
-  }
+
+  // 복원 전 현재 규모를 before_data 요약으로 남긴다(전문 스냅샷은 backups 테이블 몫).
+  const { count: currentCount } = await db
+    .from("faqs")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", session.tenantId);
+
+  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "restore",
+      targetType: "faq",
+      targetId: backupId,
+      summary: `FAQ 백업 복원 (${rows.length}건)`,
+      category: "privacy",
+      before: { faq_count: currentCount ?? 0 },
+      after: { backup_id: backupId, restored_count: rows.length },
+    },
+    async () => {
+      const { error: deleteError } = await db
+        .from("faqs")
+        .delete()
+        .eq("tenant_id", session.tenantId);
+      if (deleteError) {
+        console.error("[faq] restore delete failed", deleteError);
+        return { ok: false, error: "복원 중 오류가 발생했습니다." };
+      }
+      if (rows.length > 0) {
+        const { error: insertError } = await db.from("faqs").insert(rows);
+        if (insertError) {
+          console.error("[faq] restore insert failed", insertError);
+          return { ok: false, error: "복원 중 오류가 발생했습니다." };
+        }
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
 
   revalidateFaqs();
-  return { ok: true };
+  return result;
 }

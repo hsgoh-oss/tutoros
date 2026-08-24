@@ -26,18 +26,18 @@ export function reportAudienceLabel(audience: ReportAudience): string {
   return REPORT_AUDIENCE_OPTIONS.find((o) => o.value === audience)?.label ?? audience;
 }
 
+// 업무 상태(초안→승인→발송완료)와 전달 상태(delivery_status)를 분리 표시한다(N-02).
+// 발송 실패는 업무 상태가 아니라 전달 상태 — 승인된 리포트는 실패해도 승인 뱃지를 유지한다.
 const STATUS_LABEL: Record<AiReport["status"], string> = {
   draft: "초안",
   approved: "승인됨",
   sent: "발송완료",
-  failed: "발송실패",
 };
 
 const STATUS_TONE: Record<AiReport["status"], BadgeTone> = {
   draft: "soft",
   approved: "brand",
   sent: "success",
-  failed: "danger",
 };
 
 export function reportStatusLabel(status: AiReport["status"]): string {
@@ -46,6 +46,28 @@ export function reportStatusLabel(status: AiReport["status"]): string {
 
 export function reportStatusTone(status: AiReport["status"]): BadgeTone {
   return STATUS_TONE[status];
+}
+
+const DELIVERY_LABEL: Record<AiReport["deliveryStatus"], string> = {
+  none: "미발송",
+  queued: "발송 대기",
+  sent: "전달 완료",
+  failed: "발송 실패",
+};
+
+const DELIVERY_TONE: Record<AiReport["deliveryStatus"], BadgeTone> = {
+  none: "soft",
+  queued: "warning",
+  sent: "success",
+  failed: "danger",
+};
+
+export function reportDeliveryLabel(status: AiReport["deliveryStatus"]): string {
+  return DELIVERY_LABEL[status];
+}
+
+export function reportDeliveryTone(status: AiReport["deliveryStatus"]): BadgeTone {
+  return DELIVERY_TONE[status];
 }
 
 /**
