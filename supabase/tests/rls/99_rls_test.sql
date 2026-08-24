@@ -46,10 +46,13 @@ declare
   seeded_n bigint;   -- owner 시점: 타테넌트 행이 실제로 몇 건 있는가
   visible_n bigint;  -- authenticated(T1) 시점: 그중 몇 건이 보이는가
   t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  -- 00001의 18개 + 테넌트 정책 계열 4개(activity_log(00006)·adjustments·work_items(00013)
+  -- ·payssam_events(00014))
   tables constant text[] := array[
     'site_settings','theme_settings','ddays','recruit_status','page_contents',
     'students','reviews','faqs','lessons','ai_reports','schedules','grade_records',
-    'lesson_materials','payments','consultations','consents','notifications','backups'
+    'lesson_materials','payments','consultations','consents','notifications','backups',
+    'activity_log','adjustments','work_items','payssam_events'
   ];
 begin
   foreach t in array tables loop
@@ -370,6 +373,312 @@ begin
   values ('함수 실행 차단', 'authenticated가 automation_call_edge_function 실행', '권한 거부',
           case when blocked then '거부됨' else '실행 가능(위반)' end,
           case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+-- admin_replace_operator(00013)는 security definer — 노출되면 anon 키만으로 운영자 탈취가
+-- 가능하므로 자동화 함수와 동일하게 EXECUTE 회수를 검증한다.
+do $$
+declare blocked boolean := false;
+begin
+  execute 'set local role authenticated';
+  begin
+    execute 'select public.admin_replace_operator(''00000000-0000-0000-0000-000000000001''::uuid, ''a@b.c'', ''d@e.f'', ''탈취 시도'')';
+  exception
+    when insufficient_privilege then blocked := true;
+    when others then blocked := false;
+  end;
+  execute 'reset role';
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('함수 실행 차단', 'authenticated가 admin_replace_operator 실행', '권한 거부',
+          case when blocked then '거부됨' else '실행 가능(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8f. admin_sessions(00013): 정책 미부여 → anon·authenticated 전면 차단 ─────────
+   admin_otps와 동일 패턴 — 픽스처가 T2 세션 행을 심어 두므로 0건이 곧 차단의 증거다. */
+do $$
+declare seeded bigint; n_auth bigint; n_anon bigint;
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+begin
+  select count(*) into seeded from public.admin_sessions;
+
+  perform set_config('request.jwt.claims', json_build_object('tenant_id', t1)::text, true);
+  execute 'set local role authenticated';
+  select count(*) into n_auth from public.admin_sessions;
+  execute 'reset role';
+
+  perform set_config('request.jwt.claims', '', true);
+  execute 'set local role anon';
+  select count(*) into n_anon from public.admin_sessions;
+  execute 'reset role';
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('세션 보호', format('authenticated가 admin_sessions 조회 (실행 %s건)', seeded), '0', n_auth::text,
+          case when seeded = 0 then 'INCONCLUSIVE' when n_auth = 0 then 'PASS' else 'FAIL' end),
+         ('세션 보호', format('anon이 admin_sessions 조회 (실행 %s건)', seeded), '0', n_anon::text,
+          case when seeded = 0 then 'INCONCLUSIVE' when n_anon = 0 then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8g. append-only 강제(00013 P-11): 트리거는 service_role조차 예외 없이 막는다 ─────────
+   owner(BYPASSRLS 동급)로 실행해 "RLS가 아닌 무결성 규칙"임을 증명한다 —
+   허용되는 유일한 쓰기: activity_log의 phase pending→committed|aborted 확정. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  v_id uuid;
+  blocked boolean;
+  transitioned boolean := false;
+begin
+  insert into public.activity_log (tenant_id, actor_email, action, target_type, summary, category, phase)
+  values (t1, 'rls-test@example.com', 'test_critical', 'test', '트리거 검증용 pending', 'money', 'pending')
+  returning id into v_id;
+
+  -- (a) phase 외 컬럼 변경 → 거부
+  blocked := false;
+  begin
+    update public.activity_log set summary = '변조 시도' where id = v_id;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 append-only', 'activity_log 일반 컬럼 UPDATE', '차단(예외)',
+          case when blocked then '차단됨' else '변경 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (b) DELETE → 전면 거부
+  blocked := false;
+  begin
+    delete from public.activity_log where id = v_id;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 append-only', 'activity_log DELETE', '차단(예외)',
+          case when blocked then '차단됨' else '삭제 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (c) 허용 경로: pending→committed 확정은 통과해야 한다(과잉 차단 아님)
+  begin
+    update public.activity_log set phase = 'committed' where id = v_id;
+    transitioned := true;
+  exception when others then transitioned := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 append-only', 'activity_log phase pending→committed', '허용',
+          case when transitioned then '전환됨' else '차단됨(과잉)' end,
+          case when transitioned then 'PASS' else 'FAIL' end);
+
+  -- (d) 확정된 기록의 되돌리기(committed→pending) → 거부
+  blocked := false;
+  begin
+    update public.activity_log set phase = 'pending' where id = v_id;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 append-only', 'activity_log phase committed→pending 역전', '차단(예외)',
+          case when blocked then '차단됨' else '역전 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+do $$
+declare
+  t2 constant uuid := '00000000-0000-0000-0000-000000000002';
+  blocked boolean;
+begin
+  -- adjustments(조정 이력)는 UPDATE·DELETE 전면 거부 — 정정은 새 이력으로만.
+  blocked := false;
+  begin
+    update public.adjustments set reason = '변조 시도' where tenant_id = t2;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 append-only', 'adjustments UPDATE', '차단(예외)',
+          case when blocked then '차단됨' else '변경 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  blocked := false;
+  begin
+    delete from public.adjustments where tenant_id = t2;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 append-only', 'adjustments DELETE', '차단(예외)',
+          case when blocked then '차단됨' else '삭제 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8h. 한 사건 한 업무(00013 시나리오 50): work_items 열린 업무 dedup ───────── */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  blocked boolean := false;
+  reopened boolean := false;
+begin
+  insert into public.work_items (tenant_id, kind, title, source_type, source_id, next_action)
+  values (t1, 'manual', 'dedup 검증 업무', 'rls_test', 'dedup-1', '검증');
+
+  -- 같은 사건의 열린 업무 중복 생성 → 부분 유니크가 차단
+  begin
+    insert into public.work_items (tenant_id, kind, title, source_type, source_id, next_action)
+    values (t1, 'manual', 'dedup 검증 업무(중복)', 'rls_test', 'dedup-1', '검증');
+  exception when unique_violation then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('오늘 업무 dedup', '같은 사건의 열린 업무 중복 INSERT', '차단(unique)',
+          case when blocked then '차단됨' else '중복 생성(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- 완결 후 같은 사건 재발 → 새 업무는 만들 수 있어야 한다(부분 인덱스 — 과잉 차단 아님)
+  update public.work_items
+     set status = 'done', resolution = '검증 완료', resolved_at = now()
+   where tenant_id = t1 and source_type = 'rls_test' and source_id = 'dedup-1'
+     and status = 'open';
+  begin
+    insert into public.work_items (tenant_id, kind, title, source_type, source_id, next_action)
+    values (t1, 'manual', 'dedup 검증 업무(재발)', 'rls_test', 'dedup-1', '재검증');
+    reopened := true;
+  exception when unique_violation then reopened := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('오늘 업무 dedup', '완결 후 같은 사건 재발 시 새 업무 생성', '허용',
+          case when reopened then '생성됨' else '차단됨(과잉)' end,
+          case when reopened then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8i. 단일 활성 운영자·원자적 승계(00013 P-10 · 시나리오 67·68) ───────── */
+-- 부분 유니크: 한 테넌트에 활성 운영자 2명은 어떤 경로로도 불가
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  blocked boolean := false;
+begin
+  begin
+    insert into public.admin_accounts (tenant_id, email, status)
+    values (t1, 'second-active@example.com', 'active');
+  exception when unique_violation then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('단일 활성 운영자', 'T1에 두 번째 active 운영자 INSERT', '차단(unique)',
+          case when blocked then '차단됨' else '2인 활성(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+-- 승계 RPC: 지위 이전·세션 회수·감사 기록이 한 전환으로 끝나고 반쪽 전환이 남지 않는다
+do $$
+declare
+  t3 constant uuid := '00000000-0000-0000-0000-000000000003';
+  n_active int; n_live_session int; n_audit int;
+  rerun_blocked boolean := false;
+begin
+  -- 준비: 회수 대상 세션 1개
+  insert into public.admin_sessions (tenant_id, email, token_hash, expires_at)
+  values (t3, 'test-korean@example.com', 'dummy-session-hash-t3', now() + interval '12 hours');
+
+  perform public.admin_replace_operator(
+    t3, 'test-korean@example.com', 'new-korean@example.com', 'RLS 검증용 승계');
+
+  select count(*) into n_active
+    from public.admin_accounts where tenant_id = t3 and status = 'active';
+  select count(*) into n_live_session
+    from public.admin_sessions
+   where tenant_id = t3 and email = 'test-korean@example.com' and revoked_at is null;
+  select count(*) into n_audit
+    from public.activity_log
+   where tenant_id = t3 and action = 'admin_replace_operator'
+     and category = 'permission' and phase = 'committed';
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('원자적 승계', '승계 후 T3 활성 운영자 수', '1', n_active::text,
+          case when n_active = 1 then 'PASS' else 'FAIL' end),
+         ('원자적 승계', '승계 후 이전 운영자 미회수 세션', '0', n_live_session::text,
+          case when n_live_session = 0 then 'PASS' else 'FAIL' end),
+         ('원자적 승계', '승계 감사 기록(permission·committed)', '1', n_audit::text,
+          case when n_audit = 1 then 'PASS' else 'FAIL' end);
+
+  -- 이미 승계된(inactive) 운영자로 재승계 시도 → raise (from이 active가 아니면 실행 금지)
+  begin
+    perform public.admin_replace_operator(
+      t3, 'test-korean@example.com', 'another@example.com', '중복 승계 시도');
+  exception when others then rerun_blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('원자적 승계', 'inactive 운영자로 재승계 시도', '차단(예외)',
+          case when rerun_blocked then '차단됨' else '실행됨(위반)' end,
+          case when rerun_blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8j. 승인 통보 멱등(00014 검수 36): payssam_events applied dedup ─────────
+   같은 승인 통보(테넌트·bill_id·apprNum·경로)는 한 번만 '적용'될 수 있다 — 부분 유니크가
+   DB에서 이중 수납 반영을 차단한다. 중복 수신의 '기록'(outcome=duplicate)은 허용돼야 한다
+   (원장은 전부 보존 — 과잉 차단 아님). */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  blocked boolean := false;
+  logged boolean := false;
+begin
+  insert into public.payssam_events (tenant_id, bill_id, event_type, appr_state, appr_num, appr_price, payload, outcome)
+  values (t1, 'T1BILLDEDUP00000001', 'callback', 'F', 'APPR-DEDUP-1', 10000,
+          '{"apprState":"F","apprNum":"APPR-DEDUP-1"}'::jsonb, 'applied');
+
+  -- 같은 승인 통보의 두 번째 '적용' → 차단(중복 통보는 한 결제 — 검수 36)
+  begin
+    insert into public.payssam_events (tenant_id, bill_id, event_type, appr_state, appr_num, appr_price, payload, outcome)
+    values (t1, 'T1BILLDEDUP00000001', 'callback', 'F', 'APPR-DEDUP-1', 10000,
+            '{"apprState":"F","apprNum":"APPR-DEDUP-1"}'::jsonb, 'applied');
+  exception when unique_violation then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('승인 통보 멱등', '같은 승인 통보 2회 적용(applied) INSERT', '차단(unique)',
+          case when blocked then '차단됨' else '이중 적용(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- 재수신 기록은 duplicate로 남는다 — 부분 인덱스라 applied 외에는 제한 없음
+  begin
+    insert into public.payssam_events (tenant_id, bill_id, event_type, appr_state, appr_num, appr_price, payload, outcome)
+    values (t1, 'T1BILLDEDUP00000001', 'callback', 'F', 'APPR-DEDUP-1', 10000,
+            '{"apprState":"F","apprNum":"APPR-DEDUP-1"}'::jsonb, 'duplicate');
+    logged := true;
+  exception when unique_violation then logged := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('승인 통보 멱등', '재수신의 duplicate 기록 INSERT', '허용',
+          case when logged then '기록됨' else '차단됨(과잉)' end,
+          case when logged then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8k. 결제 컬럼 CHECK(00014 ①·②): refunded 허용·스냅샷 오염 차단 ───────── */
+do $$
+declare
+  t2 constant uuid := '00000000-0000-0000-0000-000000000002';
+  s2 uuid;
+  refunded_ok boolean := false;
+  bad_state_blocked boolean := false;
+begin
+  select id into strict s2 from public.students where tenant_id = t2 limit 1;
+
+  -- 환불 완료는 별도 업무 상태다(검수 45) — status CHECK 재생성이 refunded를 허용해야 한다
+  begin
+    insert into public.payments (tenant_id, student_id, period_start, period_end, amount, method,
+                                 status, refund_appr_num, refunded_at, refund_reason)
+    values (t2, s2, '2026-08-01', '2026-08-28', 480000, 'payssaem',
+            'refunded', 'T2-REFUND-0001', now(), '검증용 환불');
+    refunded_ok := true;
+  exception when check_violation then refunded_ok := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('결제 CHECK', 'payments.status = refunded INSERT', '허용',
+          case when refunded_ok then '허용됨' else '차단됨(과잉)' end,
+          case when refunded_ok then 'PASS' else 'FAIL' end);
+
+  -- 승인 스냅샷은 F/W/C/D만 — 스펙 밖 값은 스냅샷 오염이므로 DB가 거부한다
+  begin
+    insert into public.payments (tenant_id, student_id, period_start, period_end, amount, method, appr_state)
+    values (t2, s2, '2026-09-01', '2026-09-28', 480000, 'payssaem', 'X');
+  exception when check_violation then bad_state_blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('결제 CHECK', 'payments.appr_state 스펙 밖 값(X) INSERT', '차단(check)',
+          case when bad_state_blocked then '차단됨' else '오염 허용(위반)' end,
+          case when bad_state_blocked then 'PASS' else 'FAIL' end);
 end $$;
 
 /* ───────── 9. RLS 활성화 누락 테이블 탐지 (전 테이블 강제) ───────── */

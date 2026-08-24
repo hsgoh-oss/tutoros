@@ -12,6 +12,7 @@
     "verify:rls": "bash scripts/verify-rls.sh",
     "audit:scope": "node scripts/audit-tenant-scope.mjs",
     "audit:notify": "node scripts/audit-notify-types.mjs",
+    "payssam:smoke": "node scripts/payssam-smoke.mjs",
     "verify:all": "pnpm typecheck && pnpm audit:scope && pnpm audit:notify && pnpm verify:rls",
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report"
