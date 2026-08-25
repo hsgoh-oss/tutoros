@@ -5,6 +5,10 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { runCritical } from "@/lib/data/activity";
+import { recordAdjustment } from "@/lib/data/adjustments";
+import { createWorkItem } from "@/lib/data/work";
+import { sendNotification } from "@/lib/notify/send";
+import { resolveTenant } from "@/lib/tenant";
 import type { ClassType, Student } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -188,6 +192,24 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
     return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
   }
 
+  // E-05 재등록 — 「종료 등록 재활성 금지: 종료된 등록을 다시 활성화하지 않고 새 등록을 생성」
+  // (01_atlas_04 §17). status 폼 화이트리스트가 ended→active 되돌리기를 그대로 저장하던
+  // 충돌(06_gap_summary E-05)을 서버에서 차단한다 — 종료 학생의 활성 전환은
+  // reEnrollStudent(재등록 확인 절차)만 허용한다.
+  if (existing.status === "ended" && parsed.status !== "ended") {
+    return {
+      ok: false,
+      error:
+        "종료된 등록은 수정 폼에서 상태를 되돌릴 수 없습니다. 학생 상세의 '재등록 확인' 절차를 이용해 주세요.",
+    };
+  }
+
+  // E-04 등록 종료 — 「계약·등록 종료 → 포털 관계·접근 회수」(01_atlas_04 §17).
+  // ended 전환은 개인정보 접근이 걸린 종료 사건이므로 요약·사유를 구분해 감사에 남기고,
+  // 커밋 후 포털 접근 종료 안내를 발송한다(아래). 접근 회수 자체는
+  // getStudentByPortalToken(lib/data/crm.ts)의 ended 차단이 즉시 수행한다.
+  const isEnding = existing.status !== "ended" && parsed.status === "ended";
+
   const result = await runCritical(
     {
       tenantId: session.tenantId,
@@ -195,8 +217,11 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
       action: "update",
       targetType: "student",
       targetId: id,
-      summary: `학생 '${parsed.name}' 정보 수정`,
+      summary: isEnding
+        ? `학생 '${parsed.name}' 등록 종료(포털 접근 회수)`
+        : `학생 '${parsed.name}' 정보 수정`,
       category: "privacy",
+      ...(isEnding ? { reason: "등록 종료 — 포털 접근 회수(E-04)" } : {}),
       before: {
         name: existing.name,
         school: existing.school,
@@ -261,6 +286,156 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
           }
         }
         return { ok: false, error: "학생 정보 수정 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
+
+  if (isEnding) {
+    // E-04 — 종료 확정 후 학부모에게 포털 접근 종료를 안내한다. 안내(전달)는 종료 업무와
+    // 분리된 계층이라 실패해도 종료 전환을 되돌리지 않는다 — notifications 큐에 남아
+    // 크론 재시도(notifyRetry)·업무 큐로 수렴한다.
+    const tenant = await resolveTenant();
+    const notice = await sendNotification({
+      tenantId: session.tenantId,
+      studentId: id,
+      type: "custom_message",
+      phone: parsed.parentPhone,
+      message: `[${tenant.brandName}] ${parsed.name} 학생의 등록이 종료되어 리포트 포털 접근도 함께 종료되었습니다. 그동안 함께해 주셔서 감사합니다.`,
+      isAd: false,
+    });
+    if (!notice.ok) {
+      console.error("[students] 등록 종료 안내 발송 실패", notice.error);
+    }
+  }
+
+  revalidatePath("/admin/students");
+  revalidatePath(`/admin/students/${id}`);
+  return result;
+}
+
+/**
+ * E-05 재등록 확인 절차 — 「종료 등록을 재활성하지 않고 새 신청·계약·결제·일정의 새 등록 생성」이
+ * 정본이나, 현 모델은 등록이 students.status 하나로 표현되어 별도 등록 엔티티가 없다.
+ * 완전한 등록 엔티티 분리(새 등록 행 생성·과거 학습이력 연결)는 M2 몫이고, 여기서는 최소 부합으로
+ * ① 일반 수정 폼의 ended→active 직접 전환을 거부하고(updateStudent 가드)
+ * ② 이 액션이 "재등록 확인"(관계·결제·일정 재확인 체크 + 사유)을 거쳐 활성 전환하되,
+ *    조정 이력 공통 테이블 adjustments(domain 'enrollment')에 재등록을 상태 되돌리기가 아닌
+ *    새 이력 사건으로 남긴다(00013 append-only — 승인된 사실은 덮어쓰지 않는다).
+ */
+export async function reEnrollStudent(formData: FormData): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, error: "잘못된 요청입니다." };
+
+  // 재등록 확인 절차 — 본인·관계, 결제 조건, 일정을 다시 확인했음을 명시적으로 체크해야 한다.
+  const relationConfirmed = formData.get("relationConfirmed") === "on";
+  const paymentConfirmed = formData.get("paymentConfirmed") === "on";
+  const scheduleConfirmed = formData.get("scheduleConfirmed") === "on";
+  if (!relationConfirmed || !paymentConfirmed || !scheduleConfirmed) {
+    return { ok: false, error: "재등록 확인 항목(관계·결제·일정)을 모두 확인해 주세요." };
+  }
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!reason) return { ok: false, error: "재등록 사유를 입력해 주세요." };
+
+  const db = createServiceClient()!;
+  const { data: existing, error: fetchError } = await db
+    .from("students")
+    .select("name, status")
+    .eq("tenant_id", session.tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError || !existing) {
+    console.error("[students] fetch before re-enroll failed", fetchError);
+    return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
+  }
+  if (existing.status !== "ended") {
+    return { ok: false, error: "종료(ended) 상태의 학생만 재등록할 수 있습니다." };
+  }
+
+  // 재등록은 개인정보 접근(포털 등)이 되살아나는 전환(privacy) — 감사 선기록 없이는 실행하지 않는다.
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "update",
+      targetType: "student",
+      targetId: id,
+      summary: `학생 '${existing.name}' 재등록(종료 → 활성)`,
+      category: "privacy",
+      before: { status: "ended" },
+      after: {
+        status: "active",
+        re_enrollment: true,
+        relation_confirmed: relationConfirmed,
+        payment_confirmed: paymentConfirmed,
+        schedule_confirmed: scheduleConfirmed,
+      },
+      reason,
+    },
+    async () => {
+      // 순서: 전환 → 이력 → (이력 실패 시) 전환 원복.
+      // adjustments는 append-only(00013 트리거가 DELETE 거부)라 먼저 쌓은 이력을 보상 삭제할 수
+      // 없으므로, 이력을 나중에 기록하고 실패하면 전환을 되돌려 "이력 없는 재등록"을 확정하지
+      // 않는다(fail-closed — adjustments.ts 계약).
+      const { data: updated, error } = await db
+        .from("students")
+        .update({ status: "active" })
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id)
+        .eq("status", "ended") // 동시 재등록 이중 실행 방지 — ended인 행만 전환된다.
+        .select("id")
+        .maybeSingle();
+      if (error || !updated) {
+        console.error("[students] re-enroll update failed", error);
+        return { ok: false, error: "재등록 전환 중 오류가 발생했습니다." };
+      }
+
+      const adjustment = await recordAdjustment(session.tenantId, {
+        domain: "enrollment",
+        targetType: "student",
+        targetId: id,
+        before: { status: "ended" },
+        after: {
+          status: "active",
+          re_enrollment: true,
+          relation_confirmed: relationConfirmed,
+          payment_confirmed: paymentConfirmed,
+          schedule_confirmed: scheduleConfirmed,
+        },
+        reason,
+        actorEmail: session.email,
+      });
+      if (!adjustment.ok) {
+        // 이력 없는 재등록을 확정하지 않는다 — 전환 원복(보상).
+        const { error: revertError } = await db
+          .from("students")
+          .update({ status: "ended" })
+          .eq("tenant_id", session.tenantId)
+          .eq("id", id)
+          .eq("status", "active");
+        if (revertError) {
+          // 원복까지 실패 — 이력 없는 활성 상태가 남았다. 자동 재시도 대신
+          // 정합 확인 업무로 수렴시킨다(복원·불일치는 사람 판정).
+          console.error("[students] re-enroll revert failed", revertError);
+          await createWorkItem(session.tenantId, {
+            kind: "manual",
+            title: `재등록 이력 기록 실패 — 학생 '${existing.name}' 정합 확인 필요`,
+            sourceType: "student",
+            sourceId: id,
+            nextAction:
+              "adjustments(enrollment) 이력 없이 active로 남은 상태 — 이력을 수기 보완하거나 종료로 원복할 것",
+            priority: "privacy",
+          });
+        }
+        return {
+          ok: false,
+          error: "재등록 이력 기록에 실패해 전환을 확정하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+        };
       }
       return { ok: true };
     },

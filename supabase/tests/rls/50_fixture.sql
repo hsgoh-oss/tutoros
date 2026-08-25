@@ -3,6 +3,8 @@
 -- 전부에 타테넌트(T2) 행을 1건씩 심는다.
 -- 이게 없으면 "타테넌트 행 0건"이 RLS 덕분인지 데이터가 없어서인지 구별할 수 없다.
 -- (seed.sql은 faqs·students·recruit_status에만 T2 행을 넣는다)
+-- 00016 신설 컬럼(후기 상태·보고서 철회·대체 연결·성적 소프트 삭제)까지 채워
+-- 스키마와 CHECK·복합 FK를 함께 검증한다(00014 payments 확장과 동일 취지).
 
 do $$
 declare
@@ -10,6 +12,7 @@ declare
   s2 uuid;
   p2 uuid;
   a2 uuid;
+  r2 uuid;
 begin
   select id into strict s2 from public.students where tenant_id = t2 limit 1;
 
@@ -27,20 +30,34 @@ begin
     values (t2, 'home', 'hero')
     on conflict do nothing;
 
-  insert into public.reviews (tenant_id, reviewer_type, content)
-    values (t2, 'parent', 'T2 전용 후기 — 교차 노출 시 RLS 위반');
+  -- 00016 ③: 승인 게시 흐름 컬럼(status·approved_at)까지 채워 CHECK를 함께 검증한다
+  insert into public.reviews (tenant_id, reviewer_type, content, status, approved_at)
+    values (t2, 'parent', 'T2 전용 후기 — 교차 노출 시 RLS 위반', 'published', now());
 
   insert into public.lessons (tenant_id, student_id, lesson_date)
     values (t2, s2, '2026-07-01');
 
-  insert into public.ai_reports (tenant_id, student_id, type)
-    values (t2, s2, 'lesson');
+  -- 00016 ②: 철회·이전본 대체 표시 — 새 본(approved)을 먼저 만들고 철회된 원 본이
+  -- superseded_by로 가리키게 해 자기참조 복합 FK(테넌트 일치)까지 함께 검증한다
+  insert into public.ai_reports (tenant_id, student_id, type, status)
+    values (t2, s2, 'lesson', 'approved')
+    returning id into r2;
+
+  insert into public.ai_reports (tenant_id, student_id, type, status,
+                                 retracted_at, retract_reason, superseded_by)
+    values (t2, s2, 'lesson', 'retracted',
+            now(), 'T2 전용 철회 보고서 — 교차 노출 시 RLS 위반', r2);
 
   insert into public.schedules (tenant_id, student_id, scheduled_at)
     values (t2, s2, now());
 
   insert into public.grade_records (tenant_id, student_id, exam_name)
     values (t2, s2, 'T2 전용 모의고사');
+
+  -- 00016 ①: 소프트 삭제 컬럼(deleted_at·deleted_reason) — 철회된 결과본도 행으로 남는다
+  insert into public.grade_records (tenant_id, student_id, exam_name, deleted_at, deleted_reason)
+    values (t2, s2, 'T2 전용 철회 모의고사 — 교차 노출 시 RLS 위반',
+            now(), '검증용 소프트 삭제(물리 삭제 금지)');
 
   insert into public.lesson_materials (tenant_id, name, file_url)
     values (t2, 'T2 전용 자료.pdf', 'https://example.com/t2.pdf');

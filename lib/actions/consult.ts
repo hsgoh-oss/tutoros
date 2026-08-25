@@ -16,6 +16,9 @@ import {
 const POLICY_VERSION = "v0.9";
 const DB_ERROR_MESSAGE =
   "데이터베이스 미연결 상태입니다. 잠시 후 다시 시도하거나 카카오톡으로 문의해 주세요.";
+// O-04 접수 거부 안내 — 대기명단 실동작(정원 산정·자리 제안)은 M2 몫이라 안내 문구만 둔다.
+const RECRUIT_CLOSED_MESSAGE =
+  "현재 모집이 마감되어 상담 접수를 받지 않습니다. 대기 신청은 준비 중이니, 모집 재개 안내가 필요하시면 카카오톡으로 문의해 주세요.";
 
 export type ConsultActionResult =
   | { ok: true }
@@ -36,6 +39,20 @@ export async function submitConsult(
   }
 
   const tenant = await resolveTenant();
+
+  // O-04 정본 "공개 상태 = 실제 접수 가능 상태": 접수 중단(closed)이면 서버에서 접수를 거부한다.
+  // 공개 페이지의 폼 게이트를 우회한 직접 호출도 여기서 막힌다. 행 없음·조회 실패는
+  // 공개 표시 폴백(DEFAULT_CONTENT.recruit.status = "open")과 동일하게 접수 가능으로 취급해
+  // 일시 오류가 실제 접수를 막지 않게 한다(open·closing·waitlist는 상담 접수를 계속 받는다).
+  const { data: recruitRow } = await db
+    .from("recruit_status")
+    .select("status")
+    .eq("tenant_id", tenant.id)
+    .maybeSingle();
+  if (recruitRow?.status === "closed") {
+    return { ok: false, error: RECRUIT_CLOSED_MESSAGE };
+  }
+
   const classType = data.classType === "unspecified" ? null : data.classType;
   const hours = data.hours ? Number(data.hours) : undefined;
   const freq = data.freq ? Number(data.freq) : undefined;

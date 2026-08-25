@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getStudent, listGrades, listLessons } from "@/lib/data/crm";
-import { createReportRow, getReport } from "@/lib/data/reports";
+import { createReportRow, getReport, type AiReportWithHistory } from "@/lib/data/reports";
 import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
 import { getSiteContent } from "@/lib/data/content";
@@ -50,6 +50,84 @@ const TYPE_LABEL: Record<ReportType, string> = {
 function revalidateReport(id: string) {
   revalidatePath("/admin/reports");
   revalidatePath(`/admin/reports/${id}`);
+}
+
+/** lib/notify/send.ts MAX_RETRY와 동일 값 — 회수한 알림이 notifyRetry 크론(retry_count<3 재큐잉)에 다시 잡히지 않게 하는 상한. */
+const NOTIFY_MAX_RETRY = 3;
+
+/**
+ * 철회 전환 본체(G-03) — retractReport(단독 철회)와 createReport(정정본 생성 시 이전 본 대체)가 공유한다.
+ *
+ * 순서 계약: ① 발송 대기(queued) 알림 회수 → ② 상태 전환. ①만 성공하고 ②가 실패하면
+ * 알림만 회수된 approved 본이 남아 수동 재발송으로 복구할 수 있지만, 반대 순서면 철회된 본의
+ * 열람 안내 문자가 나갈 수 있다 — 회수를 먼저 확정한다.
+ *
+ * 이미 retracted인 본에 supersededBy만 연결하는 호출(철회 후 정정본 생성)에서는 철회 시각·사유를
+ * 덮어쓰지 않는다 — 철회된 행이 곧 철회 이력이고, 이력은 덮어쓰지 않는다.
+ *
+ * 알려진 한계: 크론이 이미 sending으로 클레임한 알림은 회수하지 않는다(이중 발송 방지 클레임과
+ * 경합 금지). 그 문자에는 열람 링크만 실리고 본문이 없으며, 포털은 retracted를 걸러 새 열람을
+ * 차단하므로 노출은 링크 안내 문구에 그친다.
+ */
+async function retractReportRow(
+  db: NonNullable<ReturnType<typeof createServiceClient>>,
+  tenantId: string,
+  report: AiReportWithHistory,
+  reason: string,
+  supersededBy?: string,
+): Promise<CrmActionResult> {
+  // ① 아직 나가지 않은 열람 안내 회수 — queued(발송 대기)뿐 아니라 failed(재시도 대기)도
+  //    함께 잠근다: notifyRetry 크론은 failed·retry_count<상한 전 건을 리포트 상태와 무관하게
+  //    재큐잉하므로, 상한으로 올려 두지 않으면 철회 후 재발송이 나간다. 사유는 error 컬럼에.
+  const { error: cancelError } = await db
+    .from("notifications")
+    .update({
+      status: "failed",
+      retry_count: NOTIFY_MAX_RETRY,
+      error: "리포트 철회로 발송 회수",
+    })
+    .eq("tenant_id", tenantId)
+    .eq("report_id", report.id)
+    .in("status", ["queued", "failed"]);
+  if (cancelError) {
+    console.error("[reports] 철회 시 대기 알림 회수 실패", cancelError);
+    return {
+      ok: false,
+      error: "발송 대기 알림 회수에 실패해 철회를 중단했습니다. 다시 시도해 주세요.",
+    };
+  }
+
+  // ② 상태 전환 — 행은 보존한다(철회는 삭제가 아니다 — 새 열람 차단 + 철회 이력 보존).
+  const patch: Record<string, unknown> = {};
+  if (report.status !== "retracted") {
+    patch.status = "retracted";
+    patch.retracted_at = new Date().toISOString();
+    patch.retract_reason = reason;
+    // 발송 대기였다면 ①에서 회수됐다 — 전달 상태도 미발송으로 되돌린다(거짓 "발송 대기" 표시 방지).
+    if (report.deliveryStatus === "queued") patch.delivery_status = "none";
+  }
+  if (supersededBy) patch.superseded_by = supersededBy;
+  let update = db
+    .from("ai_reports")
+    .update(patch)
+    .eq("tenant_id", tenantId)
+    .eq("id", report.id);
+  // TOCTOU 가드: 철회 전환은 선조회 시점 상태와 같을 때만(이중 철회가 철회 이력을 덮어쓰지 않게),
+  // 대체 연결은 아직 대체되지 않은 본에만(정정본 이중 생성 경합 차단).
+  if (report.status !== "retracted") update = update.eq("status", report.status);
+  if (supersededBy) update = update.is("superseded_by", null);
+  const { data: updated, error } = await update.select("id");
+  if (error) {
+    console.error("[reports] retract failed", error);
+    return { ok: false, error: "철회 처리 중 오류가 발생했습니다." };
+  }
+  if ((updated ?? []).length === 0) {
+    return {
+      ok: false,
+      error: "그 사이 상태가 바뀌어 처리하지 않았습니다(이미 철회·대체됐을 수 있음). 새로고침 후 다시 확인해 주세요.",
+    };
+  }
+  return { ok: true };
 }
 
 /** ai_reports.type → 알림 발송 type 키. consult_brief(내부용)는 발송 대상이 없어 null. */
@@ -126,6 +204,30 @@ export async function createReport(
   // 기획: 깊이(심화)는 월간 리포트에만 적용, 그 외 유형은 기본으로 처리.
   const depth = type === "monthly" ? rawDepth : "basic";
 
+  // G-03 정정 — "이전 본 대체" 선택(supersedes=기존 리포트 id, 상세 페이지의 정정본 생성 폼이 전달).
+  // 새 본은 항상 draft로 태어나 재승인 전에는 포털에 노출되지 않고(정본: 새 보고서본 → 운영자
+  // 재승인 → 최신본 게시), 이전 본은 생성과 동시에 철회 처리해 오류 본의 새 열람을 즉시 차단한다.
+  const supersedesId = String(formData.get("supersedes") ?? "").trim();
+  let previous: AiReportWithHistory | null = null;
+  if (supersedesId) {
+    previous = await getReport(session.tenantId, supersedesId);
+    if (!previous) return { ok: false, error: "대체할 이전 리포트를 찾을 수 없습니다." };
+    if (
+      previous.studentId !== studentId ||
+      previous.type !== type ||
+      previous.audience !== audience
+    ) {
+      // 정정본은 같은 보고의 새 본이다 — 다른 학생·유형·대상의 본을 "최신본"으로 연결하는 오염을 막는다.
+      return { ok: false, error: "이전 본과 학생·유형·대상이 같은 리포트만 대체할 수 있습니다." };
+    }
+    if (previous.supersededBy) {
+      return { ok: false, error: "이미 대체된 리포트입니다. 최신본에서 정정본을 생성해 주세요." };
+    }
+    if (previous.status === "draft") {
+      return { ok: false, error: "초안은 대체 대상이 아닙니다 — 초안을 직접 수정해 주세요." };
+    }
+  }
+
   const student = await getStudent(session.tenantId, studentId);
   if (!student) return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
 
@@ -142,19 +244,31 @@ export async function createReport(
     return { ok: false, error: generated.error ?? "리포트 생성에 실패했습니다." };
   }
 
+  const db = createServiceClient()!;
   // 성적 데이터 기반 리포트 생성은 중요행위(category=grade) — 감사 선기록 실패 시 저장하지 않는다(fail-closed).
+  // 정정본 생성(supersedes)은 "새 본 생성 + 이전 본 철회·대체 연결"이 한 사건이므로 감사도 한 건으로 묶는다.
   const created = await runCritical(
     {
       tenantId: session.tenantId,
       actorEmail: session.email,
-      action: "report_create",
+      action: previous ? "report_supersede" : "report_create",
       targetType: "ai_report",
-      targetId: null, // 생성 전이라 id 미정 — 원본 학생을 summary로 남긴다.
-      summary: `${student.name} ${TYPE_LABEL[type]} 리포트 생성(${AUDIENCE_LABEL[audience]}·${depth === "deep" ? "심화" : "기본"})`,
+      // 대체 생성이면 전환 대상은 이전 본. 단독 생성은 생성 전이라 id 미정 — 원본 학생을 summary로 남긴다.
+      targetId: previous?.id ?? null,
+      summary: previous
+        ? `${student.name} ${TYPE_LABEL[type]} 정정 리포트 생성 — 이전 본 철회·대체(${AUDIENCE_LABEL[audience]})`
+        : `${student.name} ${TYPE_LABEL[type]} 리포트 생성(${AUDIENCE_LABEL[audience]}·${depth === "deep" ? "심화" : "기본"})`,
       category: "grade",
+      ...(previous
+        ? {
+            before: { status: previous.status, supersededBy: null },
+            after: { status: "retracted", supersededBy: "신규 정정본(draft)" },
+            reason: "정정본 생성으로 이전 본 대체",
+          }
+        : {}),
     },
-    () =>
-      createReportRow({
+    async () => {
+      const inserted = await createReportRow({
         tenantId: session.tenantId,
         studentId,
         type,
@@ -163,10 +277,39 @@ export async function createReport(
         content: generated.content + AI_REPORT_DISCLAIMER,
         modelUsed: generated.modelUsed ?? null,
         tokenUsage: generated.tokenUsage ?? null,
-      }),
+      });
+      if (!inserted.ok || !previous) return inserted;
+
+      // 이전 본 철회 + superseded_by 연결. 실패하면 방금 만든 초안을 회수(삭제)해
+      // "대체 표시 없는 정정본"이 남지 않게 한다 — 초안은 게시 전(포털 비노출)이라
+      // 삭제해도 승인된 사실을 지우는 것이 아니고, 감사 기록은 abort로 실패가 남는다.
+      const linked = await retractReportRow(
+        db,
+        session.tenantId,
+        previous,
+        "정정본 생성으로 대체",
+        inserted.id,
+      );
+      if (!linked.ok) {
+        const { error: rollbackError } = await db
+          .from("ai_reports")
+          .delete()
+          .eq("tenant_id", session.tenantId)
+          .eq("id", inserted.id);
+        if (rollbackError) {
+          console.error("[reports] 대체 실패 후 초안 회수 실패 — 연결 없는 초안 잔존", rollbackError);
+        }
+        return {
+          ok: false as const,
+          error: `이전 본 대체 처리에 실패해 정정본 생성을 취소했습니다. (${linked.error})`,
+        };
+      }
+      return inserted;
+    },
   );
   if (!created.ok) return created;
 
+  if (previous) revalidateReport(previous.id);
   revalidatePath("/admin/reports");
   return { ok: true, id: created.id };
 }
@@ -184,6 +327,10 @@ export async function updateReportContent(formData: FormData): Promise<CrmAction
   const report = await getReport(session.tenantId, id);
   if (!report) return { ok: false, error: "리포트를 찾을 수 없습니다." };
   if (report.status === "sent") return { ok: false, error: "발송 완료된 리포트는 수정할 수 없습니다." };
+  // G-03 — 철회된 행이 곧 철회 이력이다: 본문을 덮어쓰지 않는다. 정정은 새 리포트(정정본 생성)로.
+  if (report.status === "retracted") {
+    return { ok: false, error: "철회된 리포트는 수정할 수 없습니다. 정정은 정정본 생성으로 진행해 주세요." };
+  }
 
   const db = createServiceClient()!;
   // 성적 리포트 본문 수정도 중요행위(category=grade) — 감사 선기록 실패 시 수정하지 않는다(fail-closed).
@@ -223,6 +370,8 @@ export async function approveReport(id: string): Promise<CrmActionResult> {
 
   const report = await getReport(session.tenantId, id);
   if (!report) return { ok: false, error: "리포트를 찾을 수 없습니다." };
+  // draft만 승인 — 철회본(retracted) 재승인 금지(재활성 금지): 재공개는 이전 본을 되돌리는 게
+  // 아니라 정정본(새 리포트)을 생성해 검토·승인·게시하는 경로뿐이다(G-03).
   if (report.status !== "draft") return { ok: false, error: "초안 상태만 승인할 수 있습니다." };
 
   const db = createServiceClient()!;
@@ -265,6 +414,11 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
 
   const report = await getReport(session.tenantId, id);
   if (!report) return { ok: false, error: "리포트를 찾을 수 없습니다." };
+  // G-03 — 철회본 발송 금지: 철회 = 새 열람 차단이며, 재공개는 이전 본을 되돌리지 않고
+  // 정정본(새 리포트)을 승인·발송하는 경로만 있다.
+  if (report.status === "retracted") {
+    return { ok: false, error: "철회된 리포트는 발송할 수 없습니다. 정정본을 생성해 승인·발송해 주세요." };
+  }
   // 승인 이후에만 발송 가능. 발송 실패는 업무 상태가 아니라 전달 상태이므로(N-02)
   // approved(첫 발송·실패 재발송)와 sent(전달 실패 후 역전파 전 재발송) 모두 허용하되,
   // queued(야간 대기·Solapi 미설정 대기)는 크론 발송 예정 — 중복 발송을 막는다.
@@ -398,6 +552,56 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
       return { ok: true };
     },
   );
+
+  revalidateReport(id);
+  return result;
+}
+
+/**
+ * G-03 철회 — "새 열람 차단 → 철회 이력 보존".
+ * 게시(승인·발송)된 본만 대상이며, 포털은 listPortalReports의 approved·sent 필터로
+ * retracted를 자동 제외한다(공유 경로 접근 회수). 행·사유·시각은 보존되고,
+ * 재공개는 정정본(새 리포트) 생성·재승인·게시로만 가능하다(재활성 금지).
+ */
+export async function retractReport(formData: FormData): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+
+  const id = String(formData.get("id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!id) return { ok: false, error: "잘못된 요청입니다." };
+  // 사유 없는 철회는 없다(00016 retract_reason — 철회 이력의 일부).
+  if (!reason) return { ok: false, error: "철회 사유를 입력해 주세요." };
+
+  const report = await getReport(session.tenantId, id);
+  if (!report) return { ok: false, error: "리포트를 찾을 수 없습니다." };
+  if (report.status === "retracted") return { ok: false, error: "이미 철회된 리포트입니다." };
+  if (report.status !== "approved" && report.status !== "sent") {
+    return {
+      ok: false,
+      error: "게시(승인·발송)된 리포트만 철회할 수 있습니다. 초안은 승인하지 않으면 노출되지 않습니다.",
+    };
+  }
+
+  const db = createServiceClient()!;
+  // 철회는 포털 노출 차단·발송 회수로 이어지는 성적 전환 — 감사 선기록 실패 시 철회하지 않는다(fail-closed).
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "report_retract",
+      targetType: "ai_report",
+      targetId: id,
+      summary: `리포트 철회(${TYPE_LABEL[report.type]}·${AUDIENCE_LABEL[report.audience]})`,
+      category: "grade",
+      before: { status: report.status },
+      after: { status: "retracted" },
+      reason,
+    },
+    () => retractReportRow(db, session.tenantId, report, reason),
+  );
+  if (!result.ok) return result;
 
   revalidateReport(id);
   return result;

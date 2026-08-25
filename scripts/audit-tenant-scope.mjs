@@ -68,6 +68,9 @@ for (const file of files) {
   const lines = src.split("\n");
 
   for (let i = 0; i < lines.length; i++) {
+    // storage.from("bucket")은 스토리지 버킷 핸들이지 테이블 쿼리가 아니다 — 오브젝트 경로의
+    // 테넌트 격리는 경로 규약(업로드 시 tenantId 접두)이 담당하므로 이 감사의 대상이 아니다.
+    if (/\.storage\s*\.\s*from\(/.test(lines[i])) continue;
     const m = lines[i].match(/\.from\(\s*["'`]([a-z_]+)["'`]\s*\)/);
     if (!m) continue;
     const table = m[1];

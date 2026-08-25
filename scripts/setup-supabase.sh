@@ -89,13 +89,15 @@ else
   echo "  ↷ 생략 (--seed 옵션으로 활성화)"
 fi
 
-echo "═══ 4/5 Storage 버킷 (materials·homework=비공개·서명URL / photos·reviews=공개 읽기) ═══"
+echo "═══ 4/5 Storage 버킷 (materials·homework·review-evidence=비공개·서명URL / photos·reviews=공개 읽기) ═══"
 if [ "$SKIP_BUCKETS" = true ]; then
   echo "  ↷ 생략 (--skip-buckets)"
 else
-  for bucket in materials homework photos reviews; do
-    # materials·homework는 학생 PII 자료 — 비공개(서명 URL로만 접근). photos·reviews는 공개 사이트 자산.
-    if [ "$bucket" = "materials" ] || [ "$bucket" = "homework" ]; then pub=false; else pub=true; fi
+  for bucket in materials homework review-evidence photos reviews; do
+    # materials·homework는 학생 PII 자료, review-evidence는 후기 증빙 스크린샷 원본(S-02 비공개
+    # 격리 — 관리자 검토는 서명 URL, 공개 노출은 게시 승인 시 reviews 버킷에 만드는 공개 사본만).
+    # photos·reviews는 공개 사이트 자산(reviews에는 레거시 업로드분 + 승인된 증빙 공개 사본이 산다).
+    if [ "$bucket" = "materials" ] || [ "$bucket" = "homework" ] || [ "$bucket" = "review-evidence" ]; then pub=false; else pub=true; fi
     code="$(curl -s -o /tmp/bucket_resp.json -w "%{http_code}" \
       -X POST "$SUPABASE_URL/storage/v1/bucket" \
       -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \

@@ -219,7 +219,10 @@ async function propagateReportDelivery(
         : { delivery_status: "failed" },
     )
     .eq("tenant_id", tenantId)
-    .eq("id", reportId);
+    .eq("id", reportId)
+    // 철회본은 어떤 전달 결과로도 되살리지 않는다(G-03 재활성 금지) — 지연 성공이 와도
+    // 게시 상태를 sent로 되돌리지 않고 무시한다(회수 경합의 마지막 방어선).
+    .neq("status", "retracted");
   if (outcome === "failed") query = query.neq("delivery_status", "sent");
   const { error } = await query;
   if (error) console.error("[notify] 리포트 delivery_status 역전파 실패", error);

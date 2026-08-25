@@ -59,6 +59,15 @@ export interface RecruitStatus {
   isBannerVisible: boolean;
 }
 
+/**
+ * 후기·성적사례 상태(00016 — S-01·S-03 정본 해소).
+ * draft(등록·제출 — 비공개) → approved(검토 승인 — 아직 비공개) → published(공개용 최소 본 게시)
+ * → retracted(철회 — 즉시 공개 중단, 행·이력은 보존).
+ * 공개 콘텐츠는 published만 노출하며, 철회 후 재공개는 이전 본을 되돌리지 않고
+ * 새 제출본을 다시 검토·승인·게시한다(재활성 금지 — 정정·철회는 adjustments 이력으로 남긴다).
+ */
+export type ReviewStatus = "draft" | "approved" | "published" | "retracted";
+
 export interface Review {
   id: string;
   reviewerType: "student" | "parent";
@@ -251,8 +260,13 @@ export interface AiReport {
   content: string;
   modelUsed: string | null;
   tokenUsage: number | null;
-  /** 업무 상태 — 초안→승인→발송완료. 'failed'는 업무 상태가 아니다(전달 실패는 deliveryStatus 담당). */
-  status: "draft" | "approved" | "sent";
+  /**
+   * 업무 상태 — 초안→승인→발송완료, 철회(G-03: 새 열람 차단·철회 이력 보존).
+   * 'failed'는 업무 상태가 아니다(전달 실패는 deliveryStatus 담당).
+   * retracted는 삭제가 아니다 — 행은 보존하고 포털·알림 노출만 차단하며,
+   * 재공개는 이전 본을 되돌리지 않고 정정된 새 리포트를 검토·승인·게시한다.
+   */
+  status: "draft" | "approved" | "sent" | "retracted";
   deliveryStatus: ReportDeliveryStatus;
   sentAt: string | null;
   createdAt: string;

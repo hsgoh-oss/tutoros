@@ -26,18 +26,21 @@ export function reportAudienceLabel(audience: ReportAudience): string {
   return REPORT_AUDIENCE_OPTIONS.find((o) => o.value === audience)?.label ?? audience;
 }
 
-// 업무 상태(초안→승인→발송완료)와 전달 상태(delivery_status)를 분리 표시한다(N-02).
+// 업무 상태(초안→승인→발송완료, 철회)와 전달 상태(delivery_status)를 분리 표시한다(N-02).
 // 발송 실패는 업무 상태가 아니라 전달 상태 — 승인된 리포트는 실패해도 승인 뱃지를 유지한다.
+// retracted(G-03)는 삭제가 아니라 "새 열람 차단 + 철회 이력 보존" — 행은 남고 포털 비노출.
 const STATUS_LABEL: Record<AiReport["status"], string> = {
   draft: "초안",
   approved: "승인됨",
   sent: "발송완료",
+  retracted: "철회됨",
 };
 
 const STATUS_TONE: Record<AiReport["status"], BadgeTone> = {
   draft: "soft",
   approved: "brand",
   sent: "success",
+  retracted: "danger",
 };
 
 export function reportStatusLabel(status: AiReport["status"]): string {

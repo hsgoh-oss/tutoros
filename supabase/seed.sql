@@ -87,6 +87,11 @@ insert into public.reviews (tenant_id, reviewer_type, content, rating, meta, scr
  5, '{"region":"경기","grade":"고2","track":"문과","source":"김과외","reviewed_at":"2026-06-01"}'::jsonb,
  array['/img/reviews/rev-3.jpg'], false);
 
+-- 00016 이후 status 기본값이 draft(비공개)라 시드 후기가 공개 사이트에 보이지 않게 된다.
+-- 시드 후기는 이미 검토된 공개본으로 간주해 published로 승급한다(00016 기존 행 백필과 동일 논리).
+update public.reviews set status = 'published', approved_at = created_at
+ where tenant_id = '00000000-0000-0000-0000-000000000001' and status = 'draft';
+
 /* ---------- 1호 테넌트: FAQ 10문항 ---------- */
 
 insert into public.faqs (tenant_id, category, question, answer, sort_order) values

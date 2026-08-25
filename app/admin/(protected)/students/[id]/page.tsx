@@ -12,9 +12,10 @@ import {
 } from "@/lib/data/crm";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Field, Textarea } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { PortalLinkCard } from "@/components/admin/portal-link";
-import { regeneratePortalToken, updateStudent } from "../actions";
+import { reEnrollStudent, regeneratePortalToken, updateStudent } from "../actions";
 import { StudentFormFields } from "../student-form-fields";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
@@ -85,8 +86,70 @@ export default async function StudentDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {student.status === "ended" && (
+            /* E-05 재등록 확인 — 종료 등록은 수정 폼으로 되돌리지 않는다(서버 가드).
+               관계·결제·일정 재확인 + 사유를 거쳐야 활성 전환되며, adjustments(enrollment)에
+               재등록 이력이 남는다. 완전한 새 등록 엔티티 생성은 M2 몫. */
+            <Card>
+              <h2 className="mb-2 text-sm font-black text-ink-soft">재등록 확인</h2>
+              <p className="mb-4 text-xs leading-relaxed text-muted">
+                종료된 등록은 다시 활성화하지 않고 새 등록으로 처리하는 것이 원칙입니다.
+                아래 항목을 실제로 다시 확인한 뒤 재등록해 주세요. 재등록 내역은
+                조정 이력으로 기록되어 되돌릴 수 없습니다.
+              </p>
+              <SubmitForm action={reEnrollStudent} submitLabel="재등록">
+                <input type="hidden" name="id" value={student.id} />
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      name="relationConfirmed"
+                      className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
+                    />
+                    <span className="text-sm font-bold text-ink-soft">
+                      본인·보호자 관계를 다시 확인했습니다
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      name="paymentConfirmed"
+                      className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
+                    />
+                    <span className="text-sm font-bold text-ink-soft">
+                      수강료·결제 조건을 다시 확인했습니다
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      name="scheduleConfirmed"
+                      className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
+                    />
+                    <span className="text-sm font-bold text-ink-soft">
+                      수업 일정을 다시 확인했습니다
+                    </span>
+                  </label>
+                  <Field label="재등록 사유" required>
+                    <Textarea
+                      name="reason"
+                      rows={2}
+                      placeholder="예: 겨울방학 복귀 — 주 2회 대면 수업으로 재개"
+                    />
+                  </Field>
+                </div>
+              </SubmitForm>
+            </Card>
+          )}
+
           <Card>
             <h2 className="mb-4 text-sm font-black text-ink-soft">기본 정보</h2>
+            {student.status === "ended" && (
+              <p className="mb-4 rounded-lg bg-soft px-3 py-2 text-xs leading-relaxed text-muted">
+                종료된 등록은 이 폼에서 상태를 되돌릴 수 없습니다. 다시 수업을 시작하려면
+                위의 재등록 확인 절차를 이용해 주세요.
+              </p>
+            )}
             <SubmitForm action={updateStudent} submitLabel="저장">
               <input type="hidden" name="id" value={student.id} />
               <StudentFormFields student={student} />
@@ -303,7 +366,14 @@ export default async function StudentDetailPage({
               승인된 리포트를 학생·학부모가 이 링크로 조회합니다(읽기 전용).
               링크가 있으면 누구나 열람하니 공유에 주의하세요.
             </p>
-            {student.portalToken ? (
+            {student.status === "ended" ? (
+              /* E-04 — 종료 학생은 포털 접근이 회수된다(getStudentByPortalToken의 ended 차단).
+                 무효인 링크를 노출해 공유 사고를 만들지 않도록 안내로 대체한다. */
+              <p className="rounded-lg bg-soft px-3 py-2 text-xs leading-relaxed text-muted">
+                등록 종료로 포털 접근이 회수되었습니다. 기존 링크는 열리지 않으며,
+                재등록 확인 절차를 거쳐 활성화되면 다시 사용할 수 있습니다.
+              </p>
+            ) : student.portalToken ? (
               <PortalLinkCard
                 url={`${SITE_URL}/portal/${student.portalToken}`}
                 studentId={student.id}

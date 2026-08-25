@@ -6,6 +6,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getBackup, recordBackup } from "@/lib/data/backup";
 import { logActivity, runCritical } from "@/lib/data/activity";
+import { createWorkItem } from "@/lib/data/work";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
@@ -287,6 +288,19 @@ export async function restoreFaqsBackup(backupId: string): Promise<CrmActionResu
     },
   );
   if (!result.ok) return result;
+
+  // D-08·W-06 최소 수렴: "복원은 정합 확인 업무로 수렴" — 복원분 정합·과거 파기 대상
+  // 재적용 여부를 사람이 확인하도록 업무를 남긴다(fail-open — 복원 성공은 유지).
+  // 격리 리허설→정합성→재파기→운영 연결 전면 구현은 M8 몫.
+  await createWorkItem(session.tenantId, {
+    kind: "manual",
+    priority: "privacy",
+    title: "백업 복원 정합 확인",
+    detail: `FAQ 백업 복원(${rows.length}건)`,
+    sourceType: "backup_restore",
+    sourceId: backupId,
+    nextAction: "복원분 데이터 정합·과거 파기 대상 재적용 여부 확인(D-08·W-06)",
+  });
 
   revalidateFaqs();
   return result;

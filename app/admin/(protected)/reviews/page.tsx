@@ -9,8 +9,11 @@ import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { ActionButton } from "@/components/admin/crm/action-button";
-import { reviewerTypeLabel } from "./constants";
+import type { ReviewStatus } from "@/lib/types";
+import { reviewerTypeLabel, reviewStatusLabel } from "./constants";
+import { listReviewStatuses } from "./storage";
 import {
+  approveReview,
   deleteReview,
   moveReviewDown,
   moveReviewUp,
@@ -18,11 +21,21 @@ import {
   togglePinReview,
 } from "./actions";
 
+/** 게시 상태별 배지 톤 — draft(승인 대기)는 경고색으로 눈에 띄게(승인 전 비공개 상태). */
+const STATUS_TONES: Record<ReviewStatus, "brand" | "soft" | "success" | "warning" | "danger"> = {
+  draft: "warning",
+  approved: "brand",
+  published: "success",
+  retracted: "danger",
+};
+
 export default async function ReviewsPage() {
   const session = await getAdminSession();
   const connected = hasDb();
   const reviews = session ? await listReviews(session.tenantId) : [];
   const backups = session ? await listBackups(session.tenantId, "reviews") : [];
+  // 게시 상태(00016)는 목록 조회(listReviews)와 별도로 보강 조회한다 — S-01 승인 게시 흐름 표시용.
+  const statuses = session ? await listReviewStatuses(session.tenantId) : new Map();
 
   return (
     <div>
@@ -56,6 +69,7 @@ export default async function ReviewsPage() {
             <thead>
               <tr>
                 <Th>유형</Th>
+                <Th>상태</Th>
                 <Th>평점</Th>
                 <Th>성적 변화</Th>
                 <Th>지역</Th>
@@ -67,7 +81,9 @@ export default async function ReviewsPage() {
               </tr>
             </thead>
             <tbody>
-              {reviews.map((r, i) => (
+              {reviews.map((r, i) => {
+                const status = statuses.get(r.id)?.status as ReviewStatus | undefined;
+                return (
                 <tr key={r.id}>
                   <Td>
                     <Link
@@ -81,6 +97,22 @@ export default async function ReviewsPage() {
                         고정
                       </Badge>
                     )}
+                  </Td>
+                  <Td>
+                    <div className="flex items-center gap-2">
+                      <Badge tone={status ? STATUS_TONES[status] : "soft"}>
+                        {reviewStatusLabel(status)}
+                      </Badge>
+                      {/* S-01: 신규 후기는 draft(비공개)로 등록되고 운영자 승인으로만 게시된다 */}
+                      {(status === "draft" || status === "approved") && (
+                        <ActionButton
+                          action={approveReview}
+                          id={r.id}
+                          label="게시 승인"
+                          confirmText="이 후기를 공개 사이트에 게시하시겠습니까? 증빙 스크린샷의 공개 사본이 생성됩니다."
+                        />
+                      )}
+                    </div>
                   </Td>
                   <Td>{r.rating}점</Td>
                   <Td>
@@ -124,7 +156,8 @@ export default async function ReviewsPage() {
                     />
                   </Td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </Table>
         </TableWrap>

@@ -70,6 +70,10 @@ export const getSiteContent = cache(
         .from("reviews")
         .select("*")
         .eq("tenant_id", tenantId)
+        // 정본 S-01·S-03 "공개 콘텐츠는 승인본만": 게시 승인(published)된 후기만 공개면에 노출한다.
+        // draft(승인 대기)·retracted(철회)는 상태 구분 없이 전 행을 노출하던 이전 동작과 달리 제외 —
+        // 기존 행은 00016이 published로 백필해 오늘 공개 중인 집합은 그대로 유지된다.
+        .eq("status", "published")
         .order("is_pinned", { ascending: false })
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false }),
@@ -127,6 +131,20 @@ export const getSiteContent = cache(
       }
     : DEFAULT_CONTENT.recruit;
 
+  // 공개면 스크린샷 URL 해석(S-02 — 승인 시 공개 사본 방식):
+  //  · "http…" 항목 = 과거 public 버킷 발급 URL(레거시, 이관하지 않음) — 그대로 사용.
+  //  · 그 외 항목 = 비공개 증빙 버킷(review-evidence)의 경로. 게시 승인 시 같은 경로로
+  //    reviews 공개 버킷에 사본이 생성돼 있으므로 getPublicUrl로 URL만 계산한다(네트워크 왕복 0).
+  // 짧은 만료 서명 URL 방식을 쓰지 않은 이유: 이 로더는 revalidatePath 기반으로 캐시되는
+  // 공개 페이지에 들어가므로 캐시된 HTML 안에서 서명이 만료돼 이미지가 깨지고, 회피하려면
+  // 매 요청 후기×스크린샷 수만큼 storage 서명 API를 호출해야 해 공개 페이지 성능을 해친다.
+  // 원본 증빙은 비공개 버킷에 격리 유지 — 철회·삭제 시 공개 사본만 제거하면 즉시 비공개화된다.
+  // "/" 시작은 사이트 정적 자산(시드의 /img/…) — 스토리지와 무관하므로 그대로 둔다.
+  const publicScreenshotUrl = (entry: string): string =>
+    entry.startsWith("http://") || entry.startsWith("https://") || entry.startsWith("/")
+      ? entry
+      : db.storage.from("reviews").getPublicUrl(entry).data.publicUrl;
+
   const reviews: Review[] =
     reviewsRes.data && reviewsRes.data.length > 0
       ? (reviewsRes.data as ReviewRow[]).map((r) => ({
@@ -141,7 +159,7 @@ export const getSiteContent = cache(
           track: r.meta?.track ?? null,
           source: r.meta?.source ?? null,
           reviewedAt: r.meta?.reviewed_at ?? null,
-          screenshots: r.screenshots ?? [],
+          screenshots: (r.screenshots ?? []).map(publicScreenshotUrl),
           aiTags: r.ai_tags ?? [],
           isPinned: r.is_pinned,
         }))

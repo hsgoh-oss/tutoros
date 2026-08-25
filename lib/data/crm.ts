@@ -159,11 +159,21 @@ export async function getStudentByPortalToken(
   // 조회된 tenant_id를 이후 리포트 조회 스코프에 사용한다.
   const { data } = await db
     .from("students")
-    .select("id, tenant_id, name")
+    .select("id, tenant_id, name, status")
     .eq("portal_token", token)
     .maybeSingle();
   if (!data) return null;
-  const row = data as { id: string; tenant_id: string; name: string };
+  const row = data as {
+    id: string;
+    tenant_id: string;
+    name: string;
+    status: Student["status"];
+  };
+  // E-04 등록 종료 — 「계약·등록 종료 → 포털 관계·접근 회수」(01_atlas_04 §17).
+  // 종료(ended) 학생은 토큰이 유효해도 포털을 열지 않는다: 리포트 열람·과제 제출·질문 등
+  // 토큰 기반 경로 전체가 이 함수를 지나므로, 여기 한 곳이 접근 회수 지점이다.
+  // 재등록(E-05 — 새 등록 절차)으로 다시 활성되기 전까지 기존 링크는 무효로 취급한다.
+  if (row.status === "ended") return null;
   return { id: row.id, tenantId: row.tenant_id, name: row.name };
 }
 
@@ -174,7 +184,12 @@ export interface PortalReport {
   createdAt: string;
 }
 
-/** 포털에 노출할 리포트 — 승인/발송된 학부모·학생용만(내부용·초안·실패 제외). */
+/**
+ * 포털에 노출할 리포트 — 승인/발송된 학부모·학생용만(내부용·초안·실패 제외).
+ * G-03 철회·대체: status 화이트리스트(approved·sent)라 retracted(철회·이전 본 대체 포함)는
+ * 자동 제외된다 — 철회 즉시 공유 경로(포털 토큰 열람)의 새 열람이 차단되는 지점이 여기다.
+ * 정정된 최신본은 재승인(approved) 후에야 이 목록에 다시 나타난다.
+ */
 export async function listPortalReports(
   tenantId: string,
   studentId: string,
@@ -399,6 +414,8 @@ export async function listGrades(
     .from("grade_records")
     .select("*, students(name)")
     .eq("tenant_id", tenantId)
+    // 철회(소프트 삭제)된 결과는 조회에서 제외한다 — A-06 물리 삭제 금지(00016 deleted_at).
+    .is("deleted_at", null)
     .order("exam_date", { ascending: true });
   if (studentId) query = query.eq("student_id", studentId);
   const { data } = await query;
@@ -419,6 +436,8 @@ export async function getGrade(
     .select("*")
     .eq("tenant_id", tenantId)
     .eq("id", id)
+    // 철회(소프트 삭제)된 결과는 단건 조회에서도 제외 — 철회본 정정·재사용 차단(A-06 재활성 금지).
+    .is("deleted_at", null)
     .maybeSingle();
   return data ? mapGrade(data as GradeRow) : null;
 }
@@ -773,6 +792,7 @@ export async function getStudentSummary(
       .select("*")
       .eq("tenant_id", tenantId)
       .eq("student_id", studentId)
+      .is("deleted_at", null) // 철회(소프트 삭제)된 성적 제외 — A-06(00016)
       .order("exam_date", { ascending: false })
       .limit(5),
     db

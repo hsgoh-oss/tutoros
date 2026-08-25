@@ -793,6 +793,114 @@ begin
           case when allowed and remaining = 0 then 'PASS' else 'FAIL' end);
 end $$;
 
+/* ───────── 8m. 정본 충돌 해소(00016 A-06·G-03·S-01): 철회 상태·대체 연결·비공개 기본값 ─────────
+   owner(BYPASSRLS 동급)로 실행해 "RLS가 아닌 무결성 규칙"임을 증명한다 — 8k와 동일 계열. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  t2 constant uuid := '00000000-0000-0000-0000-000000000002';
+  s2 uuid;
+  v_old uuid;
+  v_new uuid;
+  v_foreign uuid;
+  v_status text;
+  allowed boolean;
+  blocked boolean;
+begin
+  select id into strict s2 from public.students where tenant_id = t2 limit 1;
+
+  -- (a) G-03: status CHECK 재생성이 retracted를 허용해야 한다(철회는 업무 상태)
+  allowed := false;
+  begin
+    insert into public.ai_reports (tenant_id, student_id, type, status, retracted_at, retract_reason)
+    values (t2, s2, 'lesson', 'retracted', now(), '검증용 철회')
+    returning id into v_old;
+    allowed := true;
+  exception when check_violation then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('보고서 철회(00016)', 'ai_reports.status = retracted INSERT', '허용',
+          case when allowed then '허용됨' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (b) 00013 ⑥의 분리 유지: 'failed'는 여전히 업무 상태가 아니다(CHECK 재생성이 되돌리지 않음)
+  blocked := false;
+  begin
+    insert into public.ai_reports (tenant_id, student_id, type, status)
+    values (t2, s2, 'lesson', 'failed');
+  exception when check_violation then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('보고서 철회(00016)', 'ai_reports.status = failed INSERT(00013 분리 유지)', '차단(check)',
+          case when blocked then '차단됨' else '전달 상태 혼입(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (c) G-03 대체 표시: 같은 테넌트의 새 본 연결은 허용
+  allowed := false;
+  begin
+    insert into public.ai_reports (tenant_id, student_id, type, status)
+    values (t2, s2, 'lesson', 'approved')
+    returning id into v_new;
+    update public.ai_reports set superseded_by = v_new where id = v_old;
+    allowed := true;
+  exception when foreign_key_violation then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('보고서 철회(00016)', 'superseded_by 동일 테넌트 새 본 연결', '허용',
+          case when allowed then '연결됨' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (d) 대체 연결이 테넌트 경계를 넘으면 복합 FK가 차단한다(타테넌트 본을 "최신본"으로 오염 금지)
+  insert into public.ai_reports (tenant_id, type, status)
+  values (t1, 'lesson', 'approved')
+  returning id into v_foreign;
+  blocked := false;
+  begin
+    update public.ai_reports set superseded_by = v_foreign where id = v_old;
+  exception when foreign_key_violation then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('보고서 철회(00016)', 'superseded_by 타테넌트 보고서 연결', '차단(fk)',
+          case when blocked then '차단됨' else '교차 연결 허용(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+  delete from public.ai_reports where id = v_foreign; -- 검증용 T1 행 정리(교차노출 스캔과 무관하나 잔존 방지)
+
+  -- (e) S-01 등록 즉시 공개 금지: 상태를 지정하지 않은 신규 후기는 draft로 태어난다
+  insert into public.reviews (tenant_id, reviewer_type, content)
+  values (t2, 'parent', '검증용 신규 후기 — 기본값 확인')
+  returning status into v_status;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('후기 승인 게시(00016)', '신규 후기 INSERT 기본 status', 'draft(비공개)',
+          v_status,
+          case when v_status = 'draft' then 'PASS' else 'FAIL' end);
+
+  -- (f) 후기 상태는 정본 흐름의 4개뿐 — 스펙 밖 값은 CHECK가 거부한다
+  blocked := false;
+  begin
+    insert into public.reviews (tenant_id, reviewer_type, content, status)
+    values (t2, 'parent', '검증용 오염 상태', 'open');
+  exception when check_violation then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('후기 승인 게시(00016)', 'reviews.status 스펙 밖 값(open) INSERT', '차단(check)',
+          case when blocked then '차단됨' else '오염 허용(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (g) A-06 소프트 삭제: 원 행을 남긴 채 deleted_at 스탬프 UPDATE가 가능해야 한다
+  allowed := false;
+  begin
+    update public.grade_records
+       set deleted_at = now(), deleted_reason = '검증용 철회(물리 삭제 금지)'
+     where tenant_id = t2 and exam_name = 'T2 전용 모의고사' and deleted_at is null;
+    allowed := found;
+  exception when others then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('성적 소프트 삭제(00016)', 'grade_records deleted_at 스탬프 UPDATE', '허용',
+          case when allowed then '스탬프됨(원 행 보존)' else '차단·대상 없음' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+end $$;
+
 /* ───────── 9. RLS 활성화 누락 테이블 탐지 (전 테이블 강제) ───────── */
 insert into rls_result (scenario, detail, expected, actual, verdict)
 select 'RLS 전면 적용', 'RLS 미활성 public 테이블', '0',

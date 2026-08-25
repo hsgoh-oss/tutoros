@@ -111,7 +111,18 @@ export default async function ReportsPage({
                   <Td>{reportAudienceLabel(r.audience)}</Td>
                   <Td>{r.depth === "deep" ? "심화" : "기본"}</Td>
                   <Td>
-                    <Badge tone={reportStatusTone(r.status)}>{reportStatusLabel(r.status)}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge tone={reportStatusTone(r.status)}>{reportStatusLabel(r.status)}</Badge>
+                      {/* G-03 이전본 대체 표시 — 철회 뱃지 옆에 정정된 최신본으로 가는 연결을 드러낸다. */}
+                      {r.supersededBy && (
+                        <Link
+                          href={`/admin/reports/${r.supersededBy}`}
+                          className="whitespace-nowrap text-[11px] font-bold text-brand-700 hover:underline"
+                        >
+                          대체됨 →
+                        </Link>
+                      )}
+                    </div>
                   </Td>
                   <Td>
                     {/* 전달 상태 — 업무 상태와 분리(N-02). 미발송은 뱃지 대신 "-"로 소음을 줄인다. */}

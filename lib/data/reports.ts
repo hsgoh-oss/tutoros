@@ -15,13 +15,28 @@ interface AiReportRow {
   delivery_status: AiReport["deliveryStatus"];
   sent_at: string | null;
   created_at: string;
+  // 00016 G-03 — 철회·이전본 대체 표시. 행은 보존되고(철회된 행이 곧 철회 이력)
+  // superseded_by가 이 본을 대체한 새 리포트(최신본)를 가리킨다.
+  retracted_at: string | null;
+  retract_reason: string | null;
+  superseded_by: string | null;
+}
+
+/**
+ * G-03 철회·대체 필드까지 포함한 리포트 — lib/types AiReport의 상위집합(00016 컬럼).
+ * supersededBy가 있으면 이 본은 "대체된 이전 본"이다 — 목록·상세가 대체 표시를 그린다.
+ */
+export interface AiReportWithHistory extends AiReport {
+  retractedAt: string | null;
+  retractReason: string | null;
+  supersededBy: string | null;
 }
 
 interface AiReportJoinRow extends AiReportRow {
   students: { name: string } | null;
 }
 
-function mapReport(row: AiReportRow): AiReport {
+function mapReport(row: AiReportRow): AiReportWithHistory {
   return {
     id: row.id,
     studentId: row.student_id,
@@ -35,10 +50,13 @@ function mapReport(row: AiReportRow): AiReport {
     deliveryStatus: row.delivery_status,
     sentAt: row.sent_at,
     createdAt: row.created_at,
+    retractedAt: row.retracted_at,
+    retractReason: row.retract_reason,
+    supersededBy: row.superseded_by,
   };
 }
 
-export interface ReportListItem extends AiReport {
+export interface ReportListItem extends AiReportWithHistory {
   studentName: string | null;
 }
 
@@ -70,7 +88,7 @@ export async function listReports(
 export async function getReport(
   tenantId: string,
   id: string,
-): Promise<AiReport | null> {
+): Promise<AiReportWithHistory | null> {
   const db = createServiceClient();
   if (!db) return null;
   const { data } = await db
@@ -80,6 +98,22 @@ export async function getReport(
     .eq("id", id)
     .maybeSingle();
   return data ? mapReport(data as AiReportRow) : null;
+}
+
+/** 이 리포트가 대체한 이전 본 목록 — superseded_by가 이 id를 가리키는 철회본들(G-03 대체 연결 표시용). */
+export async function listReplacedReports(
+  tenantId: string,
+  id: string,
+): Promise<AiReportWithHistory[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("ai_reports")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("superseded_by", id)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((r) => mapReport(r as AiReportRow));
 }
 
 export interface CreateReportInput {

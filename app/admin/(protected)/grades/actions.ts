@@ -9,6 +9,7 @@ import { generateReport } from "@/lib/ai/generate";
 import { pseudonymize } from "@/lib/ai/pseudonym";
 import { REPORT_PROMPT_RULES } from "@/lib/ai/validate";
 import { runCritical } from "@/lib/data/activity";
+import { recordAdjustment } from "@/lib/data/adjustments";
 import type { ReportAudience } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import { AI_REPORT_DISCLAIMER } from "../reports/constants";
@@ -115,9 +116,30 @@ export async function updateGrade(formData: FormData): Promise<CrmActionResult> 
   const parsed = parseGradeForm(formData);
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
-  // 수정 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록에 포함).
+  // A-06 정정 이력화: 사유 없는 정정은 없다 — 정정 사유는 필수 입력.
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!reason) return { ok: false, error: "정정 사유를 입력해 주세요." };
+
+  // 수정 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록·조정 이력에 포함).
   const existing = await getGrade(session.tenantId, id);
   if (!existing) return { ok: false, error: "성적 정보를 찾을 수 없습니다." };
+
+  const before = {
+    student_id: existing.studentId,
+    exam_name: existing.examName,
+    raw_score: existing.rawScore,
+    percentile: existing.percentile,
+    grade: existing.grade,
+    exam_date: existing.examDate,
+  };
+  const after = {
+    student_id: parsed.studentId,
+    exam_name: parsed.examName,
+    raw_score: parsed.rawScore,
+    percentile: parsed.percentile,
+    grade: parsed.grade,
+    exam_date: parsed.examDate,
+  };
 
   const db = createServiceClient()!;
   const result = await runCritical(
@@ -127,26 +149,30 @@ export async function updateGrade(formData: FormData): Promise<CrmActionResult> 
       action: "update",
       targetType: "grade",
       targetId: id,
-      summary: `성적 수정: ${parsed.examName}`,
+      summary: `성적 정정: ${parsed.examName} — ${reason}`,
       category: "grade",
-      before: {
-        student_id: existing.studentId,
-        exam_name: existing.examName,
-        raw_score: existing.rawScore,
-        percentile: existing.percentile,
-        grade: existing.grade,
-        exam_date: existing.examDate,
-      },
-      after: {
-        student_id: parsed.studentId,
-        exam_name: parsed.examName,
-        raw_score: parsed.rawScore,
-        percentile: parsed.percentile,
-        grade: parsed.grade,
-        exam_date: parsed.examDate,
-      },
+      before,
+      after,
     },
     async () => {
+      // A-06 '승인된 사실은 덮어쓰지 않는다': 변경 전 값을 조정 이력(adjustments,
+      // append-only)에 먼저 남기고, 이력 기록에 실패하면 정정을 실행하지 않는다(fail-closed).
+      const adjusted = await recordAdjustment(session.tenantId, {
+        domain: "grade",
+        targetType: "grade_record",
+        targetId: id,
+        before,
+        after,
+        reason,
+        actorEmail: session.email,
+      });
+      if (!adjusted.ok) {
+        return {
+          ok: false,
+          error: `조정 이력 기록에 실패해 정정을 실행하지 않았습니다. (${adjusted.error})`,
+        };
+      }
+
       const { error } = await db
         .from("grade_records")
         .update({
@@ -173,14 +199,36 @@ export async function updateGrade(formData: FormData): Promise<CrmActionResult> 
   return result;
 }
 
-export async function deleteGrade(id: string): Promise<CrmActionResult> {
+/**
+ * 성적 삭제(철회) — 물리 삭제 금지(A-06). 원 행과 원 점수는 그대로 두고
+ * deleted_at 스탬프로 철회만 표시한다(00016 ①). 사유는 필수이며, 철회 사실은
+ * 조정 이력(adjustments)에 먼저 남긴다 — 이력 기록 실패 시 철회하지 않는다(fail-closed).
+ */
+export async function deleteGrade(formData: FormData): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
 
-  // 삭제 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록에 포함).
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, error: "잘못된 요청입니다." };
+
+  // 사유 없는 삭제는 없다(00016 deleted_reason) — 필수 입력.
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!reason) return { ok: false, error: "삭제(철회) 사유를 입력해 주세요." };
+
+  // 삭제 전 행을 before_data로 남기기 위해 먼저 조회한다(감사 선기록·조정 이력에 포함).
   const existing = await getGrade(session.tenantId, id);
   if (!existing) return { ok: false, error: "성적 정보를 찾을 수 없습니다." };
+
+  const before = {
+    student_id: existing.studentId,
+    exam_name: existing.examName,
+    raw_score: existing.rawScore,
+    percentile: existing.percentile,
+    grade: existing.grade,
+    exam_date: existing.examDate,
+  };
+  const deletedAt = new Date().toISOString();
 
   const db = createServiceClient()!;
   const result = await runCritical(
@@ -190,25 +238,36 @@ export async function deleteGrade(id: string): Promise<CrmActionResult> {
       action: "delete",
       targetType: "grade",
       targetId: id,
-      summary: "성적 삭제",
+      summary: `성적 삭제(철회): ${existing.examName} — ${reason}`,
       category: "grade",
-      before: {
-        student_id: existing.studentId,
-        exam_name: existing.examName,
-        raw_score: existing.rawScore,
-        percentile: existing.percentile,
-        grade: existing.grade,
-        exam_date: existing.examDate,
-      },
+      before,
     },
     async () => {
+      // 철회도 조정 이력이 먼저다 — 새 사실(after)은 "이 결과가 철회되었다"는 상태.
+      const adjusted = await recordAdjustment(session.tenantId, {
+        domain: "grade",
+        targetType: "grade_record",
+        targetId: id,
+        before,
+        after: { deleted_at: deletedAt, deleted_reason: reason },
+        reason,
+        actorEmail: session.email,
+      });
+      if (!adjusted.ok) {
+        return {
+          ok: false,
+          error: `조정 이력 기록에 실패해 삭제를 실행하지 않았습니다. (${adjusted.error})`,
+        };
+      }
+
       const { error } = await db
         .from("grade_records")
-        .delete()
+        .update({ deleted_at: deletedAt, deleted_reason: reason })
         .eq("tenant_id", session.tenantId)
-        .eq("id", id);
+        .eq("id", id)
+        .is("deleted_at", null); // 이미 철회된 결과의 스탬프를 덮어쓰지 않는다
       if (error) {
-        console.error("[grades] delete failed", error);
+        console.error("[grades] soft delete failed", error);
         return { ok: false, error: "성적 삭제 중 오류가 발생했습니다." };
       }
       return { ok: true };
@@ -217,6 +276,7 @@ export async function deleteGrade(id: string): Promise<CrmActionResult> {
   if (!result.ok) return result;
 
   revalidatePath("/admin/grades");
+  revalidatePath(`/admin/students/${existing.studentId}`);
   return result;
 }
 

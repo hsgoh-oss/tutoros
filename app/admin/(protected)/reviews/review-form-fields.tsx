@@ -2,8 +2,23 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { REVIEWER_TYPE_OPTIONS, RATING_OPTIONS } from "./constants";
 import type { Review } from "@/lib/types";
+import type { ScreenshotView } from "./storage";
 
-export function ReviewFormFields({ review }: { review?: Review }) {
+export function ReviewFormFields({
+  review,
+  screenshotViews,
+}: {
+  review?: Review;
+  /**
+   * 스크린샷 표시 URL(S-02) — 신규 증빙은 비공개 버킷 경로로 저장되므로 서버 페이지가
+   * 만료 서명 URL을 발급해 내려준다. 삭제 체크박스 값은 저장 원문(stored)을 그대로 써야
+   * 서버 액션이 DB 항목과 대조할 수 있다. 미전달 시 저장값을 그대로 표시(레거시 URL 호환).
+   */
+  screenshotViews?: ScreenshotView[];
+}) {
+  const views: ScreenshotView[] =
+    screenshotViews ??
+    (review?.screenshots ?? []).map((s) => ({ stored: s, displayUrl: s }));
   return (
     <div className="space-y-6">
       <div className="grid gap-5 md:grid-cols-2">
@@ -64,24 +79,31 @@ export function ReviewFormFields({ review }: { review?: Review }) {
         />
       </Field>
 
-      {review && review.screenshots.length > 0 && (
+      {review && views.length > 0 && (
         <div>
           <p className="mb-2 text-sm font-bold text-ink-soft">기존 스크린샷 (체크 시 삭제)</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-            {review.screenshots.map((url) => (
-              <label key={url} className="block cursor-pointer space-y-1.5">
-                {/* Storage 공개 URL — next.config에 remotePatterns 미설정이라 next/image 대신 img 사용 (관리자 내부 썸네일, LCP 무관) */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={url}
-                  alt="후기 스크린샷"
-                  className="h-24 w-full rounded-panel border border-line object-cover"
-                />
+            {views.map((view) => (
+              <label key={view.stored} className="block cursor-pointer space-y-1.5">
+                {/* 레거시 공개 URL 또는 비공개 증빙의 만료 서명 URL — next.config에
+                    remotePatterns 미설정이라 next/image 대신 img 사용 (관리자 내부 썸네일, LCP 무관) */}
+                {view.displayUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={view.displayUrl}
+                    alt="후기 스크린샷"
+                    className="h-24 w-full rounded-panel border border-line object-cover"
+                  />
+                ) : (
+                  <span className="flex h-24 w-full items-center justify-center rounded-panel border border-line bg-soft text-xs font-bold text-muted">
+                    미리보기 불가
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5 text-xs font-bold text-rose-600">
                   <input
                     type="checkbox"
                     name="removeScreenshots"
-                    value={url}
+                    value={view.stored}
                     className="h-4 w-4"
                   />
                   삭제
