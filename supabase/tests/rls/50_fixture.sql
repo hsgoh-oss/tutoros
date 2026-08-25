@@ -1,6 +1,8 @@
 -- 교차 접근 검증 픽스처: 계정별 30개 테이블(00001의 18개 + activity_log·adjustments·work_items
 -- + payssam_events(00014) + homework_assignments·homework_submissions·homework_questions(00015)
--- + trial_sessions·trial_results·enrollments·contracts·waitlist_offers(00018))
+-- + trial_sessions·trial_results·enrollments·contracts·waitlist_offers(00018)
+-- + lesson_packages·session_ledger·attendance_contacts·attendance_corrections
+--   ·booking_restrictions(00020))
 -- 전부에 타테넌트(T2) 행을 1건씩 심는다.
 -- 이게 없으면 "타테넌트 행 0건"이 RLS 덕분인지 데이터가 없어서인지 구별할 수 없다.
 -- (seed.sql은 faqs·students·recruit_status에만 T2 행을 넣는다)
@@ -23,6 +25,9 @@ declare
   fm2 uuid;
   tn2 uuid;
   en2 uuid;
+  ct2 uuid;
+  pk2 uuid;
+  sd2 uuid;
 begin
   select id into strict s2 from public.students where tenant_id = t2 limit 1;
 
@@ -184,8 +189,44 @@ begin
   insert into public.contracts (tenant_id, enrollment_id, terms,
                                 agreed_at, agreed_by_name, agreed_by_phone)
     values (t2, en2, '{"fee":480000,"days":["mon","thu"],"note":"T2 전용 계약 — 교차 노출 시 RLS 위반"}'::jsonb,
-            now(), 'T2 전용 계약자', '01000000002');
+            now(), 'T2 전용 계약자', '01000000002')
+    returning id into ct2;
 
   insert into public.waitlist_offers (tenant_id, consultation_id, seat_no, expires_at)
     values (t2, cs2, 1, now() + interval '3 days');
+
+  -- 00020 신설 5종(수업 묶음·회차 원장·출결) — 계약 하나에서 묶음 → 회차 → 원장 → 연락 →
+  -- 정정 → 예약 제한까지 한 줄기로 심는다. 전부 테넌트 정책 계열이라 교차노출 스캔 대상이다.
+  -- 원장·연락 기록은 append-only 트리거가 걸려 있어 이 삽입 자체가 INSERT 경로 검증이다.
+  insert into public.lesson_packages (tenant_id, enrollment_id, contract_id, student_id,
+                                      title, total_sessions, unit_price, pattern, starts_on,
+                                      status, activated_at)
+    values (t2, en2, ct2, s2, 'T2 전용 묶음 — 교차 노출 시 RLS 위반', 8, 60000,
+            '{"weekdays":[1,4],"time":"18:00","durationMin":60}'::jsonb,
+            current_date, 'active', now())
+    returning id into pk2;
+
+  insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at,
+                                package_id, contract_id, status)
+    values (t2, s2, now() - interval '2 hours', now() - interval '1 hour', pk2, ct2, 'planned')
+    returning id into sd2;
+
+  insert into public.session_ledger (tenant_id, package_id, schedule_id, kind, delta,
+                                     correction_no, reason, actor_email)
+    values (t2, pk2, sd2, 'deduct', -1, 0, 'T2 전용 원장 — 교차 노출 시 RLS 위반',
+            'test-english@example.com');
+
+  insert into public.attendance_contacts (tenant_id, schedule_id, minute_mark, channel,
+                                          result, actor_email)
+    values (t2, sd2, 10, 'call', 'no_answer', 'test-english@example.com');
+
+  insert into public.attendance_corrections (tenant_id, schedule_id, requester_role,
+                                             requested_by, from_attendance, to_attendance,
+                                             to_deduct, reason)
+    values (t2, sd2, 'parent', 'T2 전용 요청자', null, 'excused_absence', false,
+            'T2 전용 정정 요청 — 교차 노출 시 RLS 위반');
+
+  insert into public.booking_restrictions (tenant_id, student_id, reason, review_on, decided_by)
+    values (t2, s2, 'T2 전용 예약 제한 — 교차 노출 시 RLS 위반',
+            current_date + 30, 'test-english@example.com');
 end $$;

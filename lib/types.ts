@@ -165,14 +165,127 @@ export interface Lesson {
   absent: boolean;
 }
 
+// 출결(L-04). 회차당 하나만 확정되고 바꾸려면 정정 흐름(attendance_corrections)을 거친다.
+// 정본은 schedules.attendance이고 lessons.absent는 기존 화면 호환 미러다.
+export type Attendance =
+  | "present"
+  | "late"
+  | "early_leave"
+  | "excused_absence"
+  | "absent"
+  | "noshow";
+
+// 회차 차감 판정(L-05). none=미판정 / deducted=잔액 차감됨 / waived=무차감 확정.
+export type DeductionState = "none" | "deducted" | "waived";
+
 export interface ScheduleItem {
   id: string;
   studentId: string;
   scheduledAt: string; // ISO
+  endsAt: string | null;
   classType: ClassType;
-  status: "planned" | "done" | "canceled" | "makeup";
+  status: "planned" | "done" | "canceled" | "makeup" | "conflict";
   reminderSent: boolean;
   lessonId: string | null; // 완료 시 자동 생성·연결된 수업 기록
+  packageId: string | null;
+  contractId: string | null; // null = 계약 귀속 미확정 — 잔액·환불 계산에 쓰지 않는다(L-10)
+  attendance: Attendance | null;
+  deductionState: DeductionState;
+  correctionCount: number;
+  originScheduleId: string | null; // 보강의 원 회차
+  conflictReason: string | null;
+}
+
+// 수업 묶음(L-01). 계약 하나에 살아 있는 묶음은 하나다.
+export type LessonPackageStatus = "draft" | "active" | "ended";
+
+export interface LessonPackage {
+  id: string;
+  enrollmentId: string;
+  contractId: string;
+  studentId: string;
+  studentName: string | null;
+  title: string;
+  totalSessions: number;
+  unitPrice: number;
+  pattern: SessionPattern;
+  startsOn: string; // YYYY-MM-DD
+  status: LessonPackageStatus;
+  activatedAt: string | null;
+  endedAt: string | null;
+  balance: PackageBalance | null;
+}
+
+/** 반복 조건 스냅샷. weekdays는 0=일 ~ 6=토(KST 기준). */
+export interface SessionPattern {
+  weekdays: number[];
+  time: string; // "HH:MM" KST
+  durationMin: number;
+}
+
+export interface PackageBalance {
+  totalSessions: number;
+  consumed: number;
+  remaining: number;
+  confirmedSessions: number;
+  conflictedSessions: number;
+  unresolvedSessions: number;
+}
+
+export type LedgerKind = "deduct" | "restore" | "grant" | "adjust";
+
+export interface LedgerEntry {
+  id: string;
+  scheduleId: string | null;
+  kind: LedgerKind;
+  delta: number;
+  correctionNo: number;
+  reason: string;
+  actorEmail: string | null;
+  reversesId: string | null;
+  createdAt: string;
+}
+
+export type ContactResult = "no_answer" | "reached" | "entered";
+
+export interface AttendanceContact {
+  id: string;
+  scheduleId: string;
+  minuteMark: 10 | 20 | 30;
+  channel: "call" | "sms" | "kakao" | "other";
+  result: ContactResult;
+  contactedAt: string;
+}
+
+export interface AttendanceCorrection {
+  id: string;
+  scheduleId: string;
+  studentName: string | null;
+  scheduledAt: string | null;
+  requesterRole: "operator" | "teacher" | "parent" | "student";
+  requestedBy: string;
+  fromAttendance: Attendance | null;
+  toAttendance: Attendance;
+  toDeduct: boolean;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  createdAt: string;
+}
+
+export interface BookingRestriction {
+  id: string;
+  studentId: string;
+  studentName: string | null;
+  status: "active" | "lifted";
+  reason: string;
+  reviewOn: string;
+  decidedBy: string;
+  decidedAt: string;
+  liftedAt: string | null;
+  liftReason: string | null;
 }
 
 export interface GradeRecord {

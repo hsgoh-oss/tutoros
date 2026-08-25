@@ -26,6 +26,7 @@ import { logActivity, runCritical } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
 import { formatKDateTime } from "@/lib/data/crm";
 import { getSeatAvailability } from "@/lib/data/intake";
+import { hasActiveBookingRestriction } from "@/lib/data/packages";
 import { sendNotification } from "@/lib/notify/send";
 import { renderTemplate } from "@/lib/notify/templates";
 import type { RecruitState } from "@/lib/types";
@@ -294,6 +295,19 @@ export async function offerWaitlistSeat(formData: FormData): Promise<CrmActionRe
     status: string;
     student_id: string | null;
   };
+  // L-08 "제한은 새 예약·추가 자리 제안에만 적용한다": 예약 위험이 확정된 학생에게 연결된
+  // 상담에는 추가 자리를 제안하지 않는다. 학생이 연결되지 않은 상담(신규 문의)은 제한 대상이
+  // 아니다 — 제한은 학생 단위로만 판정된다.
+  if (
+    consult.student_id &&
+    (await hasActiveBookingRestriction(session.tenantId, consult.student_id))
+  ) {
+    return {
+      ok: false,
+      error: "예약이 제한된 학생입니다. 출결·정정 화면에서 제한을 검토·해제한 뒤 자리를 제안하세요.",
+    };
+  }
+
   if (consult.status !== "hold") {
     return {
       ok: false,

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { nextSessionNumber } from "@/lib/data/crm";
+import { hasActiveBookingRestriction } from "@/lib/data/packages";
 import { logActivity } from "@/lib/data/activity";
 import { sendNotification } from "@/lib/notify/send";
 import type { ClassType, ScheduleItem } from "@/lib/types";
@@ -90,6 +91,16 @@ export async function createSchedule(formData: FormData): Promise<CrmActionResul
 
   if (!studentId) return { ok: false, error: "학생을 선택해 주세요." };
   if (!scheduledAtRaw) return { ok: false, error: "일시를 입력해 주세요." };
+
+  // L-08 "제한은 새 예약·추가 자리 제안에만 적용한다": 예약 위험이 확정된 학생에게는 새 회차를
+  // 잡지 않는다. 기존 확정 수업·보강(원 회차의 대체)·학습기록·정산 접근은 건드리지 않으므로
+  // 이 게이트는 '새 예약'인 여기와 묶음 회차 생성·자리 제안에만 있다.
+  if (await hasActiveBookingRestriction(session.tenantId, studentId)) {
+    return {
+      ok: false,
+      error: "예약이 제한된 학생입니다. 출결·정정 화면에서 제한을 검토·해제한 뒤 예약하세요.",
+    };
+  }
 
   const scheduledAt = new Date(scheduledAtRaw);
   if (Number.isNaN(scheduledAt.getTime())) {

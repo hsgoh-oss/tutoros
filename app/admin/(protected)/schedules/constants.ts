@@ -7,6 +7,7 @@ export const SCHEDULE_STATUS_OPTIONS: { value: ScheduleItem["status"]; label: st
   { value: "done", label: "완료" },
   { value: "canceled", label: "취소" },
   { value: "makeup", label: "보강" },
+  { value: "conflict", label: "충돌" },
 ];
 
 const STATUS_TONE: Record<ScheduleItem["status"], BadgeTone> = {
@@ -14,6 +15,7 @@ const STATUS_TONE: Record<ScheduleItem["status"], BadgeTone> = {
   done: "success",
   canceled: "danger",
   makeup: "warning",
+  conflict: "warning",
 };
 
 export function scheduleStatusLabel(status: ScheduleItem["status"]): string {

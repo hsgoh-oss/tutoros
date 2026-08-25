@@ -12,6 +12,7 @@ const STATUS_CHIP: Record<ScheduleItem["status"], string> = {
   done: "bg-emerald-50 text-emerald-700",
   canceled: "bg-rose-50 text-rose-700 line-through",
   makeup: "bg-amber-50 text-amber-700",
+  conflict: "bg-orange-100 text-orange-800 ring-1 ring-orange-300",
 };
 
 function dateKey(d: Date): string {

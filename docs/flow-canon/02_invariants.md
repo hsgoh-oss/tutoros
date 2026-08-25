@@ -6,7 +6,7 @@
 >
 > **원문 무손실**: 각 항목의 본문은 Atlas 원문 그대로다. `코드 메모`는 현행 레포(`/Users/seolwon/IdeaProjects/tutuoros`)에서 실제 확인한 구현만 적었고, 확인하지 못한 것은 "미확인"으로 명시했다(추측 금지).
 >
-> **갱신 2026-08-25**: M0(커밋 8d10e5f)·결제선생 연동(커밋 c690804·541ab7e)·과제 도메인(커밋 4ec60e4)을 코드 메모에 반영. 체크는 "구현 전반에서 지켜짐"이 기준이라 전 도메인 검증 전이므로 계속 보류(메모만 갱신).
+> **갱신 2026-08-25**: M0(커밋 8d10e5f)·결제선생 연동(커밋 c690804·541ab7e)·과제 도메인(커밋 4ec60e4)·Tier 1 충돌 해소(00016)·역할별 포털 M1(00017)·유입 퍼널 M2(00018·37dc2e0)·수업 묶음/회차 원장 M3(00020)을 코드 메모에 반영. 체크는 "구현 전반에서 지켜짐"이 기준이라 전 도메인 검증 전이므로 계속 보류(메모만 갱신).
 >
 > **정본 원칙(원문)**: 각 ID는 화면이 아니라 하나의 업무 흐름이다. 서로 다른 ID가 만나는 화살표가 구현 경계이며, 열린 상태에는 담당자와 다음 행동이 반드시 연결된다.
 
@@ -23,9 +23,9 @@
 - [ ] 4. 부분 성공을 숨기지 않는다. 독립 처리 가능한 대상은 성공분을 유지하고 실패분만 재처리한다.
   - 코드 메모: `supabase/functions/automation/jobs/notifyRetry.ts` — `status='failed'` 알림만 건별 재큐잉, 건별 오류는 로그 후 나머지 계속 처리 확인.
 - [ ] 5. 원자적 전환은 전부 성공하거나 전부 취소한다. 등록 활성화처럼 분리되면 안 되는 전환에는 반쪽 상태를 남기지 않는다.
-  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:249` admin_replace_operator — 운영자 승계는 단일 트랜잭션 원자 RPC(RLS 테스트 8i) 확인. 등록 활성화의 원자적 전환은 여전히 미확인.
+  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:249` admin_replace_operator — 운영자 승계는 단일 트랜잭션 원자 RPC(RLS 8i) 확인. 등록 활성화도 `00018_intake_funnel.sql` activate_enrollment로 네 게이트를 UPDATE의 WHERE에 넣은 단일 문장 전환(RLS 8u) 확인. `00020_lesson_packages.sql:779` create_makeup — 원 회차 종료와 대체 회차 생성이 한 문장 안에서 끝나 반쪽 상태가 남지 않음(RLS 8w-k) 확인. 전 도메인 전수 검증은 미완.
 - [ ] 6. 승인된 사실은 덮어쓰지 않는다. 정정·취소·철회는 새 이력으로 연결한다.
-  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:115` adjustments(append-only 조정 이력 — 호출부 연결은 M3 예정)·`00015_homework.sql:88` 제출 append-only(재제출=attempt_no+1 새 행, RLS 8l) 확인. 전 도메인 정정·철회 이력 연결은 미완.
+  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:115` adjustments(append-only 조정 이력, `lib/data/adjustments.ts`에서 채택)·`00015_homework.sql:88` 제출 append-only(재제출=attempt_no+1 새 행, RLS 8l)·`00020_lesson_packages.sql:191` session_ledger(회차 잔액의 정본 — 저장값이 아니라 원장 합이고, 되돌림은 원 기입을 고치는 대신 reverses_id가 가리키는 반대 부호 행으로만 남는다. UPDATE·DELETE는 트리거가 service_role까지 거부)·`:287` attendance_contacts append-only 확인. 출결 정정은 승인 시 조정 이력을 쌓고 잔액이 재계산되는 것을 반복 정정 시나리오로 실측(RLS 8w-m·m2). 남은 것: 수업기록 본문·성적 정정은 여전히 덮어쓰기다.
 - [ ] 7. 외부 전달과 내부 성공을 분리한다. 알림 실패는 원 업무를 실패로 바꾸지 않는다.
   - 코드 메모: `supabase/migrations/00001_init.sql:305` — notifications가 원 업무와 분리된 발송 큐(`queued/sent/failed` + `retry_count`)로 존재 확인. `lib/notify/send.ts`는 notifications 상태만 갱신. `00013_m0_foundation.sql:203` ai_reports.delivery_status 분리 — 발송 실패가 승인 상태를 failed로 뒤집던 경로 제거(N-02 해소 — 코드+리뷰, 실패 주입 실측은 안 함).
 - [ ] 8. 열린 상태에는 반드시 다음 담당자와 다음 행동이 있다. 담당자가 없으면 종료 상태로 보내야 한다.

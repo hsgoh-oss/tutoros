@@ -22,10 +22,13 @@ const GROUPS = [
     items: [
       { href: "/admin/consultations", label: "상담 관리" },
       { href: "/admin/trials", label: "시범수업" },
+      { href: "/admin/enrollments", label: "정규 등록" },
       { href: "/admin/students", label: "학생 관리" },
+      { href: "/admin/packages", label: "수업 묶음" },
       { href: "/admin/lessons", label: "수업 기록" },
       { href: "/admin/homework", label: "과제 관리" },
       { href: "/admin/schedules", label: "일정 관리" },
+      { href: "/admin/attendance", label: "출결·정정" },
       { href: "/admin/grades", label: "성적 관리" },
       { href: "/admin/payments", label: "결제 관리" },
       { href: "/admin/materials", label: "자료 관리" },

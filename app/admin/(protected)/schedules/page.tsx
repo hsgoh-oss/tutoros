@@ -115,9 +115,14 @@ export default async function SchedulesPage({
               : "주간 수업 일정을 확인하고 상태를 관리합니다."}
           </p>
         </div>
-        <Link href="/admin/schedules/new" className={buttonClass("primary", "sm")}>
-          신규 등록
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/schedules/export" className={buttonClass("outline", "sm")}>
+            내보내기
+          </Link>
+          <Link href="/admin/schedules/new" className={buttonClass("primary", "sm")}>
+            신규 등록
+          </Link>
+        </div>
       </div>
 
       {!connected && <DbBanner />}

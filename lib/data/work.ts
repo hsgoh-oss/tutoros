@@ -16,6 +16,10 @@ export type WorkItemKind =
   | "audit_pending_stale" // 감사 대기 장기 미처리
   | "homework_submitted" // 과제 제출 검토 대기(H-02 — 재제출 포함, 최신 제출본이 검토 대상)
   | "question_asked" // 학생 질문 답변 대기(H-04 — 답변 게시 또는 해결 완료로 닫힘)
+  | "schedule_conflict" // 회차 후보가 기존 일정과 충돌(L-01 — 재협의 대상)
+  | "booking_risk_review" // 반복 노쇼 누적 — 예약 위험 검토(L-08, 자동 제한 금지)
+  | "report_recheck" // 출결 정정으로 게시된 보고서 영향(L-06 — 정정본 재승인)
+  | "refund_recheck" // 출결 정정으로 환불 계산 근거 변경(L-06 — 진행 중 환불 중단)
   | "manual"; // 수동 등록
 
 /** 우선순위 — risk > money > privacy > normal 순으로 처리한다. */
@@ -195,4 +199,26 @@ export async function resolveWorkItem(
     return false;
   }
   return (data ?? []).length > 0;
+}
+
+/**
+ * 종류별 열린 업무. listOpenWorkItems가 전체 큐를 우선순위순으로 보여주는 데 반해,
+ * 이쪽은 한 종류의 업무를 그 종류 전용 화면(예: 예약 위험 검토)에서 처리하기 위한 조회다.
+ */
+export async function listWorkItemsByKind(
+  tenantId: string,
+  kind: WorkItemKind,
+  limit = 50,
+): Promise<WorkItem[]> {
+  const db = createServiceClient();
+  if (!db) return [];
+  const { data } = await db
+    .from("work_items")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("kind", kind)
+    .in("status", ["open", "in_progress"])
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return ((data ?? []) as WorkItemRow[]).map(mapRow);
 }

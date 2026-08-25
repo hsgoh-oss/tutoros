@@ -17,7 +17,7 @@ export function SubmitForm({
   className,
 }: {
   action: (formData: FormData) => Promise<CrmActionResult>;
-  children: ReactNode;
+  children?: ReactNode;
   submitLabel?: string;
   pendingLabel?: string;
   redirectTo?: string;

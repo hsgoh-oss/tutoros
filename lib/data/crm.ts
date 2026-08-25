@@ -19,6 +19,8 @@ import type {
   RecruitStatus,
   ReportType,
   Review,
+  Attendance,
+  DeductionState,
   ScheduleItem,
   Student,
 } from "@/lib/types";
@@ -312,25 +314,42 @@ interface ScheduleRow {
   id: string;
   student_id: string;
   scheduled_at: string;
+  ends_at: string | null;
   class_type: ClassType;
   status: ScheduleItem["status"];
   reminder_sent: boolean;
   lesson_id: string | null;
+  package_id: string | null;
+  contract_id: string | null;
+  attendance: Attendance | null;
+  deduction_state: DeductionState;
+  correction_count: number;
+  origin_schedule_id: string | null;
+  conflict_reason: string | null;
 }
 
 interface ScheduleJoinRow extends ScheduleRow {
   students: { name: string } | null;
 }
 
-function mapSchedule(row: ScheduleRow): ScheduleItem {
+// 00020 이전 코드가 select한 행에는 신규 컬럼이 없을 수 있다 — 매핑은 방어적으로 기본값을 준다.
+export function mapSchedule(row: ScheduleRow): ScheduleItem {
   return {
     id: row.id,
     studentId: row.student_id,
     scheduledAt: row.scheduled_at,
+    endsAt: row.ends_at ?? null,
     classType: row.class_type,
     status: row.status,
     reminderSent: row.reminder_sent,
     lessonId: row.lesson_id,
+    packageId: row.package_id ?? null,
+    contractId: row.contract_id ?? null,
+    attendance: row.attendance ?? null,
+    deductionState: row.deduction_state ?? "none",
+    correctionCount: row.correction_count ?? 0,
+    originScheduleId: row.origin_schedule_id ?? null,
+    conflictReason: row.conflict_reason ?? null,
   };
 }
 
