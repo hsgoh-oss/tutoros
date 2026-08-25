@@ -1896,14 +1896,20 @@ do $$
 declare
   t1 constant uuid := '00000000-0000-0000-0000-000000000001';
   st1 uuid;
+  st2 uuid;
   en1 uuid;
   ct1 uuid;
+  ct2 uuid;
   pk1 uuid;
   sd_a uuid;   -- 정상 차감 대상
   sd_b uuid;   -- 보강 원 회차
   sd_c uuid;   -- 귀속 미확정
   sd_d uuid;   -- 반복 정정 대상
   sd_e uuid;   -- 정정 게이트 우회 시도 대상(미확정)
+  sd_f uuid;   -- 취소 슬롯 부활 검증
+  sd_g uuid;   -- 삭제 연쇄 검증
+  sd_h uuid;   -- 미래 회차 확정 검증
+  sd_i uuid;   -- 연락 시각·종료 묶음 검증
   mk uuid;
   res jsonb;
   blocked boolean;
@@ -1947,15 +1953,16 @@ begin
           case when (res ->> 'ok')::boolean then 'PASS' else 'FAIL' end);
 
   -- (b) 후보 생성: 확정 + 충돌 + 기존 = 전체 (전체 결과 대사 — L-01 "전체 결과 안내")
+  -- 후보는 과거 시각으로 만든다: 아래에서 출결 확정을 검증하는데, 확정은 시작한 회차만 가능하다.
   insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at, status)
-    values (t1, st1, now() + interval '31 days', now() + interval '31 days 1 hour', 'planned');
+    values (t1, st1, now() - interval '31 days', now() - interval '31 days' + interval '1 hour', 'planned');
   res := public.generate_package_sessions(t1, pk1, jsonb_build_array(
-    jsonb_build_object('at', (now() + interval '30 days')::text,
-                       'ends_at', (now() + interval '30 days 1 hour')::text),
-    jsonb_build_object('at', (now() + interval '31 days 20 minutes')::text,
-                       'ends_at', (now() + interval '31 days 80 minutes')::text),
-    jsonb_build_object('at', (now() + interval '32 days')::text,
-                       'ends_at', (now() + interval '32 days 1 hour')::text)
+    jsonb_build_object('at', (now() - interval '32 days')::text,
+                       'ends_at', (now() - interval '32 days' + interval '1 hour')::text),
+    jsonb_build_object('at', (now() - interval '31 days' + interval '20 minutes')::text,
+                       'ends_at', (now() - interval '31 days' + interval '80 minutes')::text),
+    jsonb_build_object('at', (now() - interval '30 days')::text,
+                       'ends_at', (now() - interval '30 days' + interval '1 hour')::text)
   ), 'rls@test');
   insert into rls_result (scenario, detail, expected, actual, verdict)
   values ('회차 후보 대사(L-01)', '3건 중 1건이 기존 일정과 충돌', '확정2·충돌1·대사true',
@@ -1965,8 +1972,8 @@ begin
 
   -- (c) 멱등: 같은 슬롯 재실행은 skipped — 회차를 복제하지 않는다
   res := public.generate_package_sessions(t1, pk1, jsonb_build_array(
-    jsonb_build_object('at', (now() + interval '30 days')::text,
-                       'ends_at', (now() + interval '30 days 1 hour')::text)
+    jsonb_build_object('at', (now() - interval '32 days')::text,
+                       'ends_at', (now() - interval '32 days' + interval '1 hour')::text)
   ), 'rls@test');
   insert into rls_result (scenario, detail, expected, actual, verdict)
   values ('회차 생성 멱등(L-01)', '같은 시각 후보 재실행', 'skipped=1·confirmed=0',
@@ -2034,7 +2041,7 @@ begin
 
   -- (i) 귀속 미확정 회차는 차감되지 않는다(L-10)
   insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at, status)
-    values (t1, st1, now() + interval '40 days', now() + interval '40 days 1 hour', 'planned')
+    values (t1, st1, now() - interval '40 days', now() - interval '40 days' + interval '1 hour', 'planned')
     returning id into sd_c;
   res := public.settle_attendance(t1, sd_c, 'present', true, '', 'rls@test');
   insert into rls_result (scenario, detail, expected, actual, verdict)
@@ -2097,7 +2104,7 @@ begin
   --      차수로 원 차감을 찾으면 correction_count와 기입 차수가 어긋나 잔액만 새는 상태가 된다.
   insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at,
                                 package_id, contract_id, status)
-    values (t1, st1, now() + interval '50 days', now() + interval '50 days 1 hour', pk1, ct1, 'planned')
+    values (t1, st1, now() - interval '20 days', now() - interval '20 days' + interval '1 hour', pk1, ct1, 'planned')
     returning id into sd_d;
   res := public.settle_attendance(t1, sd_d, 'present', true, '', 'rls@test');
   insert into public.attendance_corrections (tenant_id, schedule_id, requester_role, requested_by,
@@ -2225,6 +2232,126 @@ begin
   insert into rls_result (scenario, detail, expected, actual, verdict)
   values ('잔액 뷰 테넌트 경계', 'authenticated(T1)가 보는 타테넌트 잔액 행', '0',
           n::text, case when n = 0 then 'PASS' else 'FAIL' end);
+
+  -- (s) 취소된 슬롯은 부활하지 않는다(적대적 검토 high①). 취소를 슬롯 유니크에서 빼면 회차를
+  --     더 만들려고 후보를 다시 펼칠 때 그 시각이 planned로 되살아나, 취소 차감과 부활 회차
+  --     차감이 원장에 둘 다 남는다(L-05 "이중 차감 금지").
+  insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at,
+                                package_id, contract_id, status)
+    values (t1, st1, now() + interval '60 days', now() + interval '60 days 1 hour', pk1, ct1, 'planned')
+    returning id into sd_f;
+  res := public.cancel_schedule(t1, sd_f, true, '학부모 요청 — 차감 취소', 'rls@test');
+  res := public.generate_package_sessions(t1, pk1, jsonb_build_array(
+    jsonb_build_object('at', (now() + interval '60 days')::text,
+                       'ends_at', (now() + interval '60 days 1 hour')::text)
+  ), 'rls@test');
+  select count(*) into n from public.schedules
+   where tenant_id = t1 and package_id = pk1 and scheduled_at = (
+     select scheduled_at from public.schedules where id = sd_f);
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('취소 슬롯 부활 차단(L-05)', '차감 취소한 시각으로 후보 재생성', 'skipped=1·같은 시각 1건',
+          format('skipped=%s·%s건', res ->> 'skipped', n),
+          case when (res ->> 'skipped') = '1' and n = 1 then 'PASS' else 'FAIL' end);
+
+  -- (t) append-only 트리거가 CASCADE를 막지 않는다(적대적 검토 high②). 막으면 회차·학생 삭제가
+  --     통째로 실패해 D 도메인 파기 흐름이 진행되지 못한다.
+  insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at,
+                                package_id, contract_id, status)
+    values (t1, st1, now() + interval '62 days', now() + interval '62 days 1 hour', pk1, ct1, 'planned')
+    returning id into sd_g;
+  insert into public.attendance_contacts (tenant_id, schedule_id, minute_mark, channel, result)
+    values (t1, sd_g, 10, 'call', 'no_answer');
+  insert into public.session_ledger (tenant_id, package_id, schedule_id, kind, delta,
+                                     correction_no, reason)
+    values (t1, pk1, sd_g, 'deduct', -1, 0, '삭제 연쇄 검증용');
+  blocked := false;
+  begin
+    delete from public.schedules where tenant_id = t1 and id = sd_g;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('삭제 연쇄 허용', '연락 기록·원장이 달린 회차 삭제', '성공(트리거가 막지 않음)',
+          case when blocked then '차단됨(파기 흐름 막힘)' else '성공' end,
+          case when blocked then 'FAIL' else 'PASS' end);
+
+  -- (u) 시작 전 회차는 확정하지 않는다(적대적 검토 medium④ · L-03 전환 순서)
+  insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at,
+                                package_id, contract_id, status)
+    values (t1, st1, now() + interval '64 days', now() + interval '64 days 1 hour', pk1, ct1, 'planned')
+    returning id into sd_h;
+  res := public.settle_attendance(t1, sd_h, 'present', true, '', 'rls@test');
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('미래 회차 확정 차단(L-03)', '아직 시작하지 않은 회차의 출결 확정', 'ok=false',
+          coalesce(res ->> 'reason', 'ok=true(위반)'),
+          case when (res ->> 'reason') = 'not_started' then 'PASS' else 'FAIL' end);
+
+  -- (v) 연락 시각도 게이트다(적대적 검토 medium③). 수업 전에 세 건을 미리 찍어두면
+  --     "10분→20분→30분 연락"이라는 정본의 순서가 뜻을 잃는다.
+  insert into public.schedules (tenant_id, student_id, scheduled_at, ends_at,
+                                package_id, contract_id, status)
+    values (t1, st1, now() - interval '2 hours', now() - interval '1 hour', pk1, ct1, 'planned')
+    returning id into sd_i;
+  insert into public.attendance_contacts (tenant_id, schedule_id, minute_mark, channel,
+                                          result, contacted_at)
+    values (t1, sd_i, 10, 'call', 'no_answer', now() - interval '5 hours'),
+           (t1, sd_i, 20, 'call', 'no_answer', now() - interval '5 hours'),
+           (t1, sd_i, 30, 'call', 'no_answer', now() - interval '5 hours');
+  res := public.settle_attendance(t1, sd_i, 'noshow', true, '', 'rls@test');
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('노쇼 연락 시각 게이트(L-04)', '수업 전에 미리 찍은 연락 3건으로 노쇼 확정', 'ok=false',
+          coalesce(res ->> 'reason', 'ok=true(위반)'),
+          case when (res ->> 'reason') = 'noshow_contacts_incomplete' then 'PASS' else 'FAIL' end);
+
+  -- (w) 종료된 묶음의 회차는 잔액을 움직이지 않는다(적대적 검토 high④ · 검수 45)
+  select remaining into rem from public.lesson_package_balances
+   where tenant_id = t1 and package_id = pk1;
+  update public.lesson_packages set status = 'ended', ended_at = now(), end_reason = '검증'
+   where tenant_id = t1 and id = pk1;
+  res := public.settle_attendance(t1, sd_i, 'present', true, '', 'rls@test');
+  select remaining into n from public.lesson_package_balances
+   where tenant_id = t1 and package_id = pk1;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('종료 묶음 차감 차단(검수 45)', '종료된 묶음의 회차를 차감 확정', 'ok=false·잔액 불변',
+          format('%s·%s→%s', coalesce(res ->> 'reason', 'ok=true(위반)'), rem, n),
+          case when (res ->> 'ok')::boolean is not true and rem = n then 'PASS' else 'FAIL' end);
+  update public.lesson_packages set status = 'active', ended_at = null, end_reason = null
+   where tenant_id = t1 and id = pk1;
+
+  -- (x) 회차 부여 중복 차단(적대적 검토 medium⑥): 같은 증감·같은 사유의 재전송은 근거 없는 잔액이다.
+  insert into public.session_ledger (tenant_id, package_id, kind, delta, reason, actor_email)
+    values (t1, pk1, 'grant', 2, '이벤트 서비스 회차', 'rls@test');
+  blocked := false;
+  begin
+    insert into public.session_ledger (tenant_id, package_id, kind, delta, reason, actor_email)
+      values (t1, pk1, 'grant', 2, '이벤트 서비스 회차', 'rls@test');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('회차 부여 중복 차단', '같은 증감·같은 사유 재전송', '차단(부분 유니크)',
+          case when blocked then '차단됨' else '중복 부여(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (y) 묶음의 계약·등록·학생 조합 정합(적대적 검토 medium②): 남의 계약에 묶인 묶음은 만들 수 없다.
+  insert into public.students (tenant_id, name, parent_phone)
+    values (t1, 'RLS 검증 타학생', '01099990000')
+    returning id into st2;
+  -- 계약당 살아 있는 묶음 유니크가 먼저 걸리면 조합 FK를 검증하지 못한다 — 새 계약본을 쓴다.
+  insert into public.contracts (tenant_id, enrollment_id, terms)
+    values (t1, en1, '{"note":"조합 정합 검증용 미동의 계약본"}'::jsonb)
+    returning id into ct2;
+  blocked := false;
+  begin
+    insert into public.lesson_packages (tenant_id, enrollment_id, contract_id, student_id,
+                                        total_sessions, starts_on)
+      values (t1, en1, ct2, st2, 4, current_date);
+  exception when foreign_key_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('묶음 조합 정합(L-10)', '다른 학생을 이 등록의 계약에 묶기', '차단(복합 FK)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
 
   -- (r) 테넌트 경계: 복합 FK가 타테넌트 계약에 묶인 묶음을 막는다
   blocked := false;

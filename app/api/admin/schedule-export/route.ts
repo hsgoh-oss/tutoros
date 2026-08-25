@@ -195,7 +195,13 @@ export async function GET(request: Request) {
       icsFold(
         `DESCRIPTION:${icsEscape(r.class_type === "video" ? "화상 수업" : "대면 수업")}`,
       ),
-      r.status === "canceled" ? "STATUS:CANCELLED" : "STATUS:CONFIRMED",
+      // 충돌 회차는 정본이 "미확정 업무로 분리"하라는 상태다(L-01) — 확정 이벤트로 내보내면
+      // 학생 캘린더에는 잡힌 수업처럼 보인다. iCalendar의 TENTATIVE가 그 뜻이다.
+      r.status === "canceled"
+        ? "STATUS:CANCELLED"
+        : r.status === "conflict"
+          ? "STATUS:TENTATIVE"
+          : "STATUS:CONFIRMED",
       "END:VEVENT",
     );
   }

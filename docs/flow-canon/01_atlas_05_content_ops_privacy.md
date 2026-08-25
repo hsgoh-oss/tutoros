@@ -14,9 +14,9 @@
   - [ ] 중복 제출: 최초 유효 제출 또는 명시적 새 제출본으로 수렴하고 같은 내용의 검토 업무를 중복 생성하지 않는다.
   - [ ] 기존 자료에서 가져온 요청의 작성자·대상·출처 근거가 불명확: 격리 → 근거 확인 전 작성초대·검토·게시 금지 → 근거 보완 또는 종결·파기.
   - [ ] 작성자 철회: 미게시 제출은 검토 종료 → 동의·증빙·보존 상태 확인 → 파기 흐름.
-  - [ ] 자동 요청·자동 게시하지 않는다.
+  - [x] 자동 요청·자동 게시하지 않는다.
 - **종결·연결:** 연결 ID: S-02
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `supabase/migrations/00005_automation_extra.sql:12` · `supabase/functions/automation/jobs/reviewRequest.ts:62` · `app/admin/(protected)/reviews/actions.ts:132` · `lib/data/content.ts:70` — 작성 초대·작성자 제출 흐름 없이 운영자가 대필 등록하면 즉시 공개되고, review_request 크론이 4주 경과 학생에 자동 후기 요청을 발송해 정본의 '자동 요청·자동 게시 금지'와 충돌.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — **자동 요청·자동 게시 충돌은 둘 다 해소**됐다: `supabase/migrations/00016_tier1_conflicts.sql:78`·`:88`(기존 행은 published로 백필한 뒤 기본값을 draft로 전환 — 이후 신규 등록은 비공개로 태어난다) · `app/admin/(protected)/reviews/actions.ts:187`(insert 페이로드에 status를 넣지 않고 DB 기본값 draft에 맡긴다)·`:246`(approveReview — 운영자 승인)·`:297`(승인 시 published + approved_at)·`:300`(draft·approved만 대상인 경합 가드) · `lib/data/content.ts:76`(공개 목록은 status='published'만) · `supabase/functions/automation/jobs/reviewRequest.ts:85`·`:94`(4주 경과 학생을 여전히 매일 집계하되 결과물이 발송이 아니라 work_items 후보 카드 — next_action이 "수동 발송(S-01 자동 요청 금지)") — 신규 후기의 기본값 draft는 RLS 하네스 8m-e(`supabase/tests/rls/99_rls_test.sql:874`), 스펙 밖 상태 거부는 8m-f(`:883`)로 실증. 남은 갭: 주 전환의 앞단이 통째로 없다 — 작성 초대 발급·전달·작성자 본인/대상 관계 확인·작성자 제출 경로가 코드에 0건이고 등록은 여전히 운영자 대필(`app/admin/(protected)/reviews/actions.ts:131` 관리자 세션 전제)이다. 공개 동의는 운영자 자기신고 체크박스 한 개(`:141`)이고 수정 화면에는 그 체크박스가 렌더되지 않아 재확인이 없다(`app/admin/(protected)/reviews/review-form-fields.tsx:134`). 초대 만료·철회·교체, 중복 제출 수렴도 없다.
 
 ### S-02 성적사례 증빙 업로드·안전성 확인
 - [ ] **구현 완료** — 업로드된 증빙이 비공개 격리·유해성 검사·안전한 변환을 거쳐 결과가 확정된 뒤에만 원 성적사례 검토에 연결된다.
@@ -27,7 +27,7 @@
   - [ ] 대체본 제출: 이전 증빙을 대체 표시 → 새 증빙을 처음부터 검사 → 새 증빙 승인 전 사례 승인 보류.
   - [ ] 사례가 철회·거절·만료되면 연결된 모든 증빙을 삭제 대기 상태로 보내고 외부·백업 파기 흐름까지 확인한다.
   - [ ] 증빙은 공개하지 않고 성적사례 사실 검토에 필요한 범위에서만 사용한다.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `app/admin/(protected)/reviews/actions.ts:38` · `app/admin/(protected)/reviews/actions.ts:55` · `app/admin/(protected)/reviews/actions.ts:64` — 성적 전후가 담긴 후기 스크린샷이 확장자·MIME·10MB 검사만 거쳐 격리·유해성 검사·안전 변환 없이 public 버킷 공개 URL로 즉시 발급돼 정본의 '증빙 비공개 격리'와 충돌.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — **public 버킷 즉시 공개 충돌은 해소**됐다: `app/admin/(protected)/reviews/storage.ts:26`·`:28`(버킷 이원화 — 신규 증빙 원본은 비공개 `review-evidence`, 공개 `reviews`에는 레거시 URL과 승인 후 사본만) · `:119`(관리자 검토는 1시간 만료 서명 URL로만 열람) · `:58`(publishEvidenceCopies — 공개 사본은 게시 승인 시점에만 생성되고, 하나라도 복사에 실패하면 승인을 중단) · `app/admin/(protected)/reviews/actions.ts:48`(업로드 대상이 EVIDENCE_BUCKET)·`:288`(승인 경로에서 사본 생성) · `scripts/setup-supabase.sh:96`(review-evidence는 비공개 생성) — 업로드 시점에 공개 URL이 발급되는 경로는 이제 없다. 남은 갭: 주 전환의 검사 단계가 통째로 비어 있다 — 증빙 필요 여부 확인·업로드 권한 발급·유해성 검사·안전한 변환·결과 확정(안전함/거절/검사 지연) 어느 것도 코드가 없고, 검증은 확장자·MIME·10MB뿐이며 `file.type`이 빈 문자열이면 MIME 검사를 통과한다(`app/admin/(protected)/reviews/actions.ts:38`). '격리'는 비공개 버킷 분리라는 뜻으로만 성립한다. 증빙과 공개용 이미지가 같은 파일이라 승인 시 스크린샷 전부가 공개 사본이 되는 구조도 그대로다 — 검토 전용으로만 쓰이는 증빙을 따로 두는 개념이 없다.
 
 ### S-03 후기·성적사례 검토·게시·철회
 - [ ] **구현 완료** — 개인정보·표현·동의·사실 근거 검토와 운영자 결정(보완·거절·승인)을 거쳐 공개용 최소 본만 게시되고 철회 시 즉시 공개가 중단된다.
@@ -38,7 +38,7 @@
   - [ ] 게시 후 정정: 기존 공개본 유지 또는 즉시 숨김 판단 → 새 본 검토·승인 → 최신본 게시 → 이전본 대체 표시.
   - [ ] 동의 철회·작성자 철회: 즉시 공개·검색·공유 중단 → 공개 사본 제거 → 증빙 삭제·보존 판단 → 철회 증명만 최소 보존.
   - [ ] 사례 증빙이나 비공개 원문이 공개용 최소 본에 섞이지 않아야 한다.
-- **현행 갭:** 🔶 부분 — `app/admin/(protected)/reviews/actions.ts:141` · `app/admin/(protected)/reviews/actions.ts:188` · `app/admin/(protected)/reviews/actions.ts:355` · `lib/data/content.ts:70` — 게시 동의 확인 게이트·consents 기록·삭제 시 스토리지 사본 제거는 있으나 제출→검토→보완요청→승인→공개용 최소 본 파이프라인 없이 등록 즉시 전체 공개.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `app/admin/(protected)/reviews/actions.ts:141`(게시 동의 게이트)·`:210`(consents 기록 — 실패 시 방금 만든 후기를 보상 삭제)·`:246`(운영자 승인 = 게시)·`:288`(승인 시 증빙 공개 사본 생성 실패면 게시 중단)·`:452`·`:472`(삭제 시 비공개 원본+공개 사본 모두 제거) · `lib/data/content.ts:76`(공개는 published만) — 00016으로 '등록 즉시 전체 공개'는 사라지고 검토 후 게시가 됐다. 남은 갭: ① **철회 실행 경로가 없다** — `retracted` 상태값은 스키마(`supabase/migrations/00016_tier1_conflicts.sql:79`)와 라벨(`app/admin/(protected)/reviews/constants.ts:19` "철회됨")에만 있고 후기를 retracted로 전환하는 코드가 레포에 0건이라, '동의 철회·작성자 철회 → 즉시 공개 중단'은 현재 후기 삭제로만 가능하다(철회 증명 최소 보존이 아니라 행 자체가 사라진다). ② 보완 요청(반환)·거절·사유 안내 경로가 없어 운영자 결정 세 갈래 중 승인 하나만 코드에 있다(사유 필드·거절 액션 없음). ③ 공개용 최소 본 확정 단계가 없어 등록 원문이 그대로 공개된다. ④ 게시 후 정정 시 이전본 대체 표시가 없다(리포트 G-03의 superseded_by에 해당하는 구조 없음). ⑤ `approved`(승인·게시 대기) 상태로 가는 코드 경로도 없어 draft→published 두 단계로만 움직인다.
 
 ### S-04 입시·외부 정보·공식 캘린더 수집
 - [ ] **구현 완료** — 승인된 공식 출처에서 수집·정규화된 후보가 운영자 검토·승인을 거쳐야만 게시·변경·취소되고 출처 연결이 유지된다.
@@ -50,7 +50,7 @@
   - [ ] 출처가 여러 개이고 내용이 다름: 임의 병합 금지 → 우선 출처·사실 확인 → 운영자 결정.
   - [ ] 기존 분류가 불명확한 일정: 원 출처 대조 → 올바른 분류 후보 → 운영자 승인 → 새 분류로 게시 또는 보관.
   - [ ] 출처 폐쇄·장기 실패: 공개본 최신성 검토 → 유지·경고·숨김 중 하나로 운영자 결정.
-- **현행 갭:** 🔶 부분 — `app/admin/(protected)/dday/actions.ts:36` · `app/admin/(protected)/dday/actions.ts:147` · `supabase/functions/automation/jobs/ddayRecalc.ts:8` — 운영자 수동 D-day 작성·노출 토글·백업과 경과 시험 자동 숨김 크론만 존재하고 공식 출처 수집·최신성 확인·후보 생성·승인·출처 연결 구조는 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `app/admin/(protected)/dday/actions.ts:37`·`:148` · `supabase/functions/automation/jobs/ddayRecalc.ts:6` — 운영자 수동 D-day 작성·노출 토글·백업과 경과 시험 자동 숨김 크론만 존재하고 공식 출처 수집·최신성 확인·후보 생성·승인·출처 연결 구조는 없음. 00016~00020도 이 도메인을 다루지 않았다.
 
 ### S-05 입시 캘린더 일괄 가져오기
 - [ ] **구현 완료** — 미리보기·운영자 선택·원 자료 재대조·반영 승인을 거쳐 선택 후보가 비공개 일정 초안으로 반영되고 S-04 검토·게시 흐름으로 이어진다.
@@ -63,7 +63,7 @@
   - [ ] 반영 완료가 게시 완료를 뜻하지 않는다.
   - [ ] 각 초안은 S-04의 운영자 승인 후 공개한다.
 - **종결·연결:** 완료: 선택 후보는 초안에 하나씩 연결되고 제외·보류 후보도 종료 이유가 남는다. (연결 ID: S-04)
-- **현행 갭:** ❌ 없음 — 관련 코드 없음
+- **현행 갭:** ❌ 없음(판정 2026-08-25) — 관련 코드 없음
 
 ### S-06 공개 입시 캘린더 내보내기
 - [ ] **구현 완료** — 방문자가 현재 게시된 승인본만 담긴 캘린더 자료를 생성·다운로드해 개인 캘린더에 추가할 수 있다.
@@ -75,7 +75,7 @@
   - [ ] 전체 내보내기 중 일부 일정 오류: 잘못된 자료를 만들지 않고 생성 중단 → 오류 일정 확인 → 다시 생성.
   - [ ] 개인정보·내부 메모·비공개 출처정보는 포함하지 않는다.
   - [ ] 내려받은 외부 캘린더의 실제 반영·삭제는 외부 앱 결과이므로 TutorOS 공개본과 분리한다.
-- **현행 갭:** ❌ 없음 — 관련 코드 없음
+- **현행 갭:** ❌ 없음(판정 2026-08-25) — 공개 캘린더 내보내기 코드 없음 — M3가 만든 `app/api/admin/schedule-export/route.ts`는 운영자용 수업 일정(ICS·CSV) 내보내기이고 방문자용 공개 입시 캘린더와 무관하다.
 
 ### S-07 운영 분석·주간 보고
 - [ ] **구현 완료** — 운영 사실 집계와 누락·정의 확인을 거친 운영 보고 초안이 운영자 검토 후 확정된다.
@@ -85,7 +85,7 @@
   - [ ] 누락값: 임의 보정하지 않고 누락으로 표시.
   - [ ] 정의 변경: 과거 결과를 덮어쓰지 않고 새 기준으로 생성.
   - [ ] 생성 실패: 이전 확정본 유지 → 재생성.
-- **현행 갭:** 🔶 부분 — `app/admin/(protected)/dashboard/page.tsx:99` · `app/admin/(protected)/dashboard/page.tsx:185` · `lib/data/activity.ts:46` — 대시보드 실시간 집계(주간·오늘 일정, 수납 요약, 신규 상담, 최근 활동)만 있고 운영 보고 초안 생성·검토·확정 흐름 없음 (weekly_report_draft는 학생 학습 리포트).
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `app/admin/(protected)/dashboard/page.tsx:159`·`:168` · `lib/data/activity.ts:253` — 대시보드 실시간 집계(주간·오늘 일정, 수납 요약, 신규 상담, 최근 활동 8건, 열린 오늘 업무)만 있고 운영 보고 초안 생성·검토·확정 흐름 없음 (weekly_report_draft는 학생 학습 리포트). 집계 대상은 M2·M3로 넓어졌지만(회차·출결·계약) 전부 화면에서 그때그때 계산하는 값이라 '확정된 보고본'이 남지 않는다 — 정의 변경 시 과거 결과를 유지할 대상 자체가 없다.
 
 ## 19. 운영자 오늘 업무·사고·외부 장애 (W-01–W-08)
 
@@ -96,7 +96,7 @@
   - [ ] 중복 업무: 하나로 표시하되 원 사건 연결은 유지.
   - [ ] 숫자 경고만 있고 원본이나 종료 행동이 없는 업무를 만들지 않는다.
   - [ ] 데이터 부족: 추정하지 않고 확인 필요로 둔다.
-- **현행 갭:** 🔶 부분(판정 2026-08-25, 커밋 8d10e5f) — `supabase/migrations/00013_m0_foundation.sql:158`·`:181` · `lib/data/work.ts:112`·`:169` · `app/admin/(protected)/dashboard/page.tsx:170`·`:234` · `supabase/functions/automation/jobs/notifyRetry.ts:62` · `app/portal/[token]/actions.ts:218` — 원본 연결(source_type/source_id)·next_action 필수·한 사건 한 업무(열린 업무 부분 유니크)인 work_items 큐가 가동 중이고 알림 소진/결과 불명·결제 예외·과제 제출/질문이 여기로 수렴, 대시보드 오늘 업무 카드 렌더·자동 생성·완결은 E2E 실측 — 남은 갭: 상태가 open/in_progress/done/dismissed뿐이라 후속일 지정·다른 흐름 인계·사유/책임자/재검토 조건이 있는 보류가 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `supabase/migrations/00013_m0_foundation.sql:158`·`:171`·`:180` · `lib/data/work.ts:8`·`:116`·`:141` · `app/admin/(protected)/dashboard/page.tsx:169`·`:188` · `supabase/functions/automation/jobs/notifyRetry.ts:62` · `app/portal/[token]/actions.ts:303`·`:500` — 원본 연결(source_type/source_id)·next_action 필수·한 사건 한 업무(열린 업무 부분 유니크)인 work_items 큐가 가동 중이고, 대시보드 오늘 업무 카드 렌더·자동 생성·완결은 E2E 실측. 수렴하는 사건이 14종으로 늘었다 — 알림 소진·결과 불명, 리포트 발송 실패, 결제선생 결과 불명·불일치, 과제 제출·질문에 더해 M3가 일정 충돌(`supabase/migrations/00020_lesson_packages.sql:552`)·노쇼 예약제한 검토·출결 정정발 보고서 재검토(`:982`)·환불 재검토(`:1001`)를 얹었고, S-01 후기 요청 후보도 여기로 온다. 남은 갭: 상태는 여전히 open/in_progress/done/dismissed 네 개뿐이고(`supabase/migrations/00013_m0_foundation.sql:169`) 상태 전이 API도 done·dismissed 두 값만 받는다(`lib/data/work.ts:177`) — 후속일 지정(due·snooze 컬럼 없음)·다른 흐름 인계·사유/책임자/재검토 조건이 있는 보류가 없다. `audit_pending_stale`은 타입만 있고 발행처가 없다.
 
 ### W-02 외부 제공자 장애
 - [ ] **구현 완료** — 장애 감지 후 새 외부 요청 중단·안전 대기와 내부/외부 상태 분리를 거쳐 복구 확인·재시도·대사로 정상화된다.
@@ -106,7 +106,7 @@
   - [ ] 메시지: 원 업무 유지, 전달 재시도·대체 연락.
   - [ ] AI·채점: 수동 작성·채점 흐름.
   - [ ] 파일: 제출 확정 전이면 재업로드, 이미 확정된 안전 파일은 유지.
-- **현행 갭:** 🔶 부분 — `supabase/migrations/00001_init.sql:314` · `app/api/cron/flush/route.ts:36` · `supabase/functions/automation/jobs/notifyRetry.ts:5` · `lib/ai/generate.ts:101` — 메시지는 내부 큐 적재와 외부 발송 분리(queued/sent/failed)·미설정 시 안전 대기·상한 3회 재큐잉, AI는 폴백 모델 1회 재시도가 있으나 장애 감지·복구 확인·대사 운영 흐름은 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `supabase/migrations/00001_init.sql:313` · `app/api/cron/flush/route.ts:37` · `lib/notify/send.ts:257`·`:303` · `supabase/functions/automation/jobs/notifyRetry.ts:48` · `lib/ai/generate.ts:101` — 메시지는 내부 큐 적재와 외부 발송 분리(queued/sent/failed)·미설정 시 안전 대기·queued→sending 조건부 클레임으로 이중 발송 차단·상한 3회 재큐잉, 결과 불명(sending 장기 체류)은 성공으로 두지 않고 오늘 업무로 수렴, AI는 폴백 모델 1회 재시도. 남은 갭: 그 전부가 **건별 처리**이고 제공자 단위 판정이 없다 — 장애 감지(outage·circuit 류 코드 0건)·마지막 정상시각 확인·새 외부 요청 중단·복구 확인·미처리 건 재조회 후 대사가 어느 제공자에도 없다. 결제선생 대사는 건별 수동 동기화(`app/admin/(protected)/payments/actions.ts:788`)뿐이고 크론 등록 잡에 대사 잡이 없다.
 
 ### W-03 데이터 불일치
 - [ ] **구현 완료** — 불일치 감지 시 관련 상태 변경을 일시중단하고 운영자 판단·조정 이력·재계산을 거쳐 완료를 확인한다.
@@ -115,7 +115,7 @@
   - [ ] 시스템이 사실을 추정해 빈 값을 채우지 않는다.
   - [ ] 돈·권한·파기 불일치는 일반 업무보다 우선 확인.
   - [ ] 복구 후 관련된 모든 표면이 같은 사실로 수렴하는지 확인.
-- **현행 갭:** 🔶 부분(판정 2026-08-25) — `supabase/migrations/00012_automation_observability.sql:10`·`:17` · `supabase/migrations/00013_m0_foundation.sql:222` · `supabase/functions/automation/jobs/notifyRetry.ts:62` · `supabase/migrations/00014_payssam.sql:72`·`:91` — 자동화 무동작의 failed 승격+automation_runs 사후 대조에 더해, 발송 결과 불명(sending 장기 체류)을 성공으로 두지 않고 work_items(notify_unknown_result)로 수렴시키는 경로와 결제 콜백 멱등 원장(payssam_events — 샌드박스 실거래로 실측)이 생김 — 여전히 범용 금전·권한 대사, 관련 상태 변경 일시중단, 조정 이력·재계산 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `supabase/migrations/00012_automation_observability.sql:10`·`:17` · `supabase/functions/automation/jobs/notifyRetry.ts:62` · `supabase/migrations/00014_payssam.sql:72`·`:91` · `lib/data/adjustments.ts:87`·`:120` · `supabase/migrations/00020_lesson_packages.sql:191`·`:234`·`:861`·`:982`·`:1001` — 자동화 무동작의 failed 승격·automation_runs 사후 대조, 발송 결과 불명의 work_items 수렴, 결제 콜백 멱등 원장(payssam_events)에 더해 **조정 이력의 실체**가 생겼다: append-only adjustments 테이블과 recordAdjustment, 그리고 M3의 회차 원장(session_ledger — UPDATE·DELETE를 트리거가 거부, 잔액은 저장값이 아니라 합계)·출결 정정 승인이 원 기입을 고치지 않고 반대 부호 행을 쌓는 구조. 남은 갭: ① recordAdjustment 호출부가 성적(`app/admin/(protected)/grades/actions.ts:160`·`:247`)과 학생(`app/admin/(protected)/students/actions.ts:409`) 세 곳뿐이라 money·attendance·report·enrollment 도메인은 타입만 있고 기록이 0건이다. ② '관련 상태 변경 일시중단'이 없다 — 출결 정정이 보고서·환불에 영향을 줘도 자동 중단이 아니라 report_recheck·refund_recheck 업무 카드만 뜨고, 진행 중 환불을 실제로 막는 코드는 없다. ③ 범용 금전·권한 대사와 복구 후 표면 수렴 확인은 여전히 없다.
 
 ### W-04 보안사고·오수신
 - [ ] **구현 완료** — 의심 접근·오수신 발견 시 사고 개시·즉시 회수·노출 차단·통지·재발급·모니터링을 거쳐 종결·보존·감사까지 수렴한다.
@@ -124,7 +124,7 @@
   - [ ] 계정 잠금이 학습·금전 기록 삭제를 뜻하지 않는다.
   - [ ] 잘못 보낸 자료는 공개 경로를 먼저 닫고 외부 삭제 가능 여부를 확인.
   - [ ] 사고 중 파기 대상은 사고 보존이 필요한 경우 legal hold로 분리.
-- **현행 갭:** 🔶 부분 — `app/admin/(protected)/students/actions.ts:173` · `lib/data/activity.ts:26` · `app/api/auth/logout/route.ts:1` — 포털 링크 재발급(공유경로 즉시 회수)·감사 이력·로그아웃은 있으나 사고 개시·영향 범위 확인·통지·모니터링·종결·legal hold 분리 흐름 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `lib/portal/auth.ts:375`(revokeContactSessions — 한 사람의 활성 세션 전부 즉시 회수, 행 삭제 없이 revoked_at)·`:444`(rotateAccessLink — 재발급 시 이전 링크 즉시 무효)·`:524`(revokeRelation — 관계 종료가 세션까지 닫는다) · `app/admin/(protected)/students/actions.ts:1061` · `app/admin/(protected)/settings/actions.ts:198`(운영자 전 세션 회수)·`:255`(운영자 승계 — 구 운영자 세션·OTP 폐기) · `lib/data/activity.ts:75` — M1으로 '관련 세션·초대·공유경로 즉시 회수'는 역할 단위로 실행 가능해졌고 감사 선기록도 붙는다. 남은 갭: 회수 이후가 전부 없다 — 사고 개시(incident 엔티티 0건)·영향 범위 확인·추가 노출 차단·통지·모니터링·종결·보존이 코드에 없고, legal hold 식별자도 레포 전체에 0건이라 '사고 보존 대상 분리'가 성립하지 않는다.
 
 ### W-05 백업 확인
 - [ ] **구현 완료** — 백업 생성·누락·무결성·보존상태 확인 후 운영자가 결과를 확정하고 검증됨·실패·불명확·보존충돌 중 하나로 수렴한다.
@@ -134,7 +134,7 @@
   - [ ] 확인 실패·결과 불명확: 운영 개통·릴리스 준비 통과 금지.
   - [ ] 같은 백업의 중복 확인 요청: 기존 결과와 현재 상태를 대조해 하나의 최신 결과로 수렴.
   - [ ] 검증된 백업이라도 격리 복원 리허설을 통과하기 전 실제 복구 준비 완료가 아니다.
-- **현행 갭:** 🔶 부분 — `lib/data/backup.ts:31` · `supabase/migrations/00002_automation.sql:104` · `supabase/migrations/00001_init.sql:323` — 콘텐츠 스냅샷 백업 12개 순환 생성·조회·매일 자동 백업만 있고 누락·무결성·보존상태 확인과 검증 판정·복원 리허설 후보 흐름 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `lib/data/backup.ts:5`·`:31`·`:69` · `supabase/migrations/00002_automation.sql:104` · `supabase/migrations/00012_automation_observability.sql:148` — 콘텐츠 스냅샷 백업 12개 순환 생성·조회·매일 자동 백업만 있고 누락·무결성·보존상태 확인과 검증 판정·복원 리허설 후보 흐름 없음. 판정에 필요한 사실을 덧붙이면: 백업 대상은 site_settings·모집상태·FAQ·D-day·후기 같은 **콘텐츠/설정 계열뿐**이고 학생·수업·회차·결제·성적·동의는 대상이 아니다(자동 일일 백업은 target 'settings:daily' 하나). recordBackup은 반환형이 void라 적재·정리 실패가 `console.error`로만 남고 호출부가 실패를 알 수 없다(`lib/data/backup.ts:45`) — '생성 완료 여부 확인' 단계가 성립하지 않는 지점이 여기다.
 
 ### W-06 격리 복원 리허설
 - [ ] **구현 완료** — 검증된 백업을 운영과 분리된 대상에 승인 후 격리 복원하고 정합성·재파기·잔존 확인을 통과해야 운영 준비상태가 갱신된다.

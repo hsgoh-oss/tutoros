@@ -11,7 +11,7 @@ import { InlineSelect } from "@/components/admin/crm/inline-select";
 import { ActionButton } from "@/components/admin/crm/action-button";
 import { ScheduleCalendar } from "@/components/admin/schedule-calendar";
 import {
-  SCHEDULE_STATUS_OPTIONS,
+  MANUAL_SCHEDULE_STATUS_OPTIONS,
   classTypeLabel,
   scheduleStatusTone,
 } from "./constants";
@@ -258,7 +258,7 @@ export default async function SchedulesPage({
                         action={updateScheduleStatus}
                         id={s.id}
                         value={s.status}
-                        options={SCHEDULE_STATUS_OPTIONS}
+                        options={MANUAL_SCHEDULE_STATUS_OPTIONS}
                         className="border-none bg-transparent p-0 text-xs font-bold"
                       />
                     </Badge>

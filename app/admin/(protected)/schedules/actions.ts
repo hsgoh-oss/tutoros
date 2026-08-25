@@ -12,6 +12,8 @@ import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
 const VALID_CLASS_TYPES: ClassType[] = ["inperson", "video"];
+// 수동 상태 변경이 허용되는 값. 'conflict'는 후보 생성이 판정해서 붙이는 상태라 손으로 지정하지
+// 않는다(화면 드롭다운도 같은 목록을 쓴다 — 목록과 검증이 어긋나면 고를 수 있는데 항상 거부된다).
 const VALID_STATUSES: ScheduleItem["status"][] = ["planned", "done", "canceled", "makeup"];
 
 function revalidateSchedules() {
@@ -154,11 +156,40 @@ export async function updateScheduleStatus(
   }
 
   const db = createServiceClient()!;
+
+  // M3 이후 회차의 상태는 출결·차감 판정의 결과다. 이 레거시 드롭다운은 그 판정을 거치지 않는
+  // bare UPDATE라서, 묶음에 묶인 회차를 여기서 '완료'로 바꾸면 settle_attendance는 status가
+  // planned/makeup이 아니라 거부하고 정정은 attendance가 null이라 거부해, 그 회차가 출결·잔액
+  // 흐름에서 영구히 이탈한다(L-03 "기록 미완료: 회차 후속을 닫지 않는다"). 그래서 묶음 회차는
+  // 회차 상세의 출결 확정·취소 경로로만 닫는다. 묶음에 묶이지 않은 옛 일정은 종전대로 둔다.
+  const { data: current } = await db
+    .from("schedules")
+    .select("package_id, attendance, deduction_state")
+    .eq("tenant_id", session.tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!current) return { ok: false, error: "일정을 찾을 수 없습니다." };
+  const row = current as {
+    package_id: string | null;
+    attendance: string | null;
+    deduction_state: string;
+  };
+  if (row.package_id !== null || row.attendance !== null || row.deduction_state !== "none") {
+    return {
+      ok: false,
+      error: "수업 묶음 회차입니다. 회차 상세에서 출결 확정·취소로 처리해 주세요.",
+    };
+  }
+
   const { error } = await db
     .from("schedules")
     .update({ status })
     .eq("tenant_id", session.tenantId)
-    .eq("id", id);
+    .eq("id", id)
+    // 조회와 갱신 사이에 출결이 확정될 수 있다 — 조건을 갱신 자체에 실어 창을 닫는다.
+    .is("package_id", null)
+    .is("attendance", null)
+    .eq("deduction_state", "none");
   if (error) {
     console.error("[schedules] status update failed", error);
     return { ok: false, error: "상태 변경 중 오류가 발생했습니다." };

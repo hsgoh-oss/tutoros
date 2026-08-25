@@ -116,8 +116,20 @@ export default async function ScheduleDetailPage({
             {candidates.length === 0 &&
               " 회차 시각을 포함하는 동의된 계약이 없습니다 — 등록 기간·계약을 먼저 정정하세요."}
             {candidates.length > 1 &&
-              " 유효 계약 후보가 둘 이상입니다 — 계약 원장·기간을 먼저 정정하세요."}
+              " 유효 계약 후보가 둘 이상입니다. 이 상태에서는 어느 계약도 확정할 수 없습니다 — 정규 등록 화면에서 겹치는 등록의 기간(활성·종료 시각)을 먼저 정정한 뒤 다시 시도하세요."}
           </p>
+          {candidates.length > 1 && (
+            <ul className="mb-3 space-y-1 text-xs text-rose-900">
+              {candidates.map((c) => (
+                <li key={c.contractId}>
+                  · {formatKDateTime(c.agreedAt)} 동의 · 등록{" "}
+                  <Link href={`/admin/enrollments/${c.enrollmentId}`} className="underline">
+                    기간 확인
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
           {candidates.length === 1 && (
             <SubmitForm action={resolveAction} submitLabel="귀속 확정">
               <Field label="유효 계약 후보" required>
@@ -155,6 +167,12 @@ export default async function ScheduleDetailPage({
               </Field>
               <Field label="메모" hint="차감 판정의 근거 (선택)">
                 <Input name="reason" maxLength={200} />
+              </Field>
+              <Field label="실제 시작" hint="지각을 선택했을 때만 기록됩니다">
+                <Input name="actualStartedAt" type="datetime-local" />
+              </Field>
+              <Field label="실제 종료" hint="조퇴를 선택했을 때만 기록됩니다">
+                <Input name="actualEndedAt" type="datetime-local" />
               </Field>
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm">

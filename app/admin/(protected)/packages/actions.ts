@@ -41,7 +41,8 @@ function parsePattern(form: FormData): SessionPattern | null {
   const time = String(form.get("time") ?? "").trim();
   const durationMin = Number(form.get("durationMin") ?? 60);
   if (weekdays.length === 0) return null;
-  if (!/^\d{2}:\d{2}$/.test(time)) return null;
+  // 24:00·99:99는 Date.UTC에서 조용히 다음 날로 굴러가 엉뚱한 시각의 회차가 생긴다.
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
   if (!Number.isFinite(durationMin) || durationMin < 10 || durationMin > 480) return null;
   return { weekdays: [...new Set(weekdays)].sort(), time, durationMin };
 }
@@ -73,6 +74,12 @@ export async function createPackage(form: FormData): Promise<CrmActionResult> {
   const startsOn = String(form.get("startsOn") ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn)) {
     return { ok: false, error: "시작일이 올바르지 않습니다." };
+  }
+  // 시작일이 과거면 지난 회차가 planned로 무더기 생성되고 그대로 차감 대상이 된다.
+  // 지난 수업을 원장에 올리는 것은 회차 조정(adjust)의 일이지 후보 생성의 일이 아니다.
+  const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (startsOn < todayKst) {
+    return { ok: false, error: "시작일은 오늘 이후여야 합니다. 지난 회차는 회차 조정으로 반영하세요." };
   }
   const pattern = parsePattern(form);
   if (!pattern) return { ok: false, error: "요일·시간·수업 길이를 확인해 주세요." };
@@ -330,13 +337,41 @@ export async function endPackage(packageId: string, form: FormData): Promise<Crm
   if (!data || data.length === 0) {
     return { ok: false, error: "이미 종료된 묶음입니다." };
   }
+
+  // 종료가 곧 정산 기산점이다(검수 45). 남은 예정·충돌 회차를 열어두면 종료 뒤에도 출결 확정이
+  // 시도되고, 그때마다 이미 확정한 환불·정산 근거가 흔들린다. 차감 게이트가 DB에서 막긴 하지만
+  // 그건 마지막 방어선이고, 정본이 요구하는 것은 "미래 회차 중단"이다 — 여기서 함께 닫는다.
+  // 출결이 확정됐거나 차감 판정이 난 회차는 건드리지 않는다(확정된 사실은 덮어쓰지 않는다).
+  const { error: closeError, count: closed } = await db
+    .from("schedules")
+    .update({ status: "canceled", deduction_state: "waived" }, { count: "exact" })
+    .eq("tenant_id", session.tenantId)
+    .eq("package_id", packageId)
+    .in("status", ["planned", "makeup", "conflict"])
+    .is("attendance", null)
+    .eq("deduction_state", "none");
+  if (closeError) {
+    // 묶음은 이미 종료됐다 — 남은 회차 정리 실패를 종료 실패로 뒤집지 않고 업무로 남긴다.
+    console.error("[packages] close remaining sessions failed", closeError);
+    await db.from("work_items").insert({
+      tenant_id: session.tenantId,
+      kind: "schedule_unresolved",
+      title: "묶음 종료 후 남은 회차 정리 실패",
+      detail: "종료는 완료됐으나 예정 회차를 닫지 못했습니다.",
+      source_type: "lesson_package",
+      source_id: packageId,
+      priority: "money",
+      next_action: "해당 묶음의 남은 예정·충돌 회차를 확인해 취소하세요.",
+    });
+  }
+
   await logActivity(
     session.tenantId,
     session.email,
     "update",
     "lesson_package",
     packageId,
-    `수업 묶음 종료 — ${reason}`,
+    `수업 묶음 종료 — ${reason}` + (closed ? ` (남은 회차 ${closed}건 종료)` : ""),
   );
   revalidatePackages(packageId);
   return { ok: true };

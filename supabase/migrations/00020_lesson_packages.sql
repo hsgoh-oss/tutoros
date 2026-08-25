@@ -44,6 +44,15 @@ alter table public.contracts
 alter table public.schedules
   add constraint schedules_tenant_id_id_key unique (tenant_id, id);
 
+-- 묶음은 등록·계약·학생 셋을 함께 참조한다. 셋을 각각 별도 FK로만 검사하면 조합은 아무도 보지
+-- 않아, 다른 학생의 계약에 묶인 묶음을 만들 수 있고 그 학생의 회차가 남의 잔액을 깎는다
+-- (L-10 "임의 귀속 금지"). 그래서 부모 쪽에 조합 키를 세워 복합 FK로 짝을 강제한다 —
+-- 앱의 폼 검증이 아니라 DB가 판정한다.
+alter table public.enrollments
+  add constraint enrollments_tenant_id_student_key unique (tenant_id, id, student_id);
+alter table public.contracts
+  add constraint contracts_tenant_id_enrollment_key unique (tenant_id, id, enrollment_id);
+
 /* ---------- ① lesson_packages — 수업 묶음 (L-01 · L-10) ----------
    정본 L-01 주 전환: "활성 등록·계약 확인 → 수업 묶음 조건 확인 → 전체 회차 후보 생성".
    그래서 묶음은 등록과 계약을 모두 필수로 참조한다 — 계약 없는 묶음은 존재할 수 없고, 이것이
@@ -80,10 +89,11 @@ create table public.lesson_packages (
     check (status <> 'active' or activated_at is not null),
   constraint lesson_packages_ended_needs_time
     check (status <> 'ended' or ended_at is not null),
-  foreign key (tenant_id, enrollment_id)
-    references public.enrollments (tenant_id, id) on delete cascade,
-  foreign key (tenant_id, contract_id)
-    references public.contracts (tenant_id, id) on delete cascade,
+  -- 조합 FK: 계약은 이 등록의 것이어야 하고, 등록은 이 학생의 것이어야 한다.
+  foreign key (tenant_id, contract_id, enrollment_id)
+    references public.contracts (tenant_id, id, enrollment_id) on delete cascade,
+  foreign key (tenant_id, enrollment_id, student_id)
+    references public.enrollments (tenant_id, id, student_id) on delete cascade,
   foreign key (tenant_id, student_id)
     references public.students (tenant_id, id) on delete cascade
 );
@@ -160,9 +170,15 @@ create unique index schedules_one_active_makeup_per_origin
 
 -- 후보 재생성 멱등성(L-01 "동시 수정: 먼저 확정된 일정 유지"): 같은 묶음의 같은 시각 슬롯은
 -- 하나뿐이라 generate_package_sessions를 다시 돌려도 기존 회차를 복제하지 않는다.
+--
+-- 취소된 회차도 슬롯을 계속 점유한다. 취소를 인덱스에서 빼면 그 시각이 다시 열리고, 회차를
+-- 더 만들려고 후보를 다시 펼칠 때(앱은 언제나 starts_on부터 전개한다) 취소된 슬롯이 planned로
+-- 부활한다 — 원장에는 취소 차감과 부활 회차 차감이 둘 다 남아 같은 수업이 두 번 소진된다
+-- (L-05 "이중 차감 금지"). 슬롯은 한 번 쓰면 끝이고, 같은 시각을 다시 쓰려면 보강이 아니라
+-- 새 묶음이다.
 create unique index schedules_one_per_package_slot
   on public.schedules (tenant_id, package_id, scheduled_at)
-  where package_id is not null and status <> 'canceled';
+  where package_id is not null;
 
 create index idx_schedules_package
   on public.schedules (tenant_id, package_id, scheduled_at);
@@ -230,12 +246,39 @@ create unique index session_ledger_one_entry_per_round
 create index idx_session_ledger_package
   on public.session_ledger (tenant_id, package_id, created_at);
 
+-- 회차 부여·조정은 잔액을 직접 움직이는데 회차에 매이지 않아 위 차수 유니크가 걸리지 않는다.
+-- 더블클릭·재전송으로 같은 부여가 두 번 들어가면 근거 없는 잔액이 생긴다. 같은 묶음에 같은
+-- 증감·같은 사유를 두 번 기입하는 것은 중복으로 보고 DB가 막는다 — 정말 두 번 부여해야 하면
+-- 사유를 달리 적으면 되고, 그 다른 사유가 곧 두 번째 부여의 근거다.
+-- (시각을 키에 넣지 않는 이유: timestamptz의 시간대 변환은 IMMUTABLE이 아니라 인덱스에 못 쓴다.)
+create unique index session_ledger_manual_dedup
+  on public.session_ledger (tenant_id, package_id, kind, delta, md5(btrim(reason)))
+  where schedule_id is null;
+
 -- 원장은 고쳐 쓰지 않는다 — 되돌림도 새 행이다(00013 activity_log·00015 제출물과 같은 계열).
+--
+-- 단, 부모가 사라지는 중이면 통과시킨다(00015 homework_submission_immutable와 같은 탈출구).
+-- schedules를 지우면 FK가 schedule_id를 null로 미는 UPDATE를, lesson_packages·tenants를 지우면
+-- CASCADE DELETE를 각각 이 트리거에 쏜다 — 탈출구가 없으면 학생·회차 삭제가 통째로 막혀
+-- D 도메인의 파기 흐름이 진행되지 못한다. 부모가 아직 있는데 들어온 변경만 "직접 조작"이다.
 create or replace function public.session_ledger_append_only()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
+  if tg_op = 'DELETE' then
+    if not exists (select 1 from public.lesson_packages
+                    where tenant_id = old.tenant_id and id = old.package_id) then
+      return old;  -- 묶음·테넌트 CASCADE 진행 중
+    end if;
+  else
+    -- schedule_id만 null로 밀리는 것은 회차 삭제에 딸린 FK 동작이다(그 외 컬럼은 그대로).
+    if old.schedule_id is not null and new.schedule_id is null
+       and (to_jsonb(old) - 'schedule_id') = (to_jsonb(new) - 'schedule_id') then
+      return new;
+    end if;
+  end if;
   raise exception '회차 원장은 append-only입니다 — 되돌리려면 반대 부호 행을 추가하세요 (%)', tg_op;
 end $$;
 
@@ -299,11 +342,18 @@ create table public.attendance_contacts (
     references public.schedules (tenant_id, id) on delete cascade
 );
 
+-- 원장과 같은 탈출구: 부모 회차가 사라지는 중이면 CASCADE를 막지 않는다.
 create or replace function public.attendance_contacts_append_only()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
+  if tg_op = 'DELETE'
+     and not exists (select 1 from public.schedules
+                      where tenant_id = old.tenant_id and id = old.schedule_id) then
+    return old;
+  end if;
   raise exception '연락 기록은 append-only입니다 (%)', tg_op;
 end $$;
 
@@ -496,6 +546,9 @@ declare
   v_conflict  boolean;
   v_id        uuid;
   v_total     int := 0;
+  v_requested int := 0;
+  v_before    int := 0;
+  v_after     int := 0;
   v_confirmed int := 0;
   v_conflicted int := 0;
   v_skipped   int := 0;
@@ -509,6 +562,12 @@ begin
   if jsonb_typeof(p_candidates) <> 'array' then
     return jsonb_build_object('ok', false, 'reason', 'bad_candidates');
   end if;
+  v_requested := jsonb_array_length(p_candidates);
+
+  -- 같은 학생의 일정을 동시에 만드는 두 요청이 서로의 미커밋 행을 못 봐 겹치는 회차를 함께
+  -- 확정하는 창을 닫는다(L-01 "동시 수정"). 자문 잠금은 트랜잭션 끝에 자동 해제된다.
+  perform pg_advisory_xact_lock(
+    hashtextextended(p_tenant::text || ':' || v_pkg.student_id::text, 0));
 
   -- 하나라도 형식이 어긋나면 아무것도 만들지 않는다(반쪽 생성 금지 — 전체 결과 대사의 전제).
   if exists (
@@ -517,6 +576,9 @@ begin
   ) then
     return jsonb_build_object('ok', false, 'reason', 'bad_candidates');
   end if;
+
+  select count(*) into v_before from public.schedules
+   where tenant_id = p_tenant and package_id = p_package;
 
   for v_item in select value from jsonb_array_elements(p_candidates) loop
     v_total := v_total + 1;
@@ -542,7 +604,8 @@ begin
       case when v_conflict then 'conflict' else 'planned' end,
       case when v_conflict then '기존 일정과 시간이 겹칩니다 — 재협의 후 시각 조정 또는 취소' end
     )
-    on conflict do nothing
+    on conflict (tenant_id, package_id, scheduled_at) where package_id is not null
+      do nothing
     returning id into v_id;
 
     if v_id is null then
@@ -564,13 +627,21 @@ begin
     end if;
   end loop;
 
+  -- 대사는 루프 카운터끼리 맞춰봐야 항상 참인 동어반복이다. 실제로 대조할 것은 두 가지다:
+  --  ① 받은 후보 수와 처리한 수가 같은가 ② 새로 생긴 회차 수가 확정+충돌과 같은가.
+  -- 이 둘이 어긋나면 조용히 삼켜진 INSERT가 있다는 뜻이다(L-01 "전체 결과 안내").
+  select count(*) into v_after from public.schedules
+   where tenant_id = p_tenant and package_id = p_package;
+
   return jsonb_build_object(
     'ok', true,
+    'requested', v_requested,
     'total', v_total,
     'confirmed', v_confirmed,
     'conflicted', v_conflicted,
     'skipped', v_skipped,
-    'reconciled', (v_confirmed + v_conflicted + v_skipped) = v_total,
+    'reconciled', v_total = v_requested
+                  and (v_after - v_before) = (v_confirmed + v_conflicted),
     'actor', p_actor
   );
 end $$;
@@ -594,7 +665,9 @@ create or replace function public.settle_attendance(
   p_attendance text,
   p_deduct boolean,
   p_reason text,
-  p_actor text
+  p_actor text,
+  p_actual_started_at timestamptz default null,
+  p_actual_ended_at timestamptz default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -620,9 +693,19 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'not_found');
   end if;
 
+  -- 회차가 시작하기 전에는 출결을 확정하지 않는다(L-03 "회차 시작 → 출결 → … → 잔액 반영").
+  -- 목록에서 한 줄 잘못 눌러 다음 달 회차가 소진되는 일을 막는다. 사전 취소는 cancel_schedule 몫.
+  if now() < v_sched_at then
+    return jsonb_build_object('ok', false, 'reason', 'not_started');
+  end if;
+
   -- 노쇼 확정 게이트(L-04): 10·20·30분 연락이 모두 기록되고 모두 무응답이며 30분이 지나야 한다.
+  -- 연락 "시각"도 본다 — 수업 3시간 전에 세 건을 미리 찍어두면 게이트가 뜻을 잃는다.
   if p_attendance = 'noshow' then
-    select count(*), count(*) filter (where result = 'no_answer')
+    select count(*),
+           count(*) filter (
+             where result = 'no_answer'
+               and contacted_at >= v_sched_at + make_interval(mins => minute_mark))
       into v_marks, v_no_answer
       from public.attendance_contacts
      where tenant_id = p_tenant and schedule_id = p_schedule;
@@ -638,12 +721,19 @@ begin
      set attendance = p_attendance,
          attendance_settled_at = now(),
          status = 'done',
-         deduction_state = case when p_deduct then 'deducted' else 'waived' end
+         deduction_state = case when p_deduct then 'deducted' else 'waived' end,
+         actual_started_at = coalesce(p_actual_started_at, s.actual_started_at),
+         actual_ended_at = coalesce(p_actual_ended_at, s.actual_ended_at)
    where s.tenant_id = p_tenant
      and s.id = p_schedule
      and s.attendance is null
      and s.status in ('planned', 'makeup')
      and (not p_deduct or (s.package_id is not null and s.contract_id is not null))
+     -- 종료된 묶음의 회차는 더 이상 잔액을 움직이지 않는다. 종료가 곧 정산 기산점이라
+     -- 그 뒤의 차감은 이미 확정한 환불·정산 근거를 사후에 흔든다(검수 45).
+     and (not p_deduct or exists (
+           select 1 from public.lesson_packages p
+            where p.tenant_id = s.tenant_id and p.id = s.package_id and p.status = 'active'))
      and (not p_deduct or not exists (
            select 1 from public.schedules m
             where m.tenant_id = s.tenant_id
@@ -738,6 +828,9 @@ begin
      and s.status in ('planned', 'makeup', 'conflict')
      and s.deduction_state = 'none'
      and (not p_deduct or (s.package_id is not null and s.contract_id is not null))
+     and (not p_deduct or exists (
+           select 1 from public.lesson_packages p
+            where p.tenant_id = s.tenant_id and p.id = s.package_id and p.status = 'active'))
      and (not p_deduct or not exists (
            select 1 from public.schedules m
             where m.tenant_id = s.tenant_id
@@ -801,6 +894,12 @@ begin
   if not found then
     return jsonb_build_object('ok', false, 'reason', 'not_found');
   end if;
+
+  -- 겹침 검사와 INSERT가 두 문장이라, 같은 학생의 보강을 동시에 잡는 두 요청이 서로의 미커밋
+  -- 행을 못 보고 둘 다 통과할 수 있다(L-05 "대체 회차는 충돌 확인 후 확정"). 학생 단위 자문
+  -- 잠금으로 직렬화한다 — generate_package_sessions와 같은 키라 두 경로도 서로를 막는다.
+  perform pg_advisory_xact_lock(
+    hashtextextended(p_tenant::text || ':' || v_origin.student_id::text, 0));
 
   -- 이미 차감된 회차는 대체하지 않는다 — 차감 취소는 그 자체로 종료다(L-05 판정 분기).
   if v_origin.deduction_state = 'deducted' then
@@ -907,16 +1006,21 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'schedule_missing');
   end if;
 
-  -- 정정은 "확정된 출결"을 고치는 흐름이다(L-06 "원 기록 확인"). 미확정 회차를 정정 승인으로
-  -- 확정하면 settle_attendance의 게이트(귀속·보강·노쇼)를 통째로 우회하게 된다.
-  if v_sched.attendance is null then
+  -- 정정은 "이미 판정이 끝난 회차"를 고치는 흐름이다(L-06 "원 기록 확인"). 아직 아무 판정도
+  -- 없는 회차를 정정 승인으로 확정하면 settle_attendance의 게이트(귀속·보강·노쇼·시각)를
+  -- 통째로 우회한다. 다만 취소는 출결을 남기지 않는 판정이므로(cancel_schedule) 정정 대상이다 —
+  -- 차감 취소를 되돌릴 길이 없으면 잘못된 차감이 원장에 영구히 남는다.
+  if v_sched.attendance is null and v_sched.status <> 'canceled' then
     return jsonb_build_object('ok', false, 'reason', 'not_settled');
   end if;
 
   -- 노쇼 확정 게이트(L-04)는 정정 경로에도 그대로 적용된다 — 정정이 게이트의 뒷문이 되면
   -- "연락 없이 확정된 노쇼"가 잔액·예약 위험 판단에 들어간다.
   if v_cor.to_attendance = 'noshow' then
-    select count(*), count(*) filter (where result = 'no_answer')
+    select count(*),
+           count(*) filter (
+             where result = 'no_answer'
+               and contacted_at >= v_sched.scheduled_at + make_interval(mins => minute_mark))
       into v_marks, v_no_answer
       from public.attendance_contacts
      where tenant_id = p_tenant and schedule_id = v_sched.id;
@@ -953,12 +1057,21 @@ begin
     end if;
   end if;
 
-  update public.schedules
-     set attendance = v_cor.to_attendance,
-         attendance_settled_at = now(),
-         correction_count = v_round,
-         deduction_state = case when v_cor.to_deduct then 'deducted' else 'waived' end
-   where tenant_id = p_tenant and id = v_sched.id;
+  -- 취소 회차의 정정은 차감 판정만 되돌린다 — 취소된 회차에 출결을 새로 붙이면 "열리지 않은
+  -- 수업의 출석"이 생긴다. 확정된 회차는 출결과 차감을 함께 갱신한다.
+  if v_sched.attendance is null and v_sched.status = 'canceled' then
+    update public.schedules
+       set correction_count = v_round,
+           deduction_state = case when v_cor.to_deduct then 'deducted' else 'waived' end
+     where tenant_id = p_tenant and id = v_sched.id;
+  else
+    update public.schedules
+       set attendance = v_cor.to_attendance,
+           attendance_settled_at = now(),
+           correction_count = v_round,
+           deduction_state = case when v_cor.to_deduct then 'deducted' else 'waived' end
+     where tenant_id = p_tenant and id = v_sched.id;
+  end if;
 
   -- 정정 결과가 차감이고 아직 차감 상태가 아니었다면 이번 차수로 기입한다.
   if v_cor.to_deduct and v_sched.deduction_state <> 'deducted'
@@ -1102,7 +1215,7 @@ end $$;
 
 grant execute on function public.activate_lesson_package(uuid, uuid, text) to service_role;
 grant execute on function public.generate_package_sessions(uuid, uuid, jsonb, text) to service_role;
-grant execute on function public.settle_attendance(uuid, uuid, text, boolean, text, text) to service_role;
+grant execute on function public.settle_attendance(uuid, uuid, text, boolean, text, text, timestamptz, timestamptz) to service_role;
 grant execute on function public.cancel_schedule(uuid, uuid, boolean, text, text) to service_role;
 grant execute on function public.create_makeup(uuid, uuid, timestamptz, timestamptz, text, text) to service_role;
 grant execute on function public.decide_attendance_correction(uuid, uuid, boolean, text, text) to service_role;

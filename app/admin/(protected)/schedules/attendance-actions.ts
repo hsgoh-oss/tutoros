@@ -40,12 +40,13 @@ function rpcMessage(reason: string | undefined, map: Record<string, string>, fal
 
 const SETTLE_ERRORS: Record<string, string> = {
   not_found: "일정을 찾을 수 없습니다.",
+  not_started: "아직 시작하지 않은 회차입니다. 사전 변경은 취소·보강으로 처리하세요.",
   invalid_attendance: "올바르지 않은 출결 값입니다.",
   noshow_contacts_incomplete:
     "노쇼 확정에는 10·20·30분 연락 기록이 모두 있어야 하고 전부 무응답이어야 합니다.",
   noshow_too_early: "수업 시작 30분이 지나야 노쇼로 확정할 수 있습니다.",
   gate:
-    "확정할 수 없습니다 — 이미 출결이 확정됐거나, 계약 귀속이 미확정이거나, 활성 보강이 있는 회차입니다.",
+    "확정할 수 없습니다 — 이미 출결이 확정됐거나, 계약 귀속이 미확정이거나, 묶음이 종료됐거나, 활성 보강이 있는 회차입니다.",
 };
 
 /**
@@ -67,6 +68,23 @@ export async function settleAttendance(
   const deduct = String(form.get("deduct") ?? "") === "on";
   const reason = String(form.get("reason") ?? "").trim();
 
+  // L-04 주 전환: 지각은 "실제 시작 기록", 조퇴는 "실제 종료 기록"을 거쳐 진행된다.
+  // 해당 출결이 아닌데 들어온 값은 무시한다 — 출석 회차에 실제 종료만 남는 기록은 뜻이 없다.
+  const parseStamp = (key: string): string | null => {
+    const raw = String(form.get(key) ?? "").trim();
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+  const actualStartedAt = attendance === "late" ? parseStamp("actualStartedAt") : null;
+  const actualEndedAt = attendance === "early_leave" ? parseStamp("actualEndedAt") : null;
+  if (attendance === "late" && !actualStartedAt) {
+    return { ok: false, error: "지각은 실제 시작 시각을 함께 기록해야 합니다." };
+  }
+  if (attendance === "early_leave" && !actualEndedAt) {
+    return { ok: false, error: "조퇴는 실제 종료 시각을 함께 기록해야 합니다." };
+  }
+
   const run = async () => {
     const db = createServiceClient()!;
     const { data, error } = await db.rpc("settle_attendance", {
@@ -76,6 +94,8 @@ export async function settleAttendance(
       p_deduct: deduct,
       p_reason: reason,
       p_actor: session.email,
+      p_actual_started_at: actualStartedAt,
+      p_actual_ended_at: actualEndedAt,
     });
     if (error) {
       console.error("[attendance] settle rpc failed", error);
@@ -158,7 +178,7 @@ export async function cancelSchedule(
           r.reason,
           {
             reason_required: "취소 사유를 입력해 주세요.",
-            gate: "취소할 수 없습니다 — 이미 종료됐거나, 계약 귀속이 미확정이거나, 활성 보강이 있는 회차입니다.",
+            gate: "취소할 수 없습니다 — 이미 종료됐거나, 계약 귀속이 미확정이거나, 묶음이 종료됐거나, 활성 보강이 있는 회차입니다.",
           },
           "취소할 수 없는 상태입니다.",
         ),
