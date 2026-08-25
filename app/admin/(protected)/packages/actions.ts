@@ -142,6 +142,8 @@ export interface GenerateResult extends CrmActionResult {
   confirmed?: number;
   conflicted?: number;
   skipped?: number;
+  /** 요청 회차 수보다 적게 만들어졌을 때 실제 후보 수(시작일 +2년 상한). 잘림을 숨기지 않는다. */
+  truncatedTo?: number;
 }
 
 /**
@@ -201,6 +203,9 @@ export async function generateSessions(
   if (candidates.length === 0) {
     return { ok: false, error: "반복 조건으로 만들 수 있는 회차가 없습니다. 요일·시간을 확인해 주세요." };
   }
+  // 후보 전개는 시작일로부터 2년까지만 본다(요일 조건이 희소하면 무한히 뒤로 갈 수 있다).
+  // 요청 수에 못 미치면 조용히 줄이지 않고 그대로 알린다 — 잘린 줄 모르면 "다 만들었다"로 읽힌다.
+  const truncated = candidates.length < count;
 
   const { data, error } = await db.rpc("generate_package_sessions", {
     p_tenant: session.tenantId,
@@ -236,7 +241,8 @@ export async function generateSessions(
     "create",
     "lesson_package",
     packageId,
-    `회차 생성 — 확정 ${r.confirmed}·충돌 ${r.conflicted}·기존 ${r.skipped}`,
+    `회차 생성 — 확정 ${r.confirmed}·충돌 ${r.conflicted}·기존 ${r.skipped}` +
+      (truncated ? ` (요청 ${count}회 중 ${candidates.length}회만 — 시작일 +2년 상한)` : ""),
   );
   revalidatePackages(packageId);
   return {
@@ -245,6 +251,7 @@ export async function generateSessions(
     confirmed: r.confirmed,
     conflicted: r.conflicted,
     skipped: r.skipped,
+    truncatedTo: truncated ? candidates.length : undefined,
   };
 }
 

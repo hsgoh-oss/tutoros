@@ -12,6 +12,7 @@ import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { scheduleStatusLabel, scheduleStatusTone } from "../../schedules/constants";
 import { activatePackage, adjustPackageSessions, endPackage, generateSessions } from "../actions";
+import { GenerateSessionsForm } from "../generate-form";
 import {
   attendanceLabel,
   attendanceTone,
@@ -126,23 +127,10 @@ export default async function PackageDetailPage({
             재협의 업무를 만듭니다. 정상 회차는 그대로 확정됩니다. 이미 만든 시각은 다시 만들지
             않으므로 여러 번 눌러도 안전합니다.
           </p>
-          <SubmitForm action={generateAction} submitLabel="회차 생성">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="만들 회차 수" required>
-                <Input
-                  name="count"
-                  type="number"
-                  min={1}
-                  max={200}
-                  required
-                  defaultValue={Math.max(1, balance?.remaining ?? pkg.totalSessions)}
-                />
-              </Field>
-              <Field label="건너뛸 날" hint="YYYY-MM-DD, 쉼표·공백 구분 (휴무·공휴일)">
-                <Input name="skipDates" placeholder="2026-09-28, 2026-10-03" />
-              </Field>
-            </div>
-          </SubmitForm>
+          <GenerateSessionsForm
+            action={generateAction}
+            defaultCount={Math.max(1, balance?.remaining ?? pkg.totalSessions)}
+          />
         </Card>
       )}
 
