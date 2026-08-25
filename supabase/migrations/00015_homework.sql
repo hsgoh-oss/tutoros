@@ -213,6 +213,7 @@ alter table public.homework_questions
 create or replace function public.close_homework_assignment(p_tenant_id uuid, p_id uuid)
 returns boolean
 language plpgsql
+set search_path = public
 as $$
 declare v_count int;
 begin
@@ -235,6 +236,7 @@ grant execute on function public.close_homework_assignment(uuid, uuid) to servic
 create or replace function public.retract_homework_assignment(p_tenant_id uuid, p_id uuid)
 returns boolean
 language plpgsql
+set search_path = public
 as $$
 declare v_count int;
 begin

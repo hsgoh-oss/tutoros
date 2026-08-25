@@ -419,6 +419,7 @@ end $$;
 create or replace function public.activate_enrollment(p_tenant_id uuid, p_id uuid)
 returns boolean
 language plpgsql
+set search_path = public
 as $$
 declare
   v_count int;
@@ -496,6 +497,7 @@ create or replace function public.offer_waitlist_seat(
 )
 returns boolean
 language plpgsql
+set search_path = public
 as $$
 declare v_count int;
 begin

@@ -476,6 +476,7 @@ create or replace function public.schedule_span(p_at timestamptz, p_ends timesta
 returns tstzrange
 language sql
 immutable
+set search_path = public
 as $$
   select tstzrange(p_at, greatest(coalesce(p_ends, p_at + interval '60 minutes'),
                                   p_at + interval '1 minute'), '[)');
