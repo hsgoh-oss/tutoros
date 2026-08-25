@@ -552,7 +552,9 @@ export async function sendPayssamBillAction(id: string): Promise<CrmActionResult
   if (payment.status !== "pending" || payment.paid_at) {
     return { ok: false, error: "청구 상태(청구·미납 이전)가 아니거나 이미 완납된 건은 발송할 수 없습니다." };
   }
-  const phone = payment.students?.parent_phone;
+  // 결제선생은 숫자만 허용 — 저장 형식(010-1234-5678)의 하이픈·공백을 제거해 전송한다
+  // (로컬 실측 2026-08-25: 하이픈 포함 시 "휴대폰 번호 형식이 올바르지 않습니다" 거절).
+  const phone = (payment.students?.parent_phone ?? "").replace(/\D/g, "");
   if (!phone) return { ok: false, error: "학부모 연락처를 확인할 수 없습니다." };
   const memberName = payment.students?.name ?? "학부모";
 
