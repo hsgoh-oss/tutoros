@@ -6,6 +6,8 @@
 >
 > **원문 무손실**: 각 항목의 본문은 Atlas 원문 그대로다. `코드 메모`는 현행 레포(`/Users/seolwon/IdeaProjects/tutuoros`)에서 실제 확인한 구현만 적었고, 확인하지 못한 것은 "미확인"으로 명시했다(추측 금지).
 >
+> **갱신 2026-08-25**: M0(커밋 8d10e5f)·결제선생 연동(커밋 c690804·541ab7e)·과제 도메인(커밋 4ec60e4)을 코드 메모에 반영. 체크는 "구현 전반에서 지켜짐"이 기준이라 전 도메인 검증 전이므로 계속 보류(메모만 갱신).
+>
 > **정본 원칙(원문)**: 각 ID는 화면이 아니라 하나의 업무 흐름이다. 서로 다른 ID가 만나는 화살표가 구현 경계이며, 열린 상태에는 담당자와 다음 행동이 반드시 연결된다.
 
 ---
@@ -13,25 +15,25 @@
 ## 공통 수렴 규칙 10
 
 - [ ] 1. 한 사건은 한 결과로 수렴한다. 중복 제출·중복 알림·중복 결제 통보가 새 업무를 만들지 않는다.
-  - 코드 메모: `components/public/consult/consult-form.tsx:437` — `disabled={submitState === "submitting"}` 클라이언트 중복 제출 차단 확인. 서버측(`lib/actions/consult.ts`) 중복 차단 로직은 미확인.
+  - 코드 메모: `components/public/consult/consult-form.tsx:437` — `disabled={submitState === "submitting"}` 클라이언트 중복 제출 차단 확인. 서버측(`lib/actions/consult.ts`) 중복 차단 로직은 미확인. `supabase/migrations/00013_m0_foundation.sql:180` work_items_open_dedup(같은 사건의 열린 업무는 하나, RLS 8h)·`00014_payssam.sql:91` payssam_events_applied_dedup(중복 승인 통보는 1회만 적용, RLS 8j) 확인 — 전 도메인 적용은 아님.
 - [ ] 2. 업무 상태를 섞지 않는다. 신청, 계약, 결제, 일정, 등록, 포털 초대는 서로 다른 상태다.
   - 코드 메모: `supabase/migrations/00001_init.sql` — consultations·students(등록)·payments·schedules·ai_reports·notifications·recruit_status가 각각 독립 `status` CHECK 제약으로 분리됨 확인.
 - [ ] 3. 불명확은 성공이 아니다. 외부 결과를 확인하지 못하면 확인 필요로 보내고 조회·대사한다.
-  - 코드 메모: `supabase/migrations/00012_automation_observability.sql` — `automation_call_edge_function` "설정 부재 시 실패로 남긴다" 원칙 확인. 결제 결과불명→조회·대사 구현은 미확인.
+  - 코드 메모: `supabase/migrations/00012_automation_observability.sql` — `automation_call_edge_function` "설정 부재 시 실패로 남긴다" 원칙 확인. 결제는 `app/api/payssam/callback/route.ts:216` — 통보를 믿지 않고 /bill/read 재조회 대조, 대조 실패 시 수납 미반영·work_items 수렴 확인(샌드박스 실측, 커밋 c690804). 정기 대사(B-06·08·09)는 미구현.
 - [ ] 4. 부분 성공을 숨기지 않는다. 독립 처리 가능한 대상은 성공분을 유지하고 실패분만 재처리한다.
   - 코드 메모: `supabase/functions/automation/jobs/notifyRetry.ts` — `status='failed'` 알림만 건별 재큐잉, 건별 오류는 로그 후 나머지 계속 처리 확인.
 - [ ] 5. 원자적 전환은 전부 성공하거나 전부 취소한다. 등록 활성화처럼 분리되면 안 되는 전환에는 반쪽 상태를 남기지 않는다.
-  - 코드 메모: 등록 활성화의 원자적 전환(트랜잭션) 구현은 현행 코드에서 미확인.
+  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:249` admin_replace_operator — 운영자 승계는 단일 트랜잭션 원자 RPC(RLS 테스트 8i) 확인. 등록 활성화의 원자적 전환은 여전히 미확인.
 - [ ] 6. 승인된 사실은 덮어쓰지 않는다. 정정·취소·철회는 새 이력으로 연결한다.
-  - 코드 메모: 정정·철회 이력 테이블은 현행 마이그레이션에서 미확인.
+  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:115` adjustments(append-only 조정 이력 — 호출부 연결은 M3 예정)·`00015_homework.sql:88` 제출 append-only(재제출=attempt_no+1 새 행, RLS 8l) 확인. 전 도메인 정정·철회 이력 연결은 미완.
 - [ ] 7. 외부 전달과 내부 성공을 분리한다. 알림 실패는 원 업무를 실패로 바꾸지 않는다.
-  - 코드 메모: `supabase/migrations/00001_init.sql:305` — notifications가 원 업무와 분리된 발송 큐(`queued/sent/failed` + `retry_count`)로 존재 확인. `lib/notify/send.ts`는 notifications 상태만 갱신.
+  - 코드 메모: `supabase/migrations/00001_init.sql:305` — notifications가 원 업무와 분리된 발송 큐(`queued/sent/failed` + `retry_count`)로 존재 확인. `lib/notify/send.ts`는 notifications 상태만 갱신. `00013_m0_foundation.sql:203` ai_reports.delivery_status 분리 — 발송 실패가 승인 상태를 failed로 뒤집던 경로 제거(N-02 해소 — 코드+리뷰, 실패 주입 실측은 안 함).
 - [ ] 8. 열린 상태에는 반드시 다음 담당자와 다음 행동이 있다. 담당자가 없으면 종료 상태로 보내야 한다.
-  - 코드 메모: `docs/cron-definitions.md` — 자동화 크론 정의서(잡 정의·알려진 한계·배포 후 실동작 검증) 존재 확인. 대기 업무 담당자 연결의 전수 검증은 미완.
+  - 코드 메모: `docs/cron-definitions.md` — 자동화 크론 정의서 존재 확인. `supabase/migrations/00013_m0_foundation.sql:158` work_items — next_action not null(열린 업무의 다음 행동 강제)·열린 업무 dedup(RLS 8h), 오늘 업무 카드 렌더·자동 생성·완결 E2E 실측(커밋 8d10e5f). 전 도메인 예외의 work_items 수렴 전수 검증은 미완.
 - [ ] 9. 종료는 삭제와 다르다. 접근을 먼저 닫고, 보존·법정 보관·분쟁·외부 삭제를 거쳐 파기한다.
   - 코드 메모: 보존·파기 단계 자동화는 현행 마이그레이션·자동화 잡(8종)에서 미확인.
 - [ ] 10. 자동화 실패 시 같은 승인 흐름의 수동 경로로 복귀한다. 자동 결과를 추정해 만들지 않는다.
-  - 코드 메모: `lib/ai/validate.ts` — AI 초안 block 시 발송 차단 후 운영자 판단 경로 확인. `app/admin/(protected)/payments/actions.ts` — 결제 수기 기록 경로(`VALID_METHODS: payssaem·bank`) 확인.
+  - 코드 메모: `lib/ai/validate.ts` — AI 초안 block 시 발송 차단 후 운영자 판단 경로 확인. `app/admin/(protected)/payments/actions.ts` — 결제 수기 기록 경로(`VALID_METHODS: payssaem·bank`) 확인. 환불 결과 불명 시 refunded 확정 금지·업무 큐 수렴(`payments/actions.ts:1069`) 확인.
 
 ---
 
@@ -89,11 +91,12 @@
 - [ ] **초대·계정** — 발급 → 수락/만료/철회/대체 → 활성 → 잠금/권한회수/탈퇴
   - 코드 메모: `supabase/migrations/00003_portal_token.sql` — students.portal_token `unique` 확인.
 - [ ] **운영자 인증** — 로그인 → 2단계 인증 미등록/확인대기 → 활성접근/실패/복구 → 세션회수
-  - 코드 메모: `supabase/migrations/00001_init.sql:51` admin_otps, `00007_admin_accounts.sql`·`00010_admin_accounts_rls.sql` 존재 확인.
+  - 코드 메모: `supabase/migrations/00001_init.sql:51` admin_otps, `00007_admin_accounts.sql`·`00010_admin_accounts_rls.sql` 존재 확인. `00013_m0_foundation.sql:16` admin_sessions(서버측 회수 가능 세션·테넌트 스코프, RLS 8f) — OTP→서버 세션 로그인·재시작 후 세션 유지 E2E 실측(커밋 8d10e5f).
 - [ ] **운영자 이메일** — 변경요청 → 현재주소확인 → 새주소확인 → 변경/취소/만료 → 전체로그아웃
 - [ ] **운영자 승계** — 준비 → 양측확인 → 원자적 이전 → 기존접근종료/새접근활성 → 완료/전체취소
+  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:249` admin_replace_operator — 원자적 이전·기존 세션 회수·감사 기록이 단일 트랜잭션(RLS 8i) 확인. "양측확인" 단계는 미확인.
 - [ ] **감사** — 중요행위 → 감사연결 → 원사건대조 → 정상/불일치·사고 → 보존/파기
-  - 코드 메모: 전용 감사 로그 테이블은 현행 마이그레이션에서 미확인 (`automation_runs`는 크론 실행 기록용).
+  - 코드 메모: `supabase/migrations/00013_m0_foundation.sql:63` activity_log 2단계 확장(phase pending→committed/aborted)+append-only 트리거(:87, RLS 8g)·`lib/data/activity.ts:195` runCritical fail-closed — 금전·권한·성적·개인정보 전환 호출부 채택(14개 파일), 과제 감사 체인 5건 committed 실측(커밋 4ec60e4). 원사건 대조·보존/파기 단계는 미확인.
 - [ ] **수업 묶음** — 준비 → 활성 → 마감 → 갱신/정지/종료
 - [ ] **회차** — 예정 → 진행 → 완료/취소/노쇼 → 정정
   - 코드 메모: `supabase/migrations/00001_init.sql:205` — schedules.status ∈ `planned/done/canceled/makeup` 확인.
@@ -103,16 +106,19 @@
 - [ ] **출결** — 미확정 → 출석/지각/결석/조퇴/사유인정/노쇼 → 정정
 - [ ] **예약 위험** — 후보 → 운영자검토 → 제한없음/확인중/제한 → 이의·재검토 → 유지/변경/해제
 - [ ] **과제** — 초안 → 게시·배부 → 제출대기 → 검토 → 완료/재제출 → 닫힘 → 보관
+  - 코드 메모: `supabase/migrations/00015_homework.sql:35` status ∈ `draft/assigned/closed/canceled` + archived_at(:40)·close/retract 원자 RPC(:213·:232), 재제출 분기는 review_result=resubmit 확인. H-01 배부→H-02 제출→H-03 승인 게시 E2E 실측(커밋 4ec60e4).
 - [ ] **과제 대상** — 배정 → 제출·검토 → 완료/취소 → 보존·파기
 - [ ] **제출** — 제출 → 검토 → 대체 제출본/최종 제출본
+  - 코드 메모: `supabase/migrations/00015_homework.sql:68` homework_submissions — append-only(attempt_no 새 행이 최신 검토 대상), 원문 불변 트리거(:107, RLS 8l) 확인.
 - [ ] **피드백** — 초안 → 승인 → 게시 → 정정/철회
+  - 코드 메모: `supabase/migrations/00015_homework.sql:82` feedback_status ∈ `draft/approved` — 승인 후 포털 노출 E2E 실측(커밋 4ec60e4). 정정/철회 상태는 미확인.
 - [ ] **학습이력 가져오기** — 원본확정 → 모의검토 → 후보/제외/수동검토 → 승인 → 실행 → 대사 → 검토·게시/종결
 - [ ] **비공개 학습파일** — 업로드대기 → 검사대기 → 사용가능/거절/시간초과 → 연결·열람/재제출 → 열람차단·파기
 - [ ] **평가** — 초안 → 배정 → 응시·답안수집 → 채점 → 검토 → 승인 → 게시 → 정정/철회
 - [ ] **학습목표** — 활성 → 일시정지 → 재개/달성/취소 → 새 목표 연결
 - [ ] **학습계획 제안** — 제안 → 확인/기각/보완/대체 → 적용대기 → 적용완료 → 재검토
 - [ ] **보고서** — 근거수집 → 초안 → 검토 → 승인 → 게시 → 정정/철회
-  - 코드 메모: `supabase/migrations/00001_init.sql:190` — ai_reports.status ∈ `draft/approved/sent/failed` + `lib/ai/validate.ts` 발송 클린 검사(block/warn) 확인.
+  - 코드 메모: `00013_m0_foundation.sql:219` — ai_reports.status ∈ `draft/approved/sent`(failed는 업무 상태에서 제거, 전달은 delivery_status 분리) + `lib/ai/validate.ts` 발송 클린 검사(block/warn) 확인. 생성→승인→포털 실명 복원 E2E 실측.
 - [ ] **후기·사례 요청** — 초대 → 본인·관계확인 → 작성 → 제출 → 보완/거절/승인 → 게시/철회
   - 코드 메모: `supabase/migrations/00009_review_consent.sql` 존재, consents.item에 `review` 포함 확인.
 - [ ] **사례 증빙** — 업로드대기 → 비공개격리 → 검사·안전처리 → 사용가능/거절/재시도 → 삭제대기/파기
@@ -121,12 +127,13 @@
 - [ ] **일정 내보내기** — 대상·기간확인 → 공개가능 정보선별 → 생성 → 확인 → 전달/실패/오수신 → 재생성/사고
 - [ ] **공개 캘린더 내보내기** — 게시본확인 → 전체/개별 생성 → 다운로드/실패 → 외부추가/외부결과분리
 - [ ] **청구** — 초안 → 발행 → 결제대기 → 부분/완납/과납 → 종료/무효
-  - 코드 메모: `supabase/migrations/00001_init.sql:252` — payments.status ∈ `draft/pending/paid/overdue` 확인. 부분/과납 상태는 미확인.
+  - 코드 메모: `supabase/migrations/00014_payssam.sql:57` — payments.status CHECK 재생성 ∈ `draft/pending/paid/overdue/refunded`(RLS 8k)·bill_id 유니크(:48) 확인. 부분/과납 상태는 여전히 미구현(B-06·08·09).
 - [ ] **결제** — 대기 → 성공/실패/결과불명 → 대사 → 최종확정
-  - 코드 메모: `app/admin/(protected)/payments/actions.ts` — 수기 기록 경로(`payssaem`·`bank`) 확인. 결과불명→대사 구현은 미확인.
+  - 코드 메모: `app/admin/(protected)/payments/actions.ts` — 수기 기록 경로(`payssaem`·`bank`)와 결제선생 API V2(`lib/payssam/client.ts` 발송·조회·파기·취소) 확인. 결과불명은 `app/api/payssam/callback/route.ts:216` /bill/read 대조·`payments/actions.ts:1069` 미확정+업무 큐 수렴 — 샌드박스 실거래 실측(커밋 c690804). 정기 대사는 미구현.
 - [ ] **금전 대사** — 범위확정 → 대사대기 → 실행 → 일치/불일치/모호/미해결 → 운영자정정 → 완료/부분미해결/실패
 - [ ] **기존 결제자료** — 원본확정 → 모의검토 → 일치/중복/모호/미일치/오류/제외 → 승인 → 실행 → 대사
 - [ ] **환불** — 요청 → 계산 → 검토 → 승인/거절 → 실행 → 성공/실패 → 정합성확인
+  - 코드 메모: `app/admin/(protected)/payments/actions.ts:1032` refundPayssamBillAction — /bill/cancel 전액환불(paid+승인 F만, 결과 불명 시 refunded 미확정), 샌드박스 전액환불→refunded·감사 committed 실측(커밋 c690804). 계산·검토·승인 단계와 부분 환불은 미구현.
 - [ ] **알림** — 생성 → 발송대기 → 접수 → 전달/실패/취소 → 재시도/수동종결
   - 코드 메모: `lib/notify/send.ts` — `queued→sent/failed` + `retry_count` 증가, `supabase/functions/automation/jobs/notifyRetry.ts` — 실패분 상한까지 재큐잉 확인.
 - [ ] **포털 알림함** — 읽지않음 → 접근권한재확인 → 읽음/보관/상세차단 → 보존 → 파기
@@ -155,11 +162,12 @@
 ## Appendix B. 공통 예외의 최종 수렴점
 
 - [ ] **중복 제출·요청** — 기존 결과 조회 → 같은 결과 반환
-  - 코드 메모: `components/public/consult/consult-form.tsx:437` — 클라이언트 중복 제출 차단만 확인. "기존 결과 반환" 서버 구현은 미확인.
+  - 코드 메모: `components/public/consult/consult-form.tsx:437` — 클라이언트 중복 제출 차단만 확인. "기존 결과 반환"은 결제 콜백에서 확인 — `app/api/payssam/callback/route.ts:97` 중복 승인 통보 23505→dedup 후 동일 "0000" 응답(샌드박스 실측). 다른 도메인의 서버 구현은 미확인.
 - [ ] **링크 만료·철회** — 기존 링크 종료 → 본인·운영자 확인 → 새 링크 또는 종결
 - [ ] **입력·동의 오류** — 저장 취소 → 같은 단계에서 보완 → 재제출
 - [ ] **동시 수정** — 먼저 확정된 상태 유지 → 최신 상태 재조회 → 다시 판단
 - [ ] **외부 결과 불명** — 성공 처리 금지 → 조회·동기화·대사 → 최종 상태
+  - 코드 메모: `app/api/payssam/callback/route.ts:216` — /bill/read 재조회 대조를 통과한 경우에만 pending→paid 승격, `payments/actions.ts:1069` — 환불 NETWORK(결과 불명) 시 미확정·업무 큐 수렴 확인.
 - [ ] **메시지 실패** — 원 업무 유지 → 재시도·대체 연락 → 전달 종결
   - 코드 메모: `lib/notify/send.ts` — 실패 시 notifications.status만 `failed`로 갱신(원 업무 별도), `notifyRetry.ts` — MAX_RETRY 상한까지 재큐잉 확인.
 - [ ] **자동화·AI 실패** — 수동 작성·검토 경로 → 동일 승인·게시 흐름
@@ -171,6 +179,7 @@
   - 코드 메모: `app/portal/[token]/page.tsx:34` — `if (!student) notFound();` 존재 비노출 확인.
 - [ ] **데이터 누락** — 추정 금지 → 보완 업무 → 원 흐름 복귀 또는 사유 있는 종결
 - [ ] **결제·환불 중복** — 원 거래·승인본 확인 → 최초 실제 결과로 수렴
+  - 코드 메모: `supabase/migrations/00014_payssam.sql:91` — 같은 승인 통보는 1회만 적용(RLS 8j)·재수신은 duplicate 기록. `payments/actions.ts:215` — refunded 청구 재완납 처리 금지 확인.
 - [ ] **legal hold** — 파기 중단 → 보존 잠금 → 해제 승인 후 복귀
 - [ ] **파기 대상 변경** — 실행 중단 → 새 대상 확인 → 새 승인
 - [ ] **서비스 장애** — 저장 여부 확인 → 같은 요청으로 안전 재시도 → 대사
@@ -182,6 +191,7 @@
 - [ ] **Push 거절·미지원** — 포털 알림 유지 → Push 미사용 → 사용자 직접 재개 시에만 재요청
 - [ ] **오프라인 보호정보 요청** — 내용 비노출 → 재연결·재인증 → 최신 상태 확인
 - [ ] **운영자 중요행위 감사 실패** — 전환 확정 금지 → 이전 상태 유지 → 재시도/운영사고
+  - 코드 메모: `lib/data/activity.ts:195` runCritical — begin 실패 시 mutate 미실행(fail-closed)·commit 실패 시 auditWarning으로 pending 잔존 신호 확인. 실패 주입 실측은 안 함.
 - [ ] **백업·복원 검증 실패** — 개통·릴리스 차단 → 원인 복구 → 새 확인·리허설
 - [ ] **릴리스 결과 불명** — 재실행 금지 → 실제 적용본 확인 → 정상화/롤백
 - [ ] **사고 재발** — 해결 상태 취소 → 완화·모니터링 복귀 → 관련 흐름 재차단
@@ -204,14 +214,14 @@
 - [ ] 각 ID는 화면이 아니라 하나의 업무 흐름이다.
 - [ ] 서로 다른 ID가 만나는 화살표가 구현 경계다.
 - [ ] 확인 필요, 대기, 처리 중 상태에는 반드시 운영자 업무 또는 자동 재확인이 연결돼야 한다.
-  - 코드 메모: `docs/cron-definitions.md` — 자동 재확인 크론(알림 재시도·연체 통지 등 잡 8종+4종) 정의 확인.
+  - 코드 메모: `docs/cron-definitions.md` — 자동 재확인 크론(알림 재시도·연체 통지 등 잡 8종+4종) 정의 확인. `00013_m0_foundation.sql:158` work_items — 대조 실패·결과 불명 등 확인 필요 상태가 오늘 업무 큐로 수렴(예: 콜백 대조 실패 `app/api/payssam/callback/route.ts:238`) 확인.
 - [ ] 성공·거절·철회·만료·취소·실패·재시도·종료 중 어느 결과도 다음 상태 없이 고립시키지 않는다.
 - [ ] 기능·화면·데이터 모델은 이 문서 밖에서 정하되 여기의 상태 의미와 분기를 바꾸지 않는다.
 
 ### 결제선생 현재 위치
 
 - [ ] **결제선생 현재 위치(원문)** — 파트너 계약·카드 가맹점 등록은 완료되었고 최초 500,000원 충전 전이다. 충전·5개 검수·운영 정보 수령 전에는 수기 경로, 개통 후에는 API 주 경로, 장애·미지원 업무에는 수기 복구 경로를 적용한다.
-  - 코드 메모: `app/admin/(protected)/payments/actions.ts` — 현행은 수기 기록 경로(`VALID_METHODS: payssaem·bank`)만 확인. 결제선생 API 연동 코드는 미확인 — "개통 전 수기 경로" 위치와 부합.
+  - 코드 메모: `supabase/migrations/00014_payssam.sql`·`lib/payssam/client.ts` — API V2 연동(발송·조회·파기·취소·현금영수증) 구현, 샌드박스 실거래 전 과정·검수 5종 BILL-ID 수집 실측(커밋 c690804·541ab7e — 검수 제출 메일 전). 수기 경로 병행 유지 — "개통 전" 위치와 부합.
 
 ### 공식 참고자료
 

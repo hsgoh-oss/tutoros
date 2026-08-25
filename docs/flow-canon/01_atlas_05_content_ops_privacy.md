@@ -96,7 +96,7 @@
   - [ ] 중복 업무: 하나로 표시하되 원 사건 연결은 유지.
   - [ ] 숫자 경고만 있고 원본이나 종료 행동이 없는 업무를 만들지 않는다.
   - [ ] 데이터 부족: 추정하지 않고 확인 필요로 둔다.
-- **현행 갭:** 🔶 부분 — `app/admin/(protected)/dashboard/page.tsx:185` · `app/admin/(protected)/dashboard/page.tsx:229` · `supabase/migrations/00002_automation.sql:140` — 대시보드가 오늘 수업·납부 임박·신규 상담 등 원본 연결 항목을 노출하고 schedule_autoclean이 미처리 일정을 알림 큐잉하지만, 업무 객체·완료/보류/후속일/인계 상태 관리는 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25, 커밋 8d10e5f) — `supabase/migrations/00013_m0_foundation.sql:158`·`:181` · `lib/data/work.ts:112`·`:169` · `app/admin/(protected)/dashboard/page.tsx:170`·`:234` · `supabase/functions/automation/jobs/notifyRetry.ts:62` · `app/portal/[token]/actions.ts:218` — 원본 연결(source_type/source_id)·next_action 필수·한 사건 한 업무(열린 업무 부분 유니크)인 work_items 큐가 가동 중이고 알림 소진/결과 불명·결제 예외·과제 제출/질문이 여기로 수렴, 대시보드 오늘 업무 카드 렌더·자동 생성·완결은 E2E 실측 — 남은 갭: 상태가 open/in_progress/done/dismissed뿐이라 후속일 지정·다른 흐름 인계·사유/책임자/재검토 조건이 있는 보류가 없음.
 
 ### W-02 외부 제공자 장애
 - [ ] **구현 완료** — 장애 감지 후 새 외부 요청 중단·안전 대기와 내부/외부 상태 분리를 거쳐 복구 확인·재시도·대사로 정상화된다.
@@ -115,7 +115,7 @@
   - [ ] 시스템이 사실을 추정해 빈 값을 채우지 않는다.
   - [ ] 돈·권한·파기 불일치는 일반 업무보다 우선 확인.
   - [ ] 복구 후 관련된 모든 표면이 같은 사실로 수렴하는지 확인.
-- **현행 갭:** 🔶 부분 — `supabase/migrations/00012_automation_observability.sql:10` · `supabase/migrations/00012_automation_observability.sql:17` — 자동화 무동작이 성공으로 보고되던 불일치를 failed로 승격하고 automation_runs로 발사 기록을 사후 대조하는 조각만 존재 — 금전·권한 대사, 상태 일시중단, 조정 이력·재계산 없음.
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `supabase/migrations/00012_automation_observability.sql:10`·`:17` · `supabase/migrations/00013_m0_foundation.sql:222` · `supabase/functions/automation/jobs/notifyRetry.ts:62` · `supabase/migrations/00014_payssam.sql:72`·`:91` — 자동화 무동작의 failed 승격+automation_runs 사후 대조에 더해, 발송 결과 불명(sending 장기 체류)을 성공으로 두지 않고 work_items(notify_unknown_result)로 수렴시키는 경로와 결제 콜백 멱등 원장(payssam_events — 샌드박스 실거래로 실측)이 생김 — 여전히 범용 금전·권한 대사, 관련 상태 변경 일시중단, 조정 이력·재계산 없음.
 
 ### W-04 보안사고·오수신
 - [ ] **구현 완료** — 의심 접근·오수신 발견 시 사고 개시·즉시 회수·노출 차단·통지·재발급·모니터링을 거쳐 종결·보존·감사까지 수렴한다.
@@ -263,4 +263,4 @@
   - [ ] AI 결과는 동의가 있어도 운영자 승인 전 학생·보호자에게 공개하지 않는다.
   - [ ] 동의 철회가 이미 확정된 출결·점수·수납·사람 승인 기록을 자동 삭제하지는 않는다. 외부 AI 처리물과 이후 처리만 분리해 정리한다.
   - [ ] 외부 삭제 실패·결과 불명확: 완전 삭제로 표시하지 않고 재시도·지원 요청·대사 후 종료.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `lib/actions/consult.ts:85` · `app/admin/(protected)/reports/actions.ts:135` · `lib/ai/pseudonym.ts:1` · `lib/data/crm.ts:189` — 가명화·운영자 승인 전 비공개는 지키지만, overseas_ai 동의가 상담 필수동의에 묶여 강제 수집되고 AI 생성 시 동의 확인 게이트·거절 시 수동 대체·철회 처리 흐름이 없어 정본의 선택 동의 구조와 충돌.
+- **현행 갭:** ⚠️ 충돌(정본 우선)(판정 2026-08-25) — `lib/actions/consult.ts:85` · `app/admin/(protected)/reports/actions.ts:137` · `lib/ai/pseudonym.ts:1` · `lib/data/crm.ts:189` — AI 리포트 파이프라인(가명화 초안→승인→포털 실명 복원)은 E2E 실측으로 가동 중이나, overseas_ai 동의가 상담 필수동의에 묶여 강제 수집되고 AI 생성 시 동의 확인 게이트·거절 시 수동 대체·철회 처리 흐름이 여전히 없어 정본의 선택 동의 구조와 충돌.

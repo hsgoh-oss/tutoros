@@ -15,7 +15,7 @@
   - [ ] 기존 확인 계정이 있는 대상: 새 계정을 만들지 않고 본인 확인 후 새 역할·관계만 연결.
   - [ ] 초대 수락 중 계정·역할·학생관계 일부 연결 실패: 수락 전체를 완료로 표시하지 않음 → 생성된 반쪽 연결 회수 → 원 초대 복구 또는 새 초대 → 전체 재시도.
   - [ ] 한 번 완료된 초대 재사용: 기존 계정·역할 결과로 수렴하고 새 관계를 중복 생성하지 않는다.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `app/portal/[token]/page.tsx:10`, `app/portal/[token]/page.tsx:33`, `lib/data/crm.ts:153`, `supabase/migrations/00003_portal_token.sql:6`, `app/admin/(protected)/students/actions.ts:173` — 포털 접근이 학생당 자동 발급 비밀 토큰 링크 하나뿐 — 학생·보호자·납부자 역할별 초대 발급·본인 확인·수락·관계 활성 흐름이 없어 정본 초대 구조와 충돌(토큰 재발급 시 이전 링크 무효화만 유사).
+- **현행 갭:** ⚠️ 충돌(정본 우선) — `app/portal/[token]/page.tsx:18`, `lib/data/crm.ts:153`, `supabase/migrations/00003_portal_token.sql:6`, `app/admin/(protected)/students/actions.ts:276`, `lib/auth/session.ts:10` — (판정 2026-08-25) 서버측 회수 가능 세션은 운영자(admin_sessions) 한정으로 생겼고, 학생·보호자·납부자 포털 접근은 여전히 학생당 자동 발급 비밀 토큰 링크 하나뿐(이제 리포트 열람에 과제 제출·질문까지 이 단일 토큰으로 수행) — 역할별 초대 발급·본인 확인·수락·관계 활성 흐름이 없어 정본 초대 구조와 충돌(토큰 재발급 시 이전 링크 무효화만 유사).
 
 ### P-02 이용자 로그인·세션·복구
 - [ ] **구현 완료** — 본인 확인으로 역할별 포털에 들어가고 세션 만료·로그아웃으로 접근이 종료됨
@@ -25,7 +25,7 @@
   - [ ] 로그인 복구: 계정 존재를 노출하지 않는 확인 → 새 로그인 경로.
   - [ ] 관계가 종료됐거나 권한이 회수됨: 다음 요청부터 접근 차단.
   - [ ] 보던 작업 중 세션 만료: 재인증 → 권한 재확인 → 허용되는 경우 원 흐름으로 복귀.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `app/portal/[token]/page.tsx:32`, `lib/data/crm.ts:158`, `lib/data/crm.ts:163`, `app/admin/(protected)/students/actions.ts:172` — 이용자(학생·보호자) 접근이 본인 확인·세션·만료·로그아웃 없는 무기한 토큰 링크로만 이뤄져 정본의 로그인·세션·복구·접근 종료 모델과 충돌(회수 수단은 관리자 토큰 재발급뿐).
+- **현행 갭:** ⚠️ 충돌(정본 우선) — `lib/auth/session.ts:114`·`:158`·`:206`, `lib/data/crm.ts:153`·`:163`, `app/admin/(protected)/students/actions.ts:276` — (판정 2026-08-25) 운영자에게는 서버측 관리자 세션(admin_sessions: 발급·만료·revoked_at 즉시 회수, 00013 ①)이 생겼으나, 이용자(학생·보호자) 접근은 여전히 본인 확인·세션·만료·로그아웃 없는 무기한 포털 토큰 링크뿐(getStudentByPortalToken은 학생 status조차 검사하지 않음)이라 정본의 로그인·세션·복구·접근 종료 모델과 충돌(회수 수단은 관리자 토큰 재발급뿐).
 
 ### P-03 학생 포털 순환
 - [ ] **구현 완료** — 학생이 수업·과제·평가·피드백을 확인하고 제출·질문·정정 요청의 처리 결과까지 확인함
@@ -101,9 +101,9 @@
 - **예외·복구·종료:**
   - [ ] 일부 전환 실패: 새 운영자 활성화와 기존 운영자 종료를 모두 취소 → 기존 운영자 유지 → 원인 보완 후 전체 재시도.
   - [ ] 현재 운영자 접근 불가: 승인된 비상 복구절차로 본인·소유권 확인 → 이전 세션·인증수단 전부 회수 → 승계.
-  - [ ] 단일 활성 운영자: 한 시점에 두 명의 활성 운영자를 남기지 않는다.
+  - [x] 단일 활성 운영자: 한 시점에 두 명의 활성 운영자를 남기지 않는다.
   - [ ] 승계 범위: 승계는 학생·계약·금전·감사 이력을 새 운영자 소유 데이터로 바꾸지 않고 운영 권한만 이전한다.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `supabase/migrations/00007_admin_accounts.sql:1`, `supabase/migrations/00007_admin_accounts.sql:5`, `app/admin/login/actions.ts:38`, `lib/auth/session.ts:66` — 교체·승계 전환 흐름이 없고, admin_accounts가 '관리자 1인 제약 완화'로 다중 활성 운영자를 허용하며 세션이 무상태 서명 쿠키라 회수 불가 — 정본의 단일 활성 운영자·원자적 승계·세션 회수와 충돌.
+- **현행 갭:** 🔶 부분 — `supabase/migrations/00013_m0_foundation.sql:59`(테넌트당 활성 운영자 1인 부분 유니크 — 어떤 경로로도 2인 활성 불가)·`:249`(admin_replace_operator: 지위 이전·구 운영자 세션 회수·OTP 폐기·감사 기록을 한 트랜잭션으로 — 일부 실패 시 전체 롤백), `app/admin/(protected)/settings/actions.ts:241`(현 세션 + 새 이메일 OTP 검증 후 RPC 호출·완료 후 재로그인 유도), `lib/auth/session.ts:206`(revoked_at 즉시 회수) — (판정 2026-08-25) 다중 활성 허용·세션 회수 불가 충돌은 해소. 단일 활성·원자적 승계는 RLS 하네스(`supabase/tests/rls/99_rls_test.sql:547`·`:565`)로 2인 활성 차단·활성 1인·구 세션 회수·감사 committed·중복 승계 차단까지 실증(2026-08-25 79/79). 남은 갭: 새 운영자 2단계 인증 준비 없음(P-08 갭 동일)·승인된 비상 복구절차 없음·승계 화면 전 흐름 E2E 미실측.
 
 ### P-11 중요행위 감사·추적
 - [ ] **구현 완료** — 중요행위가 행위자·대상·이전 결과·새 결과·사유와 연결되어 감사 확인 가능 상태가 되고 운영자가 원 사건과 대조할 수 있음
@@ -113,7 +113,7 @@
   - [ ] 조회 중 불일치·미승인 변경 발견: 원 업무 변경 일시중단 → 데이터 불일치 또는 보안사고 흐름.
   - [ ] 감사 확인 권한 한계: 감사 확인이 원 기록 수정 권한을 주지 않는다.
   - [ ] 보존기한 도달: 법정·분쟁·보안 보존 여부 확인 → 허용 범위의 최소 이력만 유지하거나 파기 흐름.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `lib/data/activity.ts:25`, `lib/data/activity.ts:36`, `lib/data/activity.ts:44`, `app/admin/(protected)/activity/page.tsx:40`, `app/admin/(protected)/activity/page.tsx:51` — 주요 mutation 감사 기록·조회는 있으나 '실패해도 호출부 흐름을 막지 않는다'는 fail-open 설계라 정본의 '감사 연결 실패 시 전환 미확정' 규칙과 충돌, 이전 결과·새 결과·사유 연결도 없음(summary 문자열뿐).
+- **현행 갭:** 🔶 부분 — `supabase/migrations/00013_m0_foundation.sql:69`(category·phase·before_data·after_data·reason 컬럼 — 행위자·대상·이전·이후·사유 연결)·`:87`(append-only 트리거: pending→committed/aborted 확정 외 UPDATE·DELETE 전면 거부, service_role 포함), `lib/data/activity.ts:75`·`:195`(beginCritical→commit/abort·runCritical: 선기록 실패 시 전환 자체를 실행하지 않는 fail-closed) — (판정 2026-08-25) 금전·성적·개인정보·권한 24개 전환이 runCritical 채택(payments·grades·students·homework·settings·recruit·faq 액션 + 결제선생 콜백), committed 감사 실측(과제 체인 5건·결제선생 환불)·append-only와 phase 역전 차단은 RLS 하네스로 실증(`supabase/tests/rls/99_rls_test.sql:423`, 79/79). 남은 갭: 로그인·일정·운영 변경 등 기타 전환은 여전히 fail-open logActivity(`lib/data/activity.ts:44`)이고, 감사 연결 실패(선기록 실패) 경로의 실측 주입 검증·보존기한 흐름은 없음.
 
 ## 10. 수업 묶음·일정·출결·수업기록 (L-01 ~ L-10)
 

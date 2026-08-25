@@ -42,7 +42,7 @@
   - [ ] 예약된 자리보다 적은 정원으로 변경 시도: 변경 보류 → 열린 제안·등록 확인 → 다시 결정.
   - [ ] 공개 상태 변경 실패: 내부 정원 상태를 유지하고 공개 내용 불일치 업무 생성 → 일치 확인 전 신규 제안 중단.
   - [ ] 모집 재개: 정원과 대기명단을 다시 확인한 뒤 공개 접수와 자리 제안을 각각 재개.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `app/admin/(protected)/recruit/actions.ts:37`, `app/admin/(protected)/recruit/actions.ts:13`, `components/public/recruit-banner.tsx:32`, `lib/actions/consult.ts:45`, `app/(public)/consult/page.tsx:28` — 모집 상태(open/closing/waitlist/closed)·인원 수 관리 기능은 있으나 배너 표시 전용 — '접수 중단'이어도 상담 접수가 항상 열려 정본의 '공개 상태=실제 접수 가능 상태' 구조와 충돌, 실제 정원 산정·자리 제안도 없음.
+- **현행 갭:** ⚠️ 충돌(정본 우선)(판정 2026-08-25 — 변화 없음) — `app/admin/(protected)/recruit/actions.ts:37`, `app/admin/(protected)/recruit/actions.ts:13`, `components/public/recruit-banner.tsx:33`, `lib/actions/consult.ts:45`, `app/(public)/consult/page.tsx:28` — 모집 상태(open/closing/waitlist/closed)·인원 수 관리 기능은 있으나 배너 표시 전용 — '접수 중단'이어도 상담 접수(submitConsult)가 모집 상태를 조회하지 않고 항상 열려 정본의 '공개 상태=실제 접수 가능 상태' 구조와 충돌, 실제 정원 산정·자리 제안도 없음.
 
 ### O-05 공개 콘텐츠 이미지·미디어 처리
 - [ ] **구현 완료** — 미디어가 사용 가능 또는 거절로 확정되고 승인 콘텐츠본에만 연결된다.
@@ -212,7 +212,7 @@
   - [ ] 일정만 확정: 결제 확인 전 확정 수업 안내 금지.
   - [ ] 정원 상실: 대기 또는 조건 재협의.
   - [ ] 결제 결과 불명확: 대사 완료 전 활성화 금지.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `app/admin/(protected)/consultations/actions.ts:164`, `app/admin/(protected)/consultations/actions.ts:205`, `app/admin/(protected)/students/actions.ts:77`, `supabase/migrations/00001_init.sql:124` — 등록 활성 기능은 있으나 계약·결제·일정·정원 4게이트 없이 상태값 지정/원클릭 전환만으로 즉시 'registered'/'active'가 됨 — 정본 '네 조건 충족 전 활성화 금지' 구조와 충돌.
+- **현행 갭:** ⚠️ 충돌(정본 우선)(판정 2026-08-25) — `app/admin/(protected)/consultations/actions.ts:164`, `app/admin/(protected)/students/actions.ts:44`, `supabase/migrations/00001_init.sql:124` — 등록 활성 기능은 있으나 계약·결제·일정·정원 4게이트 없이 상담→학생 원클릭 전환(convertToStudent)·학생 폼의 status 직접 지정만으로 즉시 'active'가 됨 — M0(커밋 8d10e5f)가 도입한 것은 운영자 세션·감사·업무 큐뿐 활성화 게이트는 미착수 — 정본 '네 조건 충족 전 활성화 금지' 구조와 충돌.
 
 ### R-05 등록 활성화
 - [ ] **구현 완료** — 활성 등록 1건, 유효 계약 1건, 첫 일정과 포털 초대 흐름 연결.
@@ -220,7 +220,7 @@
 - **예외·복구·종료:**
   - [ ] 일부 연결 실패: 활성화 전체 취소 → 원인 수정 → 처음부터 재시도.
   - [ ] 완료 안내 실패: 등록은 유지하고 전달 실패 업무 생성.
-- **현행 갭:** ⚠️ 충돌(정본 우선) — `app/portal/[token]/page.tsx:33`, `supabase/migrations/00003_portal_token.sql:6`, `app/admin/(protected)/students/actions.ts:173`, `lib/data/crm.ts:153` — 포털이 학생별 단일 비밀 토큰 링크(역할·로그인·초대·권한 없음)로만 존재해 정본의 역할별 포털 초대 구조와 충돌 — 활성화의 원자적 묶음 연결(실패 시 전체 취소)도 없음.
+- **현행 갭:** ⚠️ 충돌(정본 우선)(판정 2026-08-25) — `app/portal/[token]/page.tsx:62`, `supabase/migrations/00003_portal_token.sql:6`, `app/admin/(protected)/students/actions.ts:276`, `lib/data/crm.ts:153`, `supabase/migrations/00013_m0_foundation.sql:16` — M0(커밋 8d10e5f)로 서버측 세션 모델(admin_sessions — 테넌트 스코프·회수)이 생겼으나 운영자 전용 — 학생·보호자 포털은 여전히 역할·로그인·초대·권한 없는 학생별 단일 비밀 토큰 링크(재발급 시 전체 링크 무효화)라 정본의 역할별 포털 초대 구조와 충돌하고, 활성화의 원자적 묶음 연결(실패 시 전체 취소)도 없음.
 
 ### R-06 활성화 전 포기·만료
 - [ ] **구현 완료** — 열린 준비 상태가 정리되어 종료 또는 새 정규 제안으로 이어진다.
