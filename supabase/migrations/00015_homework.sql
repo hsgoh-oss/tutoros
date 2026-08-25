@@ -226,7 +226,10 @@ begin
   get diagnostics v_count = row_count;
   return v_count > 0;
 end $$;
-revoke execute on function public.close_homework_assignment(uuid, uuid) from anon, authenticated;
+-- `public`을 빼면 회수가 무효다: 기본 ACL은 anon·authenticated에 직접 주는 게 아니라
+-- PUBLIC에 EXECUTE를 주고 둘은 그 일원으로 상속받는다(00011이 겪은 사고와 같은 함정).
+revoke execute on function public.close_homework_assignment(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.close_homework_assignment(uuid, uuid) to service_role;
 
 -- 배부 철회: 제출 이력이 전무할 때만 assigned→draft (제출물 딸린 과제를 초안으로 감추지 않는다 — H-07).
 create or replace function public.retract_homework_assignment(p_tenant_id uuid, p_id uuid)
@@ -244,4 +247,7 @@ begin
   get diagnostics v_count = row_count;
   return v_count > 0;
 end $$;
-revoke execute on function public.retract_homework_assignment(uuid, uuid) from anon, authenticated;
+-- `public`을 빼면 회수가 무효다: 기본 ACL은 anon·authenticated에 직접 주는 게 아니라
+-- PUBLIC에 EXECUTE를 주고 둘은 그 일원으로 상속받는다(00011이 겪은 사고와 같은 함정).
+revoke execute on function public.retract_homework_assignment(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.retract_homework_assignment(uuid, uuid) to service_role;

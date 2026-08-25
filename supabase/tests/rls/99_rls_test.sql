@@ -2371,6 +2371,85 @@ begin
           case when blocked then 'PASS' else 'FAIL' end);
 end $$;
 
+/* ───────── 8x. security definer RPC의 anon·authenticated 실행 차단 (00011 계열 회귀) ─────────
+   새 함수의 proacl은 NULL로 남고 NULL은 acldefault로 해석되는데 거기엔 PUBLIC EXECUTE가 있다.
+   revoke를 빠뜨리면 apikey(anon)만으로 /rest/v1/rpc/<fn> 을 호출할 수 있고, 이 함수들은 전부
+   security definer라 RLS까지 우회한다 — 00011이 정확히 그 사고를 겪고 쓰인 마이그레이션이다.
+   새 RPC가 추가될 때마다 여기에 이름을 더한다. */
+do $$
+declare
+  fn text;
+  leaked text[] := '{}';
+  fns constant text[] := array[
+    'admin_replace_operator', 'close_homework_assignment', 'retract_homework_assignment',
+    'accept_portal_link', 'activate_enrollment', 'offer_waitlist_seat',
+    'activate_lesson_package', 'generate_package_sessions', 'settle_attendance',
+    'cancel_schedule', 'create_makeup', 'decide_attendance_correction',
+    'resolve_schedule_contract', 'schedule_span',
+    'activity_log_append_only', 'append_only_reject',
+    'session_ledger_append_only', 'attendance_contacts_append_only'
+  ];
+begin
+  select coalesce(array_agg(distinct p.proname order by p.proname), '{}')
+    into leaked
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname = any(fns)
+     and (has_function_privilege('anon', p.oid, 'EXECUTE')
+          or has_function_privilege('authenticated', p.oid, 'EXECUTE'));
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('RPC 실행 권한(00011 계열)', 'anon·authenticated가 실행 가능한 security definer RPC', '0개',
+          case when array_length(leaked, 1) is null
+               then '0개'
+               else array_length(leaked, 1) || '개 (' || array_to_string(leaked, ', ') || ')' end,
+          case when array_length(leaked, 1) is null then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8y. 감사 append-only가 테넌트 CASCADE를 막지 않는다 ─────────
+   트리거는 FK 캐스케이드로 내부 발생하는 DELETE에도 붙는다. 탈출구가 없으면 tenants 1행 삭제가
+   activity_log·adjustments 캐스케이드에서 예외를 맞고 전체 롤백돼, 테넌트 오프보딩이 조용히
+   불가능해진다. 동시에 "부모가 살아 있는 상태의 직접 삭제"는 여전히 막혀야 한다. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  t_tmp uuid;
+  blocked boolean;
+begin
+  insert into public.tenants (brand_name, email, subdomain)
+    values ('RLS 캐스케이드 검증', 'probe@example.com', 'rls-cascade-probe')
+    returning id into t_tmp;
+  insert into public.activity_log (tenant_id, actor_email, action, target_type, summary)
+    values (t_tmp, 'probe@example.com', 'probe', 'tenant', '캐스케이드 검증');
+  insert into public.adjustments (tenant_id, domain, target_type, target_id, after_data, reason)
+    values (t_tmp, 'money', 'payment', gen_random_uuid(), '{}'::jsonb, '캐스케이드 검증');
+
+  blocked := false;
+  begin
+    delete from public.tenants where id = t_tmp;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 CASCADE 허용', '감사 이력이 달린 테넌트 삭제', '성공(트리거가 막지 않음)',
+          case when blocked then '차단됨(오프보딩 불가)' else '성공' end,
+          case when blocked then 'FAIL' else 'PASS' end);
+
+  -- 부모가 살아 있으면 직접 삭제는 여전히 거부돼야 한다(탈출구가 규칙을 통째로 열지 않았는지).
+  insert into public.activity_log (tenant_id, actor_email, action, target_type, summary)
+    values (t1, 'probe@example.com', 'probe', 'tenant', '직접 삭제 검증');
+  blocked := false;
+  begin
+    delete from public.activity_log
+     where tenant_id = t1 and summary = '직접 삭제 검증';
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('감사 직접 삭제 차단', '부모 테넌트가 살아 있는 상태의 activity_log DELETE', '차단(트리거 예외)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
 /* ───────── 9. RLS 활성화 누락 테이블 탐지 (전 테이블 강제) ───────── */
 insert into rls_result (scenario, detail, expected, actual, verdict)
 select 'RLS 전면 적용', 'RLS 미활성 public 테이블', '0',

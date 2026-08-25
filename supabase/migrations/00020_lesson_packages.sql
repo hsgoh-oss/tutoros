@@ -1211,7 +1211,26 @@ begin
 end $$;
 
 /* ---------- ⑰ 실행 권한 ----------
-   전부 service_role 전용이다 — 앱의 service client만 부른다(00013·00015·00018과 같은 규약). */
+   전부 service_role 전용이다 — 앱의 service client만 부른다(00013·00015·00018과 같은 규약).
+
+   **revoke가 grant보다 먼저여야 한다.** 새 함수의 proacl은 NULL로 남고 NULL은
+   acldefault(`{=X/postgres,postgres=X/postgres}`)로 해석되는데 여기엔 PUBLIC EXECUTE가 붙어 있다.
+   anon·authenticated는 PUBLIC의 일원이므로, revoke를 빠뜨리면 apikey(anon)만으로
+   /rest/v1/rpc/settle_attendance 를 호출해 임의 테넌트의 회차 차감·출결 확정·정정 승인을
+   실행할 수 있다 — 이 함수들은 전부 security definer라 RLS도 우회한다.
+   00011이 정확히 이 사고(automation_call_flush 무단 호출)를 겪고 쓰인 마이그레이션이고,
+   00013:383 · 00015 · 00017 · 00018이 모두 같은 revoke를 명시한다. */
+
+revoke execute on function public.activate_lesson_package(uuid, uuid, text) from public, anon, authenticated;
+revoke execute on function public.generate_package_sessions(uuid, uuid, jsonb, text) from public, anon, authenticated;
+revoke execute on function public.settle_attendance(uuid, uuid, text, boolean, text, text, timestamptz, timestamptz) from public, anon, authenticated;
+revoke execute on function public.cancel_schedule(uuid, uuid, boolean, text, text) from public, anon, authenticated;
+revoke execute on function public.create_makeup(uuid, uuid, timestamptz, timestamptz, text, text) from public, anon, authenticated;
+revoke execute on function public.decide_attendance_correction(uuid, uuid, boolean, text, text) from public, anon, authenticated;
+revoke execute on function public.resolve_schedule_contract(uuid, uuid, uuid, text) from public, anon, authenticated;
+revoke execute on function public.schedule_span(timestamptz, timestamptz) from public, anon, authenticated;
+revoke execute on function public.session_ledger_append_only() from public, anon, authenticated;
+revoke execute on function public.attendance_contacts_append_only() from public, anon, authenticated;
 
 grant execute on function public.activate_lesson_package(uuid, uuid, text) to service_role;
 grant execute on function public.generate_package_sessions(uuid, uuid, jsonb, text) to service_role;

@@ -90,6 +90,15 @@ language plpgsql
 set search_path = public
 as $$
 begin
+  -- 부모 테넌트가 사라지는 중이면 CASCADE 진행 — 감사 이력은 테넌트와 함께 정리된다.
+  -- 트리거는 FK 캐스케이드로 내부 발생하는 DELETE에도 붙는다. 탈출구가 없으면 tenants 1행
+  -- 삭제가 여기서 예외를 맞고 전체 롤백돼, 테넌트 오프보딩·데모 정리가 조용히 불가능해진다
+  -- (에러가 activity_log를 가리켜 tenants 삭제와의 연결이 보이지 않는다).
+  -- "직접 삭제 금지"라는 규칙은 부모가 살아 있을 때만 뜻이 있다.
+  if tg_op = 'DELETE'
+     and not exists (select 1 from public.tenants where id = old.tenant_id) then
+    return old;
+  end if;
   if tg_op = 'DELETE' then
     raise exception '[audit] activity_log은 append-only — DELETE 금지 (P-11: 감사 확인이 원 기록 수정 권한을 주지 않는다)';
   end if;
@@ -135,6 +144,12 @@ language plpgsql
 set search_path = public
 as $$
 begin
+  -- activity_log과 같은 탈출구: 부모 테넌트가 사라지는 중이면 FK 캐스케이드를 막지 않는다.
+  -- (이 함수를 쓰는 표는 전부 tenant_id ... on delete cascade 를 갖는다.)
+  if tg_op = 'DELETE'
+     and not exists (select 1 from public.tenants where id = old.tenant_id) then
+    return old;
+  end if;
   raise exception '[audit] %는 append-only — % 금지. 정정·취소·철회는 새 이력을 쌓는다',
     tg_table_name, tg_op;
 end $$;
