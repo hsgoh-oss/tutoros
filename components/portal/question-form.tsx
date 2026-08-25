@@ -9,10 +9,13 @@ import { askQuestion } from "@/app/portal/[token]/actions";
 // 접수 후 답변은 선생님 승인(게시)된 것만 포털에 나타난다(검수 28) — 안내 문구로 알려준다.
 export function QuestionForm({
   token,
+  studentId,
   assignmentId,
   reportId,
 }: {
   token: string;
+  /** 세션 경로에서 대상 학생을 특정한다(한 사람이 학생 역할을 둘 이상 가질 때 — 검수 16). */
+  studentId?: string;
   assignmentId?: string;
   reportId?: string;
 }) {
@@ -28,6 +31,7 @@ export function QuestionForm({
     if (!form) return;
     const fd = new FormData(form);
     fd.set("token", token);
+    if (studentId) fd.set("studentId", studentId);
     if (assignmentId) fd.set("assignmentId", assignmentId);
     if (reportId) fd.set("reportId", reportId);
     setPending(true);

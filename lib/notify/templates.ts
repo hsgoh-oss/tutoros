@@ -10,7 +10,8 @@
 //   ⑨ 보강 안내 = schedule_changed               ⑩ 후기 요청 = review_request
 //   ⑪ 재등록 안내(광고성) = re_enrollment         ⑫ 개별 메시지 = custom_message
 // 그 외 payment_request(청구서 발행)·payment_paid(완납 확인)·consult_confirmed(일정 확정)·
-// schedule_unresolved(선생님 내부 알림)·homework_assigned(과제 배부, 00015)는 운영 편의용 부가 타입이다.
+// schedule_unresolved(선생님 내부 알림)·homework_assigned(과제 배부, 00015)·
+// portal_invite(역할별 포털 초대, P-01)는 운영 편의용 부가 타입이다.
 
 export type NotifyType =
   | "consult_received"
@@ -31,7 +32,8 @@ export type NotifyType =
   | "re_enrollment"
   | "custom_message"
   | "schedule_unresolved"
-  | "homework_assigned";
+  | "homework_assigned"
+  | "portal_invite";
 
 export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   consult_received: "{name}님, 상담 신청이 접수되었습니다. 빠르게 연락드리겠습니다.",
@@ -59,6 +61,10 @@ export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   schedule_unresolved: "어제 이전 미처리 일정이 있습니다. 관리자 페이지에서 확인해 주세요.",
   // 과제 배부(H-01·00015) — 포털 링크는 호출부가 붙인다.
   homework_assigned: "{name}님, 새 과제가 등록되었습니다. 포털에서 확인해 주세요.",
+  // 역할별 포털 초대(P-01) — 초대 링크는 호출부가 붙인다(lib/portal/auth.ts portalLinkPath).
+  // 링크 자체가 로그인 수단이라 문구에 학생 실명·수업·금전 정보를 담지 않는다(오수신 대비).
+  portal_invite:
+    "{name}님의 학습 포털 초대장이 도착했습니다. 아래 링크로 접속하시면 바로 이용하실 수 있습니다. 링크는 본인만 사용해 주세요.",
 };
 
 /** DB 문자열이 알려진 알림 종류인지 판별. notifications.type엔 CHECK가 없어, flush 경로는 이 가드를 반드시 통과시킨다. */

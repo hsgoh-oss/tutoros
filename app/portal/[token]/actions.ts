@@ -4,16 +4,25 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getStudentByPortalToken } from "@/lib/data/crm";
+import { getPortalSession } from "@/lib/portal/auth";
 import { logActivity } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
 import { kstToday } from "@/components/portal/format";
 
 // 포털 서버 액션 — 과제 제출·철회·질의응답 (H-02·H-04, docs/flow-canon/01_atlas_03_learning.md).
 //
-// 인증: 관리자 세션이 아니라 포털 토큰이다. 모든 액션이 token을 받아
-// getStudentByPortalToken으로 학생·테넌트를 해석하고 그 스코프로만 동작한다.
+// 인증(이중 경로): 관리자 세션이 아니다. 두 경로 중 하나로 "행위 주체 학생"을 해석한다.
+//   ① 토큰 경로 — 기존 /portal/[token]. token 인자를 getStudentByPortalToken으로 해석한다.
+//      (병행 운영 중이므로 이 경로의 동작은 한 줄도 달라지지 않는다.)
+//   ② 세션 경로 — 역할별 포털(P-01·P-02). token이 빈 문자열이면 포털 세션 쿠키를
+//      getPortalSession으로 풀어 그 사람의 active "student" 관계에서 학생을 얻는다.
+// 두 경로는 resolvePortalActor 한 곳에서만 갈라지고 그 아래 로직은 완전히 같다 —
+// 액션 본문은 자기가 어느 경로로 불렸는지 알 필요가 없다(스코프는 이미 학생 하나로 좁혀졌다).
+//
+// 행위자 경계: 제출·철회·질문은 학생 본인의 행위다. 보호자·납부자 관계만 가진 사람은
+// 세션이 유효해도 여기서 거부된다(정본 P-04 "보호자 대리 제출 금지" · P-05 학습 영역 분리).
 // 타 학생의 과제·제출·질문은 존재 자체를 노출하지 않으므로(H-04·H-06)
-// 토큰 불일치·소유 불일치·비노출 상태는 전부 같은 일반 오류(ACCESS_ERROR)로 수렴한다.
+// 토큰 불일치·소유 불일치·역할 없음·비노출 상태는 전부 같은 일반 오류(ACCESS_ERROR)로 수렴한다.
 //
 // 정본 규칙:
 //  - 재제출은 append-only(검수 27): attempt_no를 올린 새 행. 이전 제출은 그대로 보존
@@ -64,6 +73,79 @@ function fileExtension(fileName: string): string {
   return idx >= 0 ? fileName.slice(idx + 1).toLowerCase() : "";
 }
 
+/* ---------- 행위 주체 해석 (토큰 경로 · 세션 경로 공통) ---------- */
+
+/**
+ * 이 요청이 대리하는 학생 — 아래 모든 액션의 유일한 스코프다.
+ * 토큰 경로와 세션 경로가 같은 모양으로 수렴하므로 액션 본문은 분기를 갖지 않는다.
+ */
+interface PortalActor {
+  /** 학생 id */
+  id: string;
+  tenantId: string;
+  name: string;
+  /** 어느 인증 경로로 들어왔는지 — 재검증 대상 경로를 고르는 데만 쓴다. */
+  via: "token" | "session";
+  /** 토큰 경로의 원 토큰(재검증 경로 /portal/{token}용). 세션 경로에서는 빈 문자열. */
+  token: string;
+}
+
+/**
+ * token이 있으면 기존 경로 그대로(회귀 금지), 비어 있으면 포털 세션으로 해석한다.
+ *
+ * 세션 경로 규칙:
+ *  - active "student" 관계가 없으면 null이다 — 보호자·납부자는 제출·철회·질문을 할 수 없다
+ *    (행위자 경계: 학생 본인의 행위 · P-04 대리 제출 금지).
+ *  - 학생 관계가 둘 이상이면(한 사람이 여러 학생 본인일 일은 없지만 데이터상 가능) 요청의
+ *    studentId로만 특정하고, 그 id가 active 관계에 없으면 null이다 — 어느 한 명을 임의로
+ *    골라 주지 않는다(잘못된 학생 이름으로 제출이 들어가는 경로를 만들지 않는다).
+ *  - 종료(ended) 학생·회수된 관계·만료·회수된 세션은 getPortalSession이 이미 걸러 낸다
+ *    (검수 21·109) — 여기서 다시 판정하지 않는다(판정 지점은 하나여야 한다).
+ *
+ * 실패는 전부 null 하나로 수렴한다. 호출부가 ACCESS_ERROR 한 문구로 답하므로
+ * 토큰·세션·역할·학생 중 무엇이 어긋났는지 드러나지 않는다(존재 비노출).
+ */
+async function resolvePortalActor(
+  token: string,
+  studentId?: string | null,
+): Promise<PortalActor | null> {
+  if (token) {
+    const student = await getStudentByPortalToken(token);
+    return student ? { ...student, via: "token", token } : null;
+  }
+
+  const session = await getPortalSession();
+  if (!session) return null;
+  const own = session.relations.filter((r) => r.role === "student");
+  if (own.length === 0) return null;
+
+  const wanted = (studentId ?? "").trim();
+  const relation = wanted
+    ? own.find((r) => r.studentId === wanted)
+    : own.length === 1
+      ? own[0]
+      : undefined;
+  if (!relation) return null;
+
+  return {
+    id: relation.studentId,
+    tenantId: session.tenantId,
+    name: relation.studentName,
+    via: "session",
+    token: "",
+  };
+}
+
+/**
+ * 액션 성공 후 재검증 — 토큰 경로는 그 링크 페이지만, 세션 경로는 /p 하위 전체다.
+ * (역할별 포털이 렌더되는 곳은 app/p/** 이고 /portal은 기존 단일 토큰 뷰어의 경로다 —
+ *  여기를 틀리면 정작 갱신해야 할 화면은 그대로고 무관한 구 경로 캐시만 비운다.)
+ */
+function revalidateActorPortal(actor: PortalActor): void {
+  if (actor.via === "token") revalidatePath(`/portal/${actor.token}`);
+  else revalidatePath("/p", "layout");
+}
+
 /* ---------- 과제 제출 (H-02) ---------- */
 
 export async function submitHomework(
@@ -73,7 +155,9 @@ export async function submitHomework(
 
   const token = String(formData.get("token") ?? "").trim();
   const assignmentId = String(formData.get("assignmentId") ?? "").trim();
-  const student = token ? await getStudentByPortalToken(token) : null;
+  // 세션 경로에서만 의미가 있는 값 — 토큰 경로에서는 무시된다(토큰 자체가 학생이다).
+  const studentId = String(formData.get("studentId") ?? "").trim();
+  const student = await resolvePortalActor(token, studentId);
   if (!student || !assignmentId) return { ok: false, error: ACCESS_ERROR };
 
   const content = String(formData.get("content") ?? "").trim();
@@ -235,7 +319,7 @@ export async function submitHomework(
     `과제 제출 ${attemptNo}회차: ${assignment.title}${late ? " (기한 경과)" : ""}`,
   );
 
-  revalidatePath(`/portal/${token}`);
+  revalidateActorPortal(student);
   return { ok: true };
 }
 
@@ -244,9 +328,11 @@ export async function submitHomework(
 export async function withdrawSubmission(
   token: string,
   submissionId: string,
+  // 세션 경로 전용(선택) — 기존 /portal/[token] 호출부는 두 인자 그대로 둔다(회귀 금지).
+  studentId?: string,
 ): Promise<PortalActionResult> {
   if (!hasDb()) return { ok: false, error: DB_ERROR };
-  const student = token ? await getStudentByPortalToken(token) : null;
+  const student = await resolvePortalActor(token, studentId);
   if (!student || !submissionId) return { ok: false, error: ACCESS_ERROR };
 
   const db = createServiceClient()!;
@@ -314,7 +400,7 @@ export async function withdrawSubmission(
     sub.id,
     `과제 제출 철회 (${sub.attempt_no}회차)`,
   );
-  revalidatePath(`/portal/${token}`);
+  revalidateActorPortal(student);
   return { ok: true };
 }
 
@@ -326,7 +412,8 @@ export async function askQuestion(
   if (!hasDb()) return { ok: false, error: DB_ERROR };
 
   const token = String(formData.get("token") ?? "").trim();
-  const student = token ? await getStudentByPortalToken(token) : null;
+  const studentId = String(formData.get("studentId") ?? "").trim();
+  const student = await resolvePortalActor(token, studentId);
   if (!student) return { ok: false, error: ACCESS_ERROR };
 
   const question = String(formData.get("question") ?? "").trim();
@@ -427,7 +514,7 @@ export async function askQuestion(
     `학생 질문 접수 (${originLabel})`,
   );
 
-  revalidatePath(`/portal/${token}`);
+  revalidateActorPortal(student);
   return { ok: true };
 }
 
@@ -436,9 +523,11 @@ export async function askQuestion(
 export async function getSubmissionFileUrl(
   token: string,
   submissionId: string,
+  // 세션 경로 전용(선택) — 토큰 경로 호출부는 그대로다.
+  studentId?: string,
 ): Promise<PortalFileUrlResult> {
   if (!hasDb()) return { ok: false, error: DB_ERROR };
-  const student = token ? await getStudentByPortalToken(token) : null;
+  const student = await resolvePortalActor(token, studentId);
   if (!student || !submissionId) return { ok: false, error: ACCESS_ERROR };
 
   const db = createServiceClient()!;

@@ -5,6 +5,8 @@
 -- (seed.sql은 faqs·students·recruit_status에만 T2 행을 넣는다)
 -- 00016 신설 컬럼(후기 상태·보고서 철회·대체 연결·성적 소프트 삭제)까지 채워
 -- 스키마와 CHECK·복합 FK를 함께 검증한다(00014 payments 확장과 동일 취지).
+-- 00017 신설 4종(portal_contacts·portal_relations·portal_access_links·portal_sessions)은
+-- 정책 없는 RLS 계열이라 교차노출 스캔이 아닌 8n(전면 차단) 검증의 실데이터로 쓰인다.
 
 do $$
 declare
@@ -13,6 +15,8 @@ declare
   p2 uuid;
   a2 uuid;
   r2 uuid;
+  c2 uuid;
+  pr2 uuid;
 begin
   select id into strict s2 from public.students where tenant_id = t2 limit 1;
 
@@ -124,4 +128,22 @@ begin
   insert into public.admin_sessions (tenant_id, email, token_hash, expires_at)
     values (t2, 'test-english@example.com', 'dummy-session-hash-t2', now() + interval '12 hours')
     on conflict (token_hash) do nothing;
+
+  -- 00017 신설 4종(역할별 포털)도 정책 없는 RLS 계열 — 사람·관계·링크·세션을 T2로 한 벌 심는다.
+  -- 행이 있어야 "authenticated·anon이 0건"이 데이터 부재가 아닌 실제 차단임을 증명할 수 있고,
+  -- 복합 FK(테넌트 일치)와 CHECK(전화 정규화·상태 정합)도 함께 검증된다.
+  insert into public.portal_contacts (tenant_id, name, phone)
+    values (t2, 'T2 전용 보호자 — 교차 노출 시 RLS 위반', '01000000002')
+    returning id into c2;
+
+  -- 수락까지 끝난 활성 관계(status active면 accepted_at 필수 — 반쪽 수락 금지 CHECK 동반 검증)
+  insert into public.portal_relations (tenant_id, contact_id, student_id, role, status, accepted_at)
+    values (t2, c2, s2, 'guardian', 'active', now())
+    returning id into pr2;
+
+  insert into public.portal_access_links (tenant_id, relation_id, token_hash)
+    values (t2, pr2, 'dummy-portal-link-hash-t2');
+
+  insert into public.portal_sessions (tenant_id, contact_id, token_hash, expires_at)
+    values (t2, c2, 'dummy-portal-session-hash-t2', now() + interval '30 days');
 end $$;

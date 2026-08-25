@@ -901,6 +901,378 @@ begin
           case when allowed then 'PASS' else 'FAIL' end);
 end $$;
 
+/* ───────── 8n. 역할별 포털 4종(00017): 정책 없는 RLS → anon·authenticated 전면 차단 ─────────
+   admin_otps·admin_sessions(8f)와 동일 패턴(00010). 포털 이용자는 Supabase authenticated 주체가
+   아니고 관리자 조회도 service client 경유라 테넌트 정책이 평가될 자리가 없다 — 정책을 만들지
+   않는 대신 anon·authenticated는 한 행도 읽지 못해야 한다.
+   픽스처가 T2 사람·관계·링크·세션을 한 벌 심어 두므로 0건이 곧 차단의 증거다. */
+do $$
+declare
+  t text;
+  seeded bigint; n_auth bigint; n_anon bigint;
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  tables constant text[] := array[
+    'portal_contacts', 'portal_relations', 'portal_access_links', 'portal_sessions'
+  ];
+begin
+  foreach t in array tables loop
+    execute format('select count(*) from public.%I', t) into seeded;
+
+    perform set_config('request.jwt.claims', json_build_object('tenant_id', t1)::text, true);
+    execute 'set local role authenticated';
+    execute format('select count(*) from public.%I', t) into n_auth;
+    execute 'reset role';
+
+    perform set_config('request.jwt.claims', '', true);
+    execute 'set local role anon';
+    execute format('select count(*) from public.%I', t) into n_anon;
+    execute 'reset role';
+
+    insert into rls_result (scenario, detail, expected, actual, verdict)
+    values ('포털 권한(00017)', format('authenticated가 %s 조회 (실행 %s건)', t, seeded), '0', n_auth::text,
+            case when seeded = 0 then 'INCONCLUSIVE' when n_auth = 0 then 'PASS' else 'FAIL' end),
+           ('포털 권한(00017)', format('anon이 %s 조회 (실행 %s건)', t, seeded), '0', n_anon::text,
+            case when seeded = 0 then 'INCONCLUSIVE' when n_anon = 0 then 'PASS' else 'FAIL' end);
+  end loop;
+end $$;
+
+-- accept_portal_link는 security definer — RPC로 노출되면 토큰 해시만 알아내면(또는 무차별 대입으로)
+-- 관계를 활성화할 수 있다. 자동화 함수·admin_replace_operator(8e)와 동일하게 EXECUTE 회수를 검증한다.
+do $$
+declare
+  r text;
+  roles constant text[] := array['authenticated', 'anon'];
+  blocked boolean;
+begin
+  foreach r in array roles loop
+    blocked := false;
+    execute format('set local role %I', r);
+    begin
+      execute 'select * from public.accept_portal_link(''dummy-portal-link-hash-t2'', ''00000000-0000-0000-0000-000000000002''::uuid)';
+    exception
+      when insufficient_privilege then blocked := true;
+      when others then blocked := false; -- 실행됐다는 뜻(다른 이유로 실패해도 권한은 통과)
+    end;
+    execute 'reset role';
+
+    insert into rls_result (scenario, detail, expected, actual, verdict)
+    values ('함수 실행 차단', format('%s가 accept_portal_link 실행', r), '권한 거부',
+            case when blocked then '거부됨' else '실행 가능(위반)' end,
+            case when blocked then 'PASS' else 'FAIL' end);
+  end loop;
+end $$;
+
+-- 회수가 과했는지도 함께 본다: PUBLIC 회수는 service_role의 EXECUTE까지 없앨 수 있어
+-- (00017 말미 주석) 서버 호출 경로 자체가 죽는다. 차단만 검사하면 이 사고를 못 잡는다.
+do $$
+declare allowed boolean := false;
+begin
+  execute 'set local role service_role';
+  begin
+    execute 'select * from public.accept_portal_link(''rls-service-role-probe'', ''00000000-0000-0000-0000-000000000001''::uuid)';
+    allowed := true;
+  exception
+    when insufficient_privilege then allowed := false;
+    when others then allowed := true; -- 권한은 통과(다른 이유로 실패해도 EXECUTE는 있었다)
+  end;
+  execute 'reset role';
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('함수 실행 허용', 'service_role이 accept_portal_link 실행(서버 호출 경로)', '실행 가능',
+          case when allowed then '실행됨' else '권한 거부(서버 경로 단절)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8o. 원자적 수락(00017 ⑤ · 검수 124·125): 첫 클릭 = 수락, 재클릭 = no-op ─────────
+   정본 P-01: "초대 수락 중 일부 연결 실패 → 수락 전체를 완료로 표시하지 않음"(검수 125),
+   "한 번 완료된 초대 재사용 → 기존 결과로 수렴, 새 관계 중복 생성 금지"(검수 124).
+   owner 시점으로 실행한다 — 이건 RLS가 아니라 트랜잭션·무결성 규칙이라 service_role도 예외가 없다. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  s1 uuid; ca uuid; ra uuid;
+  v_status text; v_role text; v_first boolean;
+  v_acc1 timestamptz; v_acc2 timestamptz;
+  n bigint;
+begin
+  -- 하네스 시드에는 T1 학생이 없다(시드의 students는 T2·T3만) — 검증용 학생을 직접 만든다.
+  insert into public.students (tenant_id, name, parent_phone)
+    values (t1, 'RLS 검증 학생(포털)', '01055550000') returning id into s1;
+
+  insert into public.portal_contacts (tenant_id, name, phone)
+    values (t1, 'RLS 검증 학생본인', '01055550001') returning id into ca;
+  insert into public.portal_relations (tenant_id, contact_id, student_id, role)
+    values (t1, ca, s1, 'student') returning id into ra;
+  insert into public.portal_access_links (tenant_id, relation_id, token_hash)
+    values (t1, ra, 'rls-portal-link-a');
+
+  -- 첫 클릭: 링크 검증 → 관계 invited→active + accepted_at 스탬프가 한 트랜잭션에서
+  select a.status, a.role, a.accepted_at, a.first_accept
+    into v_status, v_role, v_acc1, v_first
+    from public.accept_portal_link('rls-portal-link-a', '00000000-0000-0000-0000-000000000001'::uuid) a;
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 수락(검수 125)', '첫 링크 클릭 = 수락(상태·시각·역할 동시 확정)',
+          'active/student/시각 있음/최초',
+          format('%s/%s/%s/%s', coalesce(v_status, '없음'), coalesce(v_role, '없음'),
+                 case when v_acc1 is null then '시각 없음' else '시각 있음' end,
+                 case when v_first then '최초' else '재수락' end),
+          case when v_status = 'active' and v_role = 'student'
+                and v_acc1 is not null and v_first then 'PASS' else 'FAIL' end);
+
+  -- 재클릭: 이미 active면 아무것도 바꾸지 않는다(수락 시각 불변 · first_accept=false)
+  select a.status, a.accepted_at, a.first_accept
+    into v_status, v_acc2, v_first
+    from public.accept_portal_link('rls-portal-link-a', '00000000-0000-0000-0000-000000000001'::uuid) a;
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 수락(검수 124)', '같은 링크 재클릭 = no-op(수락 시각 불변)',
+          'active/시각 동일/재수락',
+          format('%s/%s/%s', coalesce(v_status, '없음'),
+                 case when v_acc2 = v_acc1 then '시각 동일' else '시각 변경(위반)' end,
+                 case when v_first then '최초(위반)' else '재수락' end),
+          case when v_status = 'active' and v_acc2 = v_acc1 and not v_first then 'PASS' else 'FAIL' end);
+
+  -- 재수락이 관계를 새로 만들지 않는다(검수 124 "중복 생성 금지")
+  select count(*) into n from public.portal_relations
+   where tenant_id = t1 and contact_id = ca and student_id = s1;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 수락(검수 124)', '재수락 후 관계 행 수', '1', n::text,
+          case when n = 1 then 'PASS' else 'FAIL' end);
+end $$;
+
+-- 반쪽 수락 금지의 DB측 보강: active인데 수락 시각이 없는 관계는 owner도 만들 수 없다.
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  s1 uuid; ca uuid; blocked boolean := false;
+begin
+  select id into strict s1 from public.students
+   where tenant_id = t1 and name = 'RLS 검증 학생(포털)';
+  select id into strict ca from public.portal_contacts where tenant_id = t1 and phone = '01055550001';
+  begin
+    insert into public.portal_relations (tenant_id, contact_id, student_id, role, status, accepted_at)
+      values (t1, ca, s1, 'contractor', 'active', null);
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 수락(검수 125)', 'accepted_at 없는 active 관계 INSERT', '차단',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+-- 원자성 실측: 수락 UPDATE 직후 후속 연결이 실패하는 상황을 트리거로 주입한다.
+-- 전체가 롤백되어 관계는 invited로 남아야 한다 — "반쪽 수락 금지"(검수 125)의 증명.
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  s1 uuid; cb uuid; rb uuid;
+  v_status text; v_acc timestamptz;
+  failed boolean := false;
+begin
+  select id into strict s1 from public.students
+   where tenant_id = t1 and name = 'RLS 검증 학생(포털)';
+
+  insert into public.portal_contacts (tenant_id, name, phone)
+    values (t1, 'RLS 검증 보호자', '01055550002') returning id into cb;
+  insert into public.portal_relations (tenant_id, contact_id, student_id, role)
+    values (t1, cb, s1, 'guardian') returning id into rb;
+  insert into public.portal_access_links (tenant_id, relation_id, token_hash)
+    values (t1, rb, 'rls-portal-link-b');
+
+  execute $fn$
+    create or replace function public.rls_test_accept_fail_injection()
+    returns trigger language plpgsql as $body$
+    begin
+      raise exception '[rls-test] 수락 후속 연결 실패 주입';
+    end $body$
+  $fn$;
+  execute 'create trigger trg_rls_test_accept_fail after update on public.portal_relations
+             for each row execute function public.rls_test_accept_fail_injection()';
+
+  begin
+    perform 1 from public.accept_portal_link('rls-portal-link-b', '00000000-0000-0000-0000-000000000001'::uuid);
+  exception when others then failed := true;
+  end;
+
+  execute 'drop trigger trg_rls_test_accept_fail on public.portal_relations';
+  execute 'drop function public.rls_test_accept_fail_injection()';
+
+  select r.status, r.accepted_at into v_status, v_acc
+    from public.portal_relations r where r.id = rb;
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 수락(검수 125)', '수락 도중 실패 주입 → 반쪽 수락 잔존 여부',
+          '예외 + invited 유지',
+          format('%s + %s/%s', case when failed then '예외' else '무예외(위반)' end, v_status,
+                 case when v_acc is null then '시각 없음' else '시각 스탬프(위반)' end),
+          case when failed and v_status = 'invited' and v_acc is null then 'PASS' else 'FAIL' end);
+
+  -- 실패 주입을 걷어낸 뒤 같은 링크로 재시도하면 정상 수락된다(P-01 "전체 재시도").
+  select a.status into v_status from public.accept_portal_link('rls-portal-link-b', '00000000-0000-0000-0000-000000000001'::uuid) a;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 수락(검수 125)', '원인 제거 후 같은 링크 재시도', 'active', coalesce(v_status, '없음'),
+          case when v_status = 'active' then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8p. 링크 재발급·관계 회수(00017 ③④ · 검수 20·21·109) ─────────
+   정본 P-01: "새 초대 발급 → 이전 초대 즉시 무효", P-06: "관계 종료 → 기존 세션·초대·공유링크 회수".
+   링크가 살아 있어도 관계가 끝났으면 수락 경로 자체가 닫혀야 한다(검수 109 직접 이동 차단). */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  ra uuid; n_old bigint; n_new bigint; n_revoked bigint; blocked boolean := false;
+begin
+  select l.relation_id into strict ra
+    from public.portal_access_links l where l.token_hash = 'rls-portal-link-a';
+
+  -- 재발급: 이전 링크를 무효로 돌리지 않으면 새 링크 INSERT 자체가 부분 유니크에 걸린다.
+  blocked := false;
+  begin
+    insert into public.portal_access_links (tenant_id, relation_id, token_hash)
+      values (t1, ra, 'rls-portal-link-a-dup');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 링크(검수 20)', '이전 링크를 살려 둔 채 새 링크 발급', '차단(관계당 활성 1개)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  update public.portal_access_links
+     set rotated_at = now(), revoked_at = now(), revoked_reason = '재발급(RLS 검증)'
+   where relation_id = ra and revoked_at is null;
+  insert into public.portal_access_links (tenant_id, relation_id, token_hash)
+    values (t1, ra, 'rls-portal-link-a2');
+
+  select count(*) into n_old from public.accept_portal_link('rls-portal-link-a', '00000000-0000-0000-0000-000000000001'::uuid);
+  select count(*) into n_new from public.accept_portal_link('rls-portal-link-a2', '00000000-0000-0000-0000-000000000001'::uuid);
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 링크(검수 20)', '재발급 후 이전 링크로 수락 시도', '0행', n_old::text || '행',
+          case when n_old = 0 then 'PASS' else 'FAIL' end),
+         ('포털 링크(검수 20)', '재발급된 새 링크로 수락', '1행', n_new::text || '행',
+          case when n_new = 1 then 'PASS' else 'FAIL' end);
+
+  -- 관계 회수: 링크는 살아 있어도(회수 누락 상황을 일부러 재현) 수락 경로가 닫혀야 한다.
+  update public.portal_relations
+     set status = 'revoked', revoked_at = now(), revoked_reason = '관계 종료(RLS 검증)'
+   where id = ra;
+
+  select count(*) into n_revoked from public.accept_portal_link('rls-portal-link-a2', '00000000-0000-0000-0000-000000000001'::uuid);
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 회수(검수 21·109)', '관계 회수 후 살아 있는 링크로 수락 시도', '0행', n_revoked::text || '행',
+          case when n_revoked = 0 then 'PASS' else 'FAIL' end);
+end $$;
+
+-- 존재 비노출(P-02 "계정 존재를 노출하지 않는 확인"): 없는 토큰도 0행으로 같게 응답한다.
+do $$
+declare n_none bigint; n_empty bigint;
+begin
+  select count(*) into n_none from public.accept_portal_link('rls-portal-link-does-not-exist', '00000000-0000-0000-0000-000000000001'::uuid);
+  select count(*) into n_empty from public.accept_portal_link('', '00000000-0000-0000-0000-000000000001'::uuid);
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 수락(P-02)', '없는 토큰·빈 토큰 수락 시도', '둘 다 0행',
+          format('%s행/%s행', n_none, n_empty),
+          case when n_none = 0 and n_empty = 0 then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8q. 역할 독립·테넌트 경계(00017 ② · 검수 16·18) ─────────
+   정본 P-01: "한 사람이 여러 역할 → 한 계정에 역할을 각각 연결", P-05: "학습 영역과 금전 영역을
+   역할별로 분리". 겸임은 역할별 행이고 한 역할의 회수가 다른 역할을 건드리지 않아야 한다. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  s1 uuid; s_other uuid; ca uuid; rp uuid;
+  v_payer text; v_student text;
+  blocked boolean;
+begin
+  select id into strict s1 from public.students
+   where tenant_id = t1 and name = 'RLS 검증 학생(포털)';
+  select id into strict s_other from public.students where tenant_id <> t1 limit 1;
+  select id into strict ca from public.portal_contacts where tenant_id = t1 and phone = '01055550001';
+
+  -- 같은 사람·같은 학생에 다른 역할 추가 → 별개 권한 행으로 공존한다(직전 8p에서 student 역할은 회수됨)
+  insert into public.portal_relations (tenant_id, contact_id, student_id, role)
+    values (t1, ca, s1, 'payer') returning id into rp;
+
+  select r.status into v_payer from public.portal_relations r where r.id = rp;
+  select r.status into v_student from public.portal_relations r
+   where r.tenant_id = t1 and r.contact_id = ca and r.student_id = s1 and r.role = 'student';
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 역할 독립(검수 16)', 'student 역할 회수 후 payer 역할 신규 연결',
+          'payer=invited / student=revoked',
+          format('payer=%s / student=%s', coalesce(v_payer, '없음'), coalesce(v_student, '없음')),
+          case when v_payer = 'invited' and v_student = 'revoked' then 'PASS' else 'FAIL' end);
+
+  -- 같은 사람·학생·역할 중복 행 금지 — 재초대는 같은 행을 되살린다(관계는 하나)
+  blocked := false;
+  begin
+    insert into public.portal_relations (tenant_id, contact_id, student_id, role)
+      values (t1, ca, s1, 'payer');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 역할 독립(검수 16)', '같은 사람·학생·역할 중복 관계 INSERT', '차단',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- 테넌트 경계: T1 사람을 타테넌트 학생에 연결하려는 시도는 복합 FK가 막는다(검수 18의 DB측 바닥)
+  blocked := false;
+  begin
+    insert into public.portal_relations (tenant_id, contact_id, student_id, role)
+      values (t1, ca, s_other, 'guardian');
+  exception when foreign_key_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 테넌트 경계(검수 18)', 'T1 사람 × 타테넌트 학생 관계 INSERT', '차단(복합 FK)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- 링크도 마찬가지 — 관계의 테넌트와 링크의 테넌트가 어긋나면 타테넌트 관계로 로그인할 수 있다
+  blocked := false;
+  begin
+    insert into public.portal_access_links (tenant_id, relation_id, token_hash)
+      values ('00000000-0000-0000-0000-000000000002', rp, 'rls-portal-link-cross-tenant');
+  exception when foreign_key_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 테넌트 경계(검수 18)', '타테넌트 tenant_id로 링크 INSERT', '차단(복합 FK)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- 전화 정규화: 하이픈 표기가 들어오면 같은 사람이 둘로 갈라진다 — DB가 막는다
+  blocked := false;
+  begin
+    insert into public.portal_contacts (tenant_id, name, phone)
+      values (t1, 'RLS 검증 비정규 번호', '010-5555-0001');
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 사람(검수 124)', '비정규 전화번호(하이픈) INSERT', '차단',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- 같은 사람 중복 등록 금지 — 재초대가 새 사람을 만들지 않는 근거(검수 124)
+  blocked := false;
+  begin
+    insert into public.portal_contacts (tenant_id, name, phone)
+      values (t1, 'RLS 검증 학생본인(중복)', '01055550001');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('포털 사람(검수 124)', '같은 테넌트·같은 번호 사람 중복 INSERT', '차단',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
 /* ───────── 9. RLS 활성화 누락 테이블 탐지 (전 테이블 강제) ───────── */
 insert into rls_result (scenario, detail, expected, actual, verdict)
 select 'RLS 전면 적용', 'RLS 미활성 public 테이블', '0',

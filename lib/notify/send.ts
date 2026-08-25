@@ -228,6 +228,14 @@ async function propagateReportDelivery(
   if (error) console.error("[notify] 리포트 delivery_status 역전파 실패", error);
 }
 
+/**
+ * 전달 완료된 포털 초대 본문에서 링크 토큰을 지운다.
+ * 남은 문구로 "무엇을 보냈는지"는 알 수 있지만 그 링크로 로그인할 수는 없다.
+ */
+function redactPortalLink(message: string): string {
+  return message.replace(/(\/p\/link\/)[A-Za-z0-9_-]+/g, "$1[삭제됨]");
+}
+
 /** notify_exhausted 우선순위 — 광고성은 normal, 결제 계열은 money(금전 흐름 중단), 그 외 normal. */
 function exhaustedPriority(req: SendDispatchRequest): "money" | "normal" {
   if (req.isAd) return "normal";
@@ -281,6 +289,12 @@ export async function dispatchQueued(
         sent_at: new Date().toISOString(),
         channel: finalChannel,
         error: null,
+        // 전달이 끝나면 본문에 남은 로그인 자격(포털 초대 링크)을 지운다 — 재시도에 원문이
+        // 필요한 구간은 queued~sending뿐이고, 그 뒤로도 남겨 두면 알림 이력 열람 권한이
+        // 곧 포털 로그인 권한이 된다(초대 링크는 만료 없이 회수·재발급으로만 무효).
+        ...(req.type === "portal_invite"
+          ? { message: redactPortalLink(req.message) }
+          : {}),
       })
       .eq("id", notificationId)
       .eq("status", "sending");

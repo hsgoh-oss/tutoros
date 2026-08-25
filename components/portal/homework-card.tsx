@@ -29,10 +29,13 @@ const RESULT_LABEL: Record<string, string> = {
 
 function FileLink({
   token,
+  studentId,
   submissionId,
   fileName,
 }: {
   token: string;
+  /** 세션 경로 대상 학생(검수 16 — 학생 역할이 둘 이상인 사람). */
+  studentId?: string;
   submissionId: string;
   fileName: string;
 }) {
@@ -46,7 +49,7 @@ function FileLink({
         // 팝업 차단 회피 — 클릭 제스처 안에서 창을 먼저 열고, 발급된 서명 URL로 이동시킨다.
         const popup = window.open("about:blank", "_blank");
         try {
-          const result = await getSubmissionFileUrl(token, submissionId);
+          const result = await getSubmissionFileUrl(token, submissionId, studentId);
           if (result.ok) {
             if (popup) popup.location.href = result.url;
             else window.location.href = result.url;
@@ -70,11 +73,14 @@ function FileLink({
 
 function SubmissionItem({
   token,
+  studentId,
   submission,
   isLatest,
   canWithdraw,
 }: {
   token: string;
+  /** 세션 경로 대상 학생(검수 16 — 학생 역할이 둘 이상인 사람). */
+  studentId?: string;
   submission: PortalHomeworkSubmission;
   isLatest: boolean;
   canWithdraw: boolean;
@@ -119,6 +125,7 @@ function SubmissionItem({
         <div className="mt-2">
           <FileLink
             token={token}
+            studentId={studentId}
             submissionId={submission.id}
             fileName={submission.fileName}
           />
@@ -168,7 +175,7 @@ function SubmissionItem({
               }
               setPending(true);
               try {
-                const result = await withdrawSubmission(token, submission.id);
+                const result = await withdrawSubmission(token, submission.id, studentId);
                 if (result.ok) router.refresh();
                 else window.alert(result.error ?? "철회하지 못했습니다.");
               } catch {
@@ -189,10 +196,13 @@ function SubmissionItem({
 
 export function HomeworkCard({
   token,
+  studentId,
   homework,
   overdue,
 }: {
   token: string;
+  /** 세션 경로 대상 학생(검수 16 — 학생 역할이 둘 이상인 사람). */
+  studentId?: string;
   homework: PortalHomework;
   overdue: boolean;
 }) {
@@ -307,6 +317,7 @@ export function HomeworkCard({
               <SubmissionItem
                 key={s.id}
                 token={token}
+            studentId={studentId}
                 submission={s}
                 isLatest={latest?.id === s.id}
                 canWithdraw={canWithdraw && latest?.id === s.id}
@@ -380,7 +391,7 @@ export function HomeworkCard({
         </form>
       )}
 
-      <QuestionForm token={token} assignmentId={homework.id} />
+      <QuestionForm token={token} studentId={studentId} assignmentId={homework.id} />
     </article>
   );
 }
