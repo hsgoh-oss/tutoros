@@ -10,7 +10,7 @@
 //   ⑨ 보강 안내 = schedule_changed               ⑩ 후기 요청 = review_request
 //   ⑪ 재등록 안내(광고성) = re_enrollment         ⑫ 개별 메시지 = custom_message
 // 그 외 payment_request(청구서 발행)·payment_paid(완납 확인)·consult_confirmed(일정 확정)·
-// schedule_unresolved(선생님 내부 알림)는 운영 편의용 부가 타입이다.
+// schedule_unresolved(선생님 내부 알림)·homework_assigned(과제 배부, 00015)는 운영 편의용 부가 타입이다.
 
 export type NotifyType =
   | "consult_received"
@@ -30,7 +30,8 @@ export type NotifyType =
   | "review_request"
   | "re_enrollment"
   | "custom_message"
-  | "schedule_unresolved";
+  | "schedule_unresolved"
+  | "homework_assigned";
 
 export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   consult_received: "{name}님, 상담 신청이 접수되었습니다. 빠르게 연락드리겠습니다.",
@@ -56,6 +57,8 @@ export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   custom_message: "{name}님께 안내 말씀 드립니다.",
   // 선생님 내부 알림 — 실제 문구는 automation_schedule_autoclean(00002)이 완성해 적재한다. 이 항목은 isNotifyType 통과용.
   schedule_unresolved: "어제 이전 미처리 일정이 있습니다. 관리자 페이지에서 확인해 주세요.",
+  // 과제 배부(H-01·00015) — 포털 링크는 호출부가 붙인다.
+  homework_assigned: "{name}님, 새 과제가 등록되었습니다. 포털에서 확인해 주세요.",
 };
 
 /** DB 문자열이 알려진 알림 종류인지 판별. notifications.type엔 CHECK가 없어, flush 경로는 이 가드를 반드시 통과시킨다. */

@@ -23,6 +23,7 @@ const GROUPS = [
       { href: "/admin/consultations", label: "상담 관리" },
       { href: "/admin/students", label: "학생 관리" },
       { href: "/admin/lessons", label: "수업 기록" },
+      { href: "/admin/homework", label: "과제 관리" },
       { href: "/admin/schedules", label: "일정 관리" },
       { href: "/admin/grades", label: "성적 관리" },
       { href: "/admin/payments", label: "결제 관리" },

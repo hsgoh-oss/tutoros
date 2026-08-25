@@ -46,13 +46,14 @@ declare
   seeded_n bigint;   -- owner 시점: 타테넌트 행이 실제로 몇 건 있는가
   visible_n bigint;  -- authenticated(T1) 시점: 그중 몇 건이 보이는가
   t1 constant uuid := '00000000-0000-0000-0000-000000000001';
-  -- 00001의 18개 + 테넌트 정책 계열 4개(activity_log(00006)·adjustments·work_items(00013)
-  -- ·payssam_events(00014))
+  -- 00001의 18개 + 테넌트 정책 계열 7개(activity_log(00006)·adjustments·work_items(00013)
+  -- ·payssam_events(00014)·homework_assignments·homework_submissions·homework_questions(00015))
   tables constant text[] := array[
     'site_settings','theme_settings','ddays','recruit_status','page_contents',
     'students','reviews','faqs','lessons','ai_reports','schedules','grade_records',
     'lesson_materials','payments','consultations','consents','notifications','backups',
-    'activity_log','adjustments','work_items','payssam_events'
+    'activity_log','adjustments','work_items','payssam_events',
+    'homework_assignments','homework_submissions','homework_questions'
   ];
 begin
   foreach t in array tables loop
@@ -679,6 +680,117 @@ begin
   values ('결제 CHECK', 'payments.appr_state 스펙 밖 값(X) INSERT', '차단(check)',
           case when bad_state_blocked then '차단됨' else '오염 허용(위반)' end,
           case when bad_state_blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8l. 제출 원문 불변(00015 검수 27 · H-07): 트리거는 service_role조차 막는다 ─────────
+   owner(BYPASSRLS 동급)로 실행해 "RLS가 아닌 무결성 규칙"임을 증명한다 — 8g와 동일 계열.
+   허용되는 유일한 UPDATE: 검토·피드백·철회 필드 갱신. DELETE는 직접 삭제만 거부하고
+   부모 과제 CASCADE 삭제(학생·테넌트 삭제 경로)는 통과해야 한다(과잉 차단 아님). */
+do $$
+declare
+  -- 시드에 학생이 있는 테넌트는 T2·T3뿐 — 8k와 동일하게 T2 학생을 쓴다(owner 시점 무결성 검증).
+  t2 constant uuid := '00000000-0000-0000-0000-000000000002';
+  s2 uuid;
+  v_assignment uuid;
+  v_submission uuid;
+  blocked boolean;
+  allowed boolean;
+  remaining bigint;
+begin
+  select id into strict s2 from public.students where tenant_id = t2 limit 1;
+
+  insert into public.homework_assignments (tenant_id, student_id, title, status, assigned_at)
+  values (t2, s2, '불변 트리거 검증용 과제', 'assigned', now())
+  returning id into v_assignment;
+
+  insert into public.homework_submissions (tenant_id, assignment_id, attempt_no, content)
+  values (t2, v_assignment, 1, '원문 제출 내용')
+  returning id into v_submission;
+
+  -- (a) 제출 원문(content) UPDATE → 거부 (재제출은 새 행으로 — 검수 27)
+  blocked := false;
+  begin
+    update public.homework_submissions set content = '변조 시도' where id = v_submission;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('제출 append-only', 'homework_submissions 원문(content) UPDATE', '차단(예외)',
+          case when blocked then '차단됨' else '변경 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (b) 제출 시각(submitted_at) UPDATE → 거부 (지연 사실·실제 시각 연결 — H-02)
+  blocked := false;
+  begin
+    update public.homework_submissions set submitted_at = now() - interval '1 day'
+     where id = v_submission;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('제출 append-only', 'homework_submissions submitted_at UPDATE', '차단(예외)',
+          case when blocked then '차단됨' else '변경 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (c) 직접 DELETE → 거부 (과제 취소가 제출물을 지우지 않는다 — H-07)
+  blocked := false;
+  begin
+    delete from public.homework_submissions where id = v_submission;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('제출 append-only', 'homework_submissions 직접 DELETE', '차단(예외)',
+          case when blocked then '차단됨' else '삭제 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (d) 허용 경로: 검토·피드백 필드 갱신은 통과해야 한다(과잉 차단 아님 — H-03)
+  allowed := true;
+  begin
+    update public.homework_submissions
+       set review_status = 'reviewed', feedback = '피드백 초안', feedback_status = 'draft',
+           review_result = 'complete'
+     where id = v_submission;
+  exception when others then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('제출 append-only', 'homework_submissions 검토·피드백 필드 UPDATE', '허용',
+          case when allowed then '갱신됨' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (e) 재제출: 같은 회차(attempt_no) 중복 INSERT → unique 차단, 다음 회차는 허용(검수 27)
+  blocked := false;
+  begin
+    insert into public.homework_submissions (tenant_id, assignment_id, attempt_no, content)
+    values (t2, v_assignment, 1, '같은 회차 중복 제출');
+  exception when unique_violation then blocked := true;
+  end;
+  allowed := true;
+  begin
+    insert into public.homework_submissions (tenant_id, assignment_id, attempt_no, content)
+    values (t2, v_assignment, 2, '재제출 — 새 행이 최신 검토 대상');
+  exception when others then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('제출 append-only', '같은 회차(attempt_no=1) 중복 INSERT', '차단(unique)',
+          case when blocked then '차단됨' else '중복 생성(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end),
+         ('제출 append-only', '재제출(attempt_no=2) 새 행 INSERT', '허용',
+          case when allowed then '생성됨' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (f) 부모 과제 CASCADE 삭제는 트리거가 막지 않는다 — 학생·테넌트 삭제 경로 보전.
+  --     (과제 행 삭제 자체는 앱 코드에서 금지 — 여기서는 무결성 규칙의 범위만 증명)
+  allowed := true;
+  begin
+    delete from public.homework_assignments where id = v_assignment;
+  exception when others then allowed := false;
+  end;
+  select count(*) into remaining
+    from public.homework_submissions where assignment_id = v_assignment;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('제출 append-only', '부모 과제 CASCADE 삭제(학생·테넌트 삭제 경로)', '허용',
+          case when allowed and remaining = 0 then '통과됨'
+               when not allowed then '차단됨(과잉)'
+               else format('제출 %s건 잔존', remaining) end,
+          case when allowed and remaining = 0 then 'PASS' else 'FAIL' end);
 end $$;
 
 /* ───────── 9. RLS 활성화 누락 테이블 탐지 (전 테이블 강제) ───────── */

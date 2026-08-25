@@ -1,5 +1,6 @@
--- 교차 접근 검증 픽스처: 계정별 22개 테이블(00001의 18개 + activity_log·adjustments·work_items
--- + payssam_events(00014)) 전부에 타테넌트(T2) 행을 1건씩 심는다.
+-- 교차 접근 검증 픽스처: 계정별 25개 테이블(00001의 18개 + activity_log·adjustments·work_items
+-- + payssam_events(00014) + homework_assignments·homework_submissions·homework_questions(00015))
+-- 전부에 타테넌트(T2) 행을 1건씩 심는다.
 -- 이게 없으면 "타테넌트 행 0건"이 RLS 덕분인지 데이터가 없어서인지 구별할 수 없다.
 -- (seed.sql은 faqs·students·recruit_status에만 T2 행을 넣는다)
 
@@ -8,6 +9,7 @@ declare
   t2 constant uuid := '00000000-0000-0000-0000-000000000002';
   s2 uuid;
   p2 uuid;
+  a2 uuid;
 begin
   select id into strict s2 from public.students where tenant_id = t2 limit 1;
 
@@ -82,6 +84,18 @@ begin
     values (t2, p2, 'T2BILL0000000000001', 'callback', 'F', 'T2-APPR-0001', 480000,
             '{"billId":"T2BILL0000000000001","apprState":"F","apprNum":"T2-APPR-0001","apprPrice":"480000"}'::jsonb,
             'applied', 'T2 전용 승인 통보 — 교차 노출 시 RLS 위반');
+
+  -- 00015 신설 3종(과제·제출·질문) — 테넌트 정책 계열이라 교차노출 스캔 대상.
+  -- 제출·질문까지 심어 복합 FK(tenant_id, assignment_id)와 CHECK도 함께 검증한다.
+  insert into public.homework_assignments (tenant_id, student_id, title, description, status, assigned_at)
+    values (t2, s2, 'T2 전용 과제 — 교차 노출 시 RLS 위반', 'T2 과제 설명', 'assigned', now())
+    returning id into a2;
+
+  insert into public.homework_submissions (tenant_id, assignment_id, attempt_no, content, late)
+    values (t2, a2, 1, 'T2 전용 제출물 — 교차 노출 시 RLS 위반', false);
+
+  insert into public.homework_questions (tenant_id, student_id, assignment_id, question)
+    values (t2, s2, a2, 'T2 전용 질문 — 교차 노출 시 RLS 위반');
 
   -- admin_otps는 tenant_isolation 정책이 없다(service_role 전용). 행을 심어야
   -- "authenticated가 0건을 본다"가 데이터 부재가 아닌 실제 차단임을 증명할 수 있다.

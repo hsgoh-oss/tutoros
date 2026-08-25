@@ -18,6 +18,7 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "supabase/.temp/**", // supabase CLI 로컬 스택 생성물(git-ignored) — lint 대상 아님
     ],
   },
 ];

@@ -14,6 +14,8 @@ export type WorkItemKind =
   | "payssam_unknown_result" // 결제선생 결과 불명(발송·환불·동기화 — 확인 대상)
   | "payssam_mismatch" // 결제선생 승인·내부 원장 불일치(자동 조정 금지 — 사람 판정)
   | "audit_pending_stale" // 감사 대기 장기 미처리
+  | "homework_submitted" // 과제 제출 검토 대기(H-02 — 재제출 포함, 최신 제출본이 검토 대상)
+  | "question_asked" // 학생 질문 답변 대기(H-04 — 답변 게시 또는 해결 완료로 닫힘)
   | "manual"; // 수동 등록
 
 /** 우선순위 — risk > money > privacy > normal 순으로 처리한다. */

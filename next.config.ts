@@ -12,6 +12,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // 과제 제출·자료 업로드는 10MB 파일 검증을 통과해도 서버 액션 기본 본문 한도(1MB)에서
+  // 전송이 끊긴다 — 검증 한도보다 약간 크게 열어 폼 오버헤드를 흡수한다.
+  experimental: {
+    serverActions: { bodySizeLimit: "12mb" },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

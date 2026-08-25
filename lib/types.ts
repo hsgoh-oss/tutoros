@@ -271,3 +271,23 @@ export interface NotificationLog {
   retryCount: number;
   sentAt: string | null;
 }
+
+/* ---------- 과제·질의응답 (H-01~H-07 · 00015) ---------- */
+
+/** 과제 상태 — draft(초안: 학생·보호자 비노출, H-01) → assigned(게시·배부) → closed(전체 종료) / canceled(취소 — 제출물·피드백은 보존, H-07). */
+export type HomeworkStatus = "draft" | "assigned" | "closed" | "canceled";
+
+/** 제출 검토 상태 — pending(미검토)이 남은 과제는 전체 종료로 표시하지 않는다(검수 126). */
+export type HomeworkReviewStatus = "pending" | "reviewed";
+
+/** 검토 판정 — complete(과제 완료) / resubmit(보완 필요 → 재제출 요청, H-03 분기). 컬럼은 null 허용(판정 전). */
+export type HomeworkReviewResult = "complete" | "resubmit";
+
+/** 제출 피드백 상태 — approved만 알림·포털에 노출(검수 28). draft(미승인)는 존재 자체 비노출. 컬럼은 null 허용(피드백 없음). */
+export type HomeworkFeedbackStatus = "draft" | "approved";
+
+/** 질문 답변 상태 — approved만 포털 노출(H-04: 승인 전 비노출). 컬럼은 null 허용(답변 없음). */
+export type HomeworkAnswerStatus = "draft" | "approved";
+
+/** 질문 상태 — 답변 게시(answer_status=approved) 또는 해결 완료(resolved)로 닫힌다(검수 29). 열린 질문은 오늘 업무로 수렴. */
+export type HomeworkQuestionStatus = "open" | "resolved";
