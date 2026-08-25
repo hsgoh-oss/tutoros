@@ -134,6 +134,26 @@ interface SolapiSendResult {
   error?: string;
 }
 
+/**
+ * Solapi 오류 본문에서 운영자가 읽을 사유를 뽑는다.
+ *
+ * 이게 없으면 저장되는 건 "SMS 발송 실패"뿐이고, 오늘 업무 카드에도 그 문구만 뜬다 —
+ * 운영자는 무엇을 해야 하는지 알 수 없고, 실제 원인(예: '발신번호 미등록')은 런타임 로그를
+ * 뒤져야 나온다. 정본 공통 규칙 "열린 상태에는 반드시 다음 담당자와 다음 행동이 있다"에
+ * 어긋나므로, 외부가 알려준 사유를 그대로 들고 온다.
+ *
+ * 사유는 발송 실패 원인일 뿐 개인정보가 아니다(수신번호·본문은 담지 않는다).
+ */
+function solapiReason(status: number, body: unknown): string {
+  const b = body as { errorCode?: unknown; errorMessage?: unknown } | null;
+  const code = typeof b?.errorCode === "string" ? b.errorCode : null;
+  const message = typeof b?.errorMessage === "string" ? b.errorMessage : null;
+  if (message && code) return `${message} (${code})`;
+  if (message) return message;
+  if (code) return code;
+  return `HTTP ${status}`;
+}
+
 async function sendAlimtalk(req: DispatchRequest): Promise<SolapiSendResult> {
   const pfId = process.env.SOLAPI_KAKAO_CHANNEL_ID;
   const sender = process.env.SOLAPI_SENDER_PHONE;
@@ -165,7 +185,7 @@ async function sendAlimtalk(req: DispatchRequest): Promise<SolapiSendResult> {
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
       console.error("[notify] alimtalk failed", res.status, errBody);
-      return { ok: false, error: "알림톡 발송 실패" };
+      return { ok: false, error: `알림톡 발송 실패 — ${solapiReason(res.status, errBody)}` };
     }
     return { ok: true };
   } catch (err) {
@@ -191,7 +211,7 @@ async function sendSms(req: DispatchRequest): Promise<SolapiSendResult> {
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
       console.error("[notify] sms failed", res.status, errBody);
-      return { ok: false, error: "SMS 발송 실패" };
+      return { ok: false, error: `SMS 발송 실패 — ${solapiReason(res.status, errBody)}` };
     }
     return { ok: true };
   } catch (err) {
