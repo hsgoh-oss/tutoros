@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
 import { getConsultation, listConsents, formatKDate } from "@/lib/data/crm";
+import { getConsultationIntakeState, listForms } from "@/lib/data/intake";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Textarea } from "@/components/ui/form";
@@ -19,6 +20,7 @@ import {
 } from "../actions";
 import { ConvertButton } from "../convert-button";
 import { ConsultBriefButton } from "../consult-brief-button";
+import { IntakeFormsCard } from "../intake-forms-card";
 
 export default async function ConsultationDetailPage({
   params,
@@ -33,6 +35,9 @@ export default async function ConsultationDetailPage({
   if (!consultation) notFound();
 
   const consents = await listConsents(session.tenantId, "consultation", id);
+  // 신청폼 발급 이력(T-01·R-01)과 지금 열려 있는 다음 단계(검수 6) — 카드가 함께 보여준다.
+  const forms = await listForms(session.tenantId, { consultationId: id });
+  const intakeState = await getConsultationIntakeState(session.tenantId, id);
 
   return (
     <div>
@@ -157,6 +162,27 @@ export default async function ConsultationDetailPage({
         </div>
 
         <div className="space-y-6">
+          {/* 상담 결과 → 다음 단계 링크(C-05). 발급 게이트·이전 폼 닫기는 서버 액션이 판정한다. */}
+          <IntakeFormsCard
+            consultationId={consultation.id}
+            forms={forms.map((f) => ({
+              id: f.id,
+              kind: f.kind,
+              status: f.status,
+              sentAt: f.sentAt,
+              submittedAt: f.submittedAt,
+              closedAt: f.closedAt,
+              closeReason: f.closeReason,
+              expiresAt: f.expiresAt,
+              isExpired: f.isExpired,
+            }))}
+            openBranches={{
+              activeTrials: intakeState.activeTrials.length,
+              openEnrollments: intakeState.openEnrollments.length,
+              openOffers: intakeState.openOffers.length,
+            }}
+          />
+
           <Card>
             <h2 className="mb-3 text-sm font-black text-ink-soft">학생 전환</h2>
             {consultation.studentId ? (

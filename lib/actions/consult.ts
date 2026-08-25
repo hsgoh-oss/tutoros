@@ -12,13 +12,16 @@ import {
 
 // 상담 폼 제출 — 만 14세 미만 판정은 스키마 superRefine로 서버 재검증(클라 우회 차단).
 // consultations insert 후 consents 기록에 실패하면, 방금 만든 상담 행을 되돌려 "동의 없는 접수"를 막는다.
+// O-04 모집 상태 반영: 마감(closed)이면 접수 거부, 대기만 가능(waitlist)이면 접수는 받되
+// 대기 신청(consultations.status='hold')으로 구분해 적재한다 — 관리자 모집 화면의 대기자 목록이 된다.
 
 const POLICY_VERSION = "v0.9";
 const DB_ERROR_MESSAGE =
   "데이터베이스 미연결 상태입니다. 잠시 후 다시 시도하거나 카카오톡으로 문의해 주세요.";
-// O-04 접수 거부 안내 — 대기명단 실동작(정원 산정·자리 제안)은 M2 몫이라 안내 문구만 둔다.
+// O-04 접수 거부 안내 — '마감(closed)'은 접수 자체를 닫는다(대기 신청도 받지 않는다).
+// 대기만 받으려면 모집 상태를 'waitlist'로 두면 되고, 그때는 아래 대기 분기로 접수된다.
 const RECRUIT_CLOSED_MESSAGE =
-  "현재 모집이 마감되어 상담 접수를 받지 않습니다. 대기 신청은 준비 중이니, 모집 재개 안내가 필요하시면 카카오톡으로 문의해 주세요.";
+  "현재 모집이 마감되어 상담 접수를 받지 않습니다. 모집 재개 안내가 필요하시면 카카오톡으로 문의해 주세요.";
 
 export type ConsultActionResult =
   | { ok: true }
@@ -53,6 +56,12 @@ export async function submitConsult(
     return { ok: false, error: RECRUIT_CLOSED_MESSAGE };
   }
 
+  // O-04 "대기만 가능" 상태(waitlist): 접수는 계속 받되 일반 접수와 구분해 대기 신청으로 적재한다.
+  // 상담 상태를 'hold'(보류)로 두는 것이 대기명단의 정본 표식이고(C-05 "정원 대기 → 대기명단"),
+  // 관리자 모집 화면은 이 상태의 상담을 대기자 목록으로 읽어 자리를 제안한다(C-06 · 검수 61).
+  // 자리 제안은 순서대로 자동 확정되지 않는다 — 운영자가 대기자를 직접 고른다.
+  const isWaitlistIntake = recruitRow?.status === "waitlist";
+
   const classType = data.classType === "unspecified" ? null : data.classType;
   const hours = data.hours ? Number(data.hours) : undefined;
   const freq = data.freq ? Number(data.freq) : undefined;
@@ -73,6 +82,8 @@ export async function submitConsult(
       guardian_phone: data.guardianPhone || null,
       checklist_items: data.checklistItems,
       prefill: hasPrefill ? { mode: classType ?? undefined, hours, freq } : null,
+      // 대기 접수만 'hold'로 시작한다. 일반 접수는 기존과 같이 기본값 'new'(신규 상담 업무).
+      status: isWaitlistIntake ? "hold" : "new",
     })
     .select("id")
     .single();
@@ -133,7 +144,11 @@ export async function submitConsult(
       studentId: null,
       type: "consult_received",
       phone: data.phone,
-      message: `[${tenant.brandName}] ${data.name}님, 상담 신청이 접수되었습니다. 확인 후 연락드리겠습니다.`,
+      // 대기 접수는 안내 문구도 대기 신청으로 구분한다 — 자리가 나면 개별로 제안한다는 사실을 알린다
+      // (C-06 "한 명에게 승인된 기간의 자리 제안" — 순서대로 자동 배정되지 않는다).
+      message: isWaitlistIntake
+        ? `[${tenant.brandName}] ${data.name}님, 대기 신청이 접수되었습니다. 자리가 나면 순서와 조건을 확인한 뒤 개별로 안내드리겠습니다.`
+        : `[${tenant.brandName}] ${data.name}님, 상담 신청이 접수되었습니다. 확인 후 연락드리겠습니다.`,
       isAd: false,
     });
   } catch (notifyError) {
@@ -150,7 +165,9 @@ export async function submitConsult(
         studentId: null,
         type: "consult_admin_alert",
         phone: adminPhone,
-        message: `[${tenant.brandName}] 새 상담 신청이 접수되었습니다. (신청자: ${data.name}) 관리자 페이지에서 확인해 주세요.`,
+        message: isWaitlistIntake
+          ? `[${tenant.brandName}] 새 대기 신청이 접수되었습니다. (신청자: ${data.name}) 관리자 페이지 모집 현황에서 확인해 주세요.`
+          : `[${tenant.brandName}] 새 상담 신청이 접수되었습니다. (신청자: ${data.name}) 관리자 페이지에서 확인해 주세요.`,
         isAd: false,
       });
     }

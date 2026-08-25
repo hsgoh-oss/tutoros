@@ -21,6 +21,7 @@ const GROUPS = [
     label: "학생·상담 CRM",
     items: [
       { href: "/admin/consultations", label: "상담 관리" },
+      { href: "/admin/trials", label: "시범수업" },
       { href: "/admin/students", label: "학생 관리" },
       { href: "/admin/lessons", label: "수업 기록" },
       { href: "/admin/homework", label: "과제 관리" },

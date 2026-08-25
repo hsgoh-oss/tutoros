@@ -17,6 +17,10 @@ interface TenantRow {
   subdomain: string | null;
   domain_verified: boolean;
   tutor_report_no: string | null;
+  // 00019 이전 스키마(컬럼 없음)에서도 select "*"는 성공하고 값만 undefined로 온다 —
+  // 그래서 옵셔널로 받고 ?? null로 정규화한다.
+  payssam_member_id?: string | null;
+  payssam_merchant_id?: string | null;
 }
 
 function mapTenant(row: TenantRow): Tenant {
@@ -30,6 +34,9 @@ function mapTenant(row: TenantRow): Tenant {
     subdomain: row.subdomain,
     domainVerified: row.domain_verified,
     tutorReportNo: row.tutor_report_no,
+    // 결제선생 하위사업장 매핑(00019) — 이 테넌트의 청구가 나갈 사업장. null이면 환경변수 폴백.
+    payssamMemberId: row.payssam_member_id ?? null,
+    payssamMerchantId: row.payssam_merchant_id ?? null,
   };
 }
 

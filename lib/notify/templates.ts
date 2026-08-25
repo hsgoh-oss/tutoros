@@ -11,7 +11,8 @@
 //   ⑪ 재등록 안내(광고성) = re_enrollment         ⑫ 개별 메시지 = custom_message
 // 그 외 payment_request(청구서 발행)·payment_paid(완납 확인)·consult_confirmed(일정 확정)·
 // schedule_unresolved(선생님 내부 알림)·homework_assigned(과제 배부, 00015)·
-// portal_invite(역할별 포털 초대, P-01)는 운영 편의용 부가 타입이다.
+// portal_invite(역할별 포털 초대, P-01)·intake_form_sent(시범·정규 신청폼 링크, T-01·R-01)·
+// trial_confirmed(시범 확정, T-02)·waitlist_offer(대기 자리 제안, C-06)는 운영 편의용 부가 타입이다.
 
 export type NotifyType =
   | "consult_received"
@@ -33,7 +34,11 @@ export type NotifyType =
   | "custom_message"
   | "schedule_unresolved"
   | "homework_assigned"
-  | "portal_invite";
+  | "portal_invite"
+  | "intake_form_sent"
+  | "trial_confirmed"
+  | "waitlist_offer"
+  | "enrollment_activated";
 
 export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   consult_received: "{name}님, 상담 신청이 접수되었습니다. 빠르게 연락드리겠습니다.",
@@ -65,6 +70,19 @@ export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   // 링크 자체가 로그인 수단이라 문구에 학생 실명·수업·금전 정보를 담지 않는다(오수신 대비).
   portal_invite:
     "{name}님의 학습 포털 초대장이 도착했습니다. 아래 링크로 접속하시면 바로 이용하실 수 있습니다. 링크는 본인만 사용해 주세요.",
+  // 시범·정규 신청폼 발송(T-01·R-01·00018) — 작성 링크는 호출부가 붙인다.
+  // 종류(시범/정규)와 기한을 문구에 넣지 않는다: 한 문장으로 두 폼을 함께 쓰고, 기한은 링크 화면이 안내한다.
+  intake_form_sent:
+    "{name}님, 신청서 작성 링크를 보내드립니다. 아래 링크에서 작성해 주세요. 링크는 본인만 사용해 주세요.",
+  // 시범 확정 안내(T-02) — 일정 확정과 (유료면) 결제 확인을 모두 통과한 회차에만 보낸다(검수 9).
+  // 기존 trial_scheduled는 상담 화면에서 일시를 직접 입력해 보내는 수동 안내라 그대로 남겨 둔다.
+  trial_confirmed: "{name}님, 시범수업이 {date}로 확정되었습니다.",
+  // 대기 자리 제안(C-06) — {date}는 회신 기한(expires_at). 기한이 지나면 자리가 반환된다(검수 62).
+  // 자리 번호·다른 대기자 정보는 담지 않는다(한 자리에 한 사람에게만 제안 — 검수 61).
+  waitlist_offer:
+    "{name}님, 수업 자리가 생겨 안내드립니다. {date}까지 회신해 주시면 자리를 배정해 드립니다.",
+  enrollment_activated:
+    "{name}님, 정규 수업 등록이 완료되었습니다. 학습 포털 초대가 곧 전달됩니다.",
 };
 
 /** DB 문자열이 알려진 알림 종류인지 판별. notifications.type엔 CHECK가 없어, flush 경로는 이 가드를 반드시 통과시킨다. */

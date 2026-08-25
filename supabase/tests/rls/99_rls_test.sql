@@ -46,14 +46,16 @@ declare
   seeded_n bigint;   -- owner 시점: 타테넌트 행이 실제로 몇 건 있는가
   visible_n bigint;  -- authenticated(T1) 시점: 그중 몇 건이 보이는가
   t1 constant uuid := '00000000-0000-0000-0000-000000000001';
-  -- 00001의 18개 + 테넌트 정책 계열 7개(activity_log(00006)·adjustments·work_items(00013)
-  -- ·payssam_events(00014)·homework_assignments·homework_submissions·homework_questions(00015))
+  -- 00001의 18개 + 테넌트 정책 계열 12개(activity_log(00006)·adjustments·work_items(00013)
+  -- ·payssam_events(00014)·homework_assignments·homework_submissions·homework_questions(00015)
+  -- ·trial_sessions·trial_results·enrollments·contracts·waitlist_offers(00018))
   tables constant text[] := array[
     'site_settings','theme_settings','ddays','recruit_status','page_contents',
     'students','reviews','faqs','lessons','ai_reports','schedules','grade_records',
     'lesson_materials','payments','consultations','consents','notifications','backups',
     'activity_log','adjustments','work_items','payssam_events',
-    'homework_assignments','homework_submissions','homework_questions'
+    'homework_assignments','homework_submissions','homework_questions',
+    'trial_sessions','trial_results','enrollments','contracts','waitlist_offers'
   ];
 begin
   foreach t in array tables loop
@@ -1271,6 +1273,613 @@ begin
   values ('포털 사람(검수 124)', '같은 테넌트·같은 번호 사람 중복 INSERT', '차단',
           case when blocked then '차단됨' else '허용됨(위반)' end,
           case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8r. 유입 신청폼(00018 ①): 정책 없는 RLS → anon·authenticated 전면 차단 ─────────
+   admin_otps·admin_sessions(8f)·역할별 포털 4종(8n)과 동일 패턴(00010). 공개 폼 방문자는
+   Supabase authenticated 주체가 아니라 토큰 링크를 든 손님이고, 조회·제출·발급이 전부
+   service client 경유라 테넌트 정책이 평가될 자리가 없다 — 정책을 만들지 않는 대신 두 역할은
+   한 행도 읽지 못해야 한다. 픽스처가 T2 신청폼을 심어 두므로 0건이 곧 차단의 증거다. */
+do $$
+declare
+  t text;
+  seeded bigint; n_auth bigint; n_anon bigint;
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  tables constant text[] := array['intake_forms'];
+begin
+  foreach t in array tables loop
+    execute format('select count(*) from public.%I', t) into seeded;
+
+    perform set_config('request.jwt.claims', json_build_object('tenant_id', t1)::text, true);
+    execute 'set local role authenticated';
+    execute format('select count(*) from public.%I', t) into n_auth;
+    execute 'reset role';
+
+    perform set_config('request.jwt.claims', '', true);
+    execute 'set local role anon';
+    execute format('select count(*) from public.%I', t) into n_anon;
+    execute 'reset role';
+
+    insert into rls_result (scenario, detail, expected, actual, verdict)
+    values ('신청폼 권한(00018)', format('authenticated가 %s 조회 (실행 %s건)', t, seeded), '0', n_auth::text,
+            case when seeded = 0 then 'INCONCLUSIVE' when n_auth = 0 then 'PASS' else 'FAIL' end),
+           ('신청폼 권한(00018)', format('anon이 %s 조회 (실행 %s건)', t, seeded), '0', n_anon::text,
+            case when seeded = 0 then 'INCONCLUSIVE' when n_anon = 0 then 'PASS' else 'FAIL' end);
+  end loop;
+end $$;
+
+-- 두 RPC는 상태를 바꾸는 경로다(등록 활성화·자리 점유). RPC로 노출되면 공개 키만으로 등록을
+-- 활성화하거나 남의 자리를 집을 수 있다 — 자동화 함수(8d)·accept_portal_link(8n)와 동일하게
+-- anon·authenticated EXECUTE 회수를 검증한다.
+do $$
+declare
+  r text;
+  roles constant text[] := array['authenticated', 'anon'];
+  calls constant text[] := array[
+    'select public.activate_enrollment(''00000000-0000-0000-0000-000000000001''::uuid, gen_random_uuid())',
+    'select public.offer_waitlist_seat(''00000000-0000-0000-0000-000000000001''::uuid, gen_random_uuid(), 999, now() - interval ''1 day'')'
+  ];
+  names constant text[] := array['activate_enrollment', 'offer_waitlist_seat'];
+  i int;
+  blocked boolean;
+begin
+  foreach r in array roles loop
+    for i in 1 .. array_length(calls, 1) loop
+      blocked := false;
+      execute format('set local role %I', r);
+      begin
+        execute calls[i];
+      exception
+        when insufficient_privilege then blocked := true;
+        when others then blocked := false; -- 실행됐다는 뜻(다른 이유로 실패해도 권한은 통과)
+      end;
+      execute 'reset role';
+
+      insert into rls_result (scenario, detail, expected, actual, verdict)
+      values ('함수 실행 차단', format('%s가 %s 실행', r, names[i]), '권한 거부',
+              case when blocked then '거부됨' else '실행 가능(위반)' end,
+              case when blocked then 'PASS' else 'FAIL' end);
+    end loop;
+  end loop;
+end $$;
+
+-- 회수가 과했는지도 함께 본다(00018 ⑩ 주석): PUBLIC 회수는 service_role의 EXECUTE까지 없앨 수
+-- 있어 서버 호출 경로 자체가 죽는다. 차단만 검사하면 이 사고를 못 잡는다.
+do $$
+declare
+  i int;
+  allowed boolean;
+  calls constant text[] := array[
+    'select public.activate_enrollment(''00000000-0000-0000-0000-000000000001''::uuid, gen_random_uuid())',
+    'select public.offer_waitlist_seat(''00000000-0000-0000-0000-000000000001''::uuid, gen_random_uuid(), 999, now() - interval ''1 day'')'
+  ];
+  names constant text[] := array['activate_enrollment', 'offer_waitlist_seat'];
+begin
+  for i in 1 .. array_length(calls, 1) loop
+    allowed := false;
+    execute 'set local role service_role';
+    begin
+      execute calls[i];
+      allowed := true;
+    exception
+      when insufficient_privilege then allowed := false;
+      when others then allowed := true; -- 권한은 통과(다른 이유로 실패해도 EXECUTE는 있었다)
+    end;
+    execute 'reset role';
+
+    insert into rls_result (scenario, detail, expected, actual, verdict)
+    values ('함수 실행 허용', format('service_role이 %s 실행(서버 호출 경로)', names[i]), '실행 가능',
+            case when allowed then '실행됨' else '권한 거부(서버 경로 단절)' end,
+            case when allowed then 'PASS' else 'FAIL' end);
+  end loop;
+end $$;
+
+/* ───────── 8s. 신청폼 활성 1개(00018 ① · 검수 6·7) ─────────
+   정본 C-05 예외: "결과 변경 시 기존 다음 단계 링크를 먼저 닫고 새 결과를 생성", 검수 7:
+   "새 다음 단계 폼을 발급하면 이전 폼은 닫힌다". 코드 규율이 아니라 부분 유니크가 강제하는지를
+   owner 시점으로 본다 — RLS가 아닌 무결성 규칙이라 service_role도 예외가 없다. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  c1 uuid;
+  f1 uuid;
+  blocked boolean;
+  allowed boolean;
+begin
+  insert into public.consultations (tenant_id, name, phone)
+    values (t1, 'RLS 검증 상담(폼)', '01055552000') returning id into c1;
+
+  insert into public.intake_forms (tenant_id, consultation_id, kind, token_hash)
+    values (t1, c1, 'trial', 'rls-intake-trial-1') returning id into f1;
+
+  -- (a) 이전 폼을 살려 둔 채 같은 종류로 재발급 → 차단(활성 1개)
+  blocked := false;
+  begin
+    insert into public.intake_forms (tenant_id, consultation_id, kind, token_hash)
+      values (t1, c1, 'trial', 'rls-intake-trial-2');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('신청폼 활성 1개(검수 7)', '이전 폼을 살려 둔 채 같은 종류 재발급', '차단(부분 유니크)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (b) 이전 폼을 닫으면 재발급이 통과한다(과잉 차단 아님 — T-01 "링크 만료 → 새 링크 발급")
+  update public.intake_forms
+     set status = 'closed', closed_at = now(), close_reason = '재발급(RLS 검증)'
+   where id = f1;
+  allowed := true;
+  begin
+    insert into public.intake_forms (tenant_id, consultation_id, kind, token_hash)
+      values (t1, c1, 'trial', 'rls-intake-trial-2');
+  exception when others then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('신청폼 활성 1개(검수 7)', '이전 폼을 닫은 뒤 재발급', '허용',
+          case when allowed then '발급됨' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (c) 종류가 다른 폼은 공존한다 — 시범 결과가 정규 제안일 때 정규 폼이 열려야 한다(검수 11).
+  --     종류 간 배타(검수 6 "동시 활성 하나")는 상담 결과 전환 코드가 두 종류를 함께 닫아 지킨다.
+  allowed := true;
+  begin
+    insert into public.intake_forms (tenant_id, consultation_id, kind, token_hash)
+      values (t1, c1, 'regular', 'rls-intake-regular-1');
+  exception when others then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('신청폼 활성 1개(검수 11)', '다른 종류(정규) 폼 동시 발급', '허용',
+          case when allowed then '발급됨' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (d) 제출은 시각과 내용이 함께여야 한다 — "제출됐다는데 볼 내용이 없다"는 검토 불가 상태다.
+  blocked := false;
+  begin
+    insert into public.intake_forms (tenant_id, consultation_id, kind, token_hash,
+                                     status, submitted_at)
+      values (t1, c1, 'trial', 'rls-intake-nopayload', 'submitted', now());
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('신청폼 제출(T-01)', '내용(payload) 없는 submitted INSERT', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (e) 테넌트 경계: 타테넌트 상담에 폼을 발급하려는 시도는 복합 FK가 막는다
+  blocked := false;
+  begin
+    insert into public.intake_forms (tenant_id, consultation_id, kind, token_hash)
+      select t1, cs.id, 'trial', 'rls-intake-cross-tenant'
+        from public.consultations cs where cs.tenant_id <> t1 limit 1;
+  exception when foreign_key_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('신청폼 테넌트 경계', 'T1 폼 × 타테넌트 상담 INSERT', '차단(복합 FK)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8t. 시범 확정 게이트·결과 append-only(00018 ②③ · 검수 8·9 · T-04) ─────────
+   정본 T-02: "일정만 합의·결제 미확인 → 결제 대기, 예약 확정 아님", "무료 시범은 결제 단계를
+   통과 처리하지 않고 결제 불필요 근거로 일정 확정". T-04: "결과가 바뀌면 이전 결과를 덮어쓰지
+   않고 새 결정으로 연결한다". owner 시점 — RLS가 아니라 무결성 규칙이다. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  c1 uuid;
+  ts_free uuid;
+  n_results bigint;
+  remaining bigint;
+  blocked boolean;
+  allowed boolean;
+begin
+  insert into public.consultations (tenant_id, name, phone)
+    values (t1, 'RLS 검증 상담(시범)', '01055553000') returning id into c1;
+
+  -- (a) 일정만 합의(결제 미확인)인 유료 시범을 확정으로 올리려는 시도 → 차단(검수 8·9)
+  blocked := false;
+  begin
+    insert into public.trial_sessions (tenant_id, consultation_id, scheduled_at, is_paid,
+                                       schedule_confirmed, payment_confirmed, status)
+      values (t1, c1, now() + interval '1 day', true, true, false, 'scheduled');
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 확정 게이트(검수 9)', '유료 시범 결제 미확인 상태로 scheduled INSERT', '차단(check)',
+          case when blocked then '차단됨' else '반쪽 확정(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (b) 유료 시범의 결제 확인에는 결제 행이 근거로 있어야 한다(대사 불가 확인 금지)
+  blocked := false;
+  begin
+    insert into public.trial_sessions (tenant_id, consultation_id, scheduled_at, is_paid,
+                                       schedule_confirmed, payment_confirmed, status)
+      values (t1, c1, now() + interval '1 day', true, true, true, 'scheduled');
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 확정 게이트(검수 9)', '결제 행 없이 payment_confirmed인 유료 시범 INSERT', '차단(check)',
+          case when blocked then '차단됨' else '근거 없는 확인(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (c) 일정 확정에는 실제 일시가 필요하다 — 안내할 수 없는 확정은 확정이 아니다
+  blocked := false;
+  begin
+    insert into public.trial_sessions (tenant_id, consultation_id, is_paid,
+                                       schedule_confirmed, payment_confirmed)
+      values (t1, c1, false, true, true);
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 확정 게이트(T-02)', '일시 없이 schedule_confirmed INSERT', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (d) 무료 시범은 결제 불필요 근거(is_paid=false)로 확정된다(과잉 차단 아님 — T-02 예외)
+  allowed := true;
+  begin
+    insert into public.trial_sessions (tenant_id, consultation_id, scheduled_at, is_paid,
+                                       schedule_confirmed, payment_confirmed, status)
+      values (t1, c1, now() + interval '1 day', false, true, true, 'scheduled')
+      returning id into ts_free;
+  exception when others then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 확정 게이트(T-02)', '무료 시범(is_paid=false) 확정 INSERT', '허용',
+          case when allowed then '확정됨(결제 불필요 근거 보존)' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (e) 확정된 회차의 게이트를 사후에 내리는 UPDATE도 차단된다(확정의 근거는 사라지지 않는다)
+  blocked := false;
+  begin
+    update public.trial_sessions set payment_confirmed = false where id = ts_free;
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 확정 게이트(T-02)', '확정된 회차의 게이트 사후 해제 UPDATE', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (f) 결과 이력 append-only: UPDATE 전면 거부(T-04 "이전 결과를 덮어쓰지 않는다")
+  insert into public.trial_results (tenant_id, trial_session_id, result, note, decided_by)
+    values (t1, ts_free, 'retrial', '첫 결정 — 재시범', 'rls@example.com');
+
+  blocked := false;
+  begin
+    update public.trial_results set result = 'regular_offer' where trial_session_id = ts_free;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 결과 append-only(T-04)', 'trial_results 결과 UPDATE', '차단(예외)',
+          case when blocked then '차단됨' else '덮어쓰기 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (g) 직접 DELETE 거부 — 결정을 지우면 왜 바뀌었는지가 사라진다
+  blocked := false;
+  begin
+    delete from public.trial_results where trial_session_id = ts_free;
+  exception when others then blocked := true;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 결과 append-only(T-04)', 'trial_results 직접 DELETE', '차단(예외)',
+          case when blocked then '차단됨' else '삭제 성공(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (h) 결과 변경 = 새 결정 행(과잉 차단 아님). 이력 2건이 남고 최신은 마지막 결정이다.
+  allowed := true;
+  begin
+    insert into public.trial_results (tenant_id, trial_session_id, result, note, decided_by)
+      values (t1, ts_free, 'regular_offer', '결과 변경 — 정규 제안', 'rls@example.com');
+  exception when others then allowed := false;
+  end;
+  select count(*) into n_results from public.trial_results where trial_session_id = ts_free;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 결과 append-only(T-04)', '결과 변경 → 새 결정 행 추가', '허용 + 이력 2건',
+          format('%s / %s건', case when allowed then '추가됨' else '차단됨(과잉)' end, n_results),
+          case when allowed and n_results = 2 then 'PASS' else 'FAIL' end);
+
+  -- (i) 부모 회차 CASCADE 삭제는 트리거가 막지 않는다 — 상담·테넌트 삭제 경로 보전
+  allowed := true;
+  begin
+    delete from public.trial_sessions where id = ts_free;
+  exception when others then allowed := false;
+  end;
+  select count(*) into remaining from public.trial_results where trial_session_id = ts_free;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('시범 결과 append-only(T-04)', '부모 회차 CASCADE 삭제(상담·테넌트 삭제 경로)', '허용',
+          case when allowed and remaining = 0 then '통과됨'
+               when not allowed then '차단됨(과잉)'
+               else format('결과 %s건 잔존', remaining) end,
+          case when allowed and remaining = 0 then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8u. 등록 4게이트 원자성(00018 ④⑤⑧ · 검수 12·13·14·15) ─────────
+   정본 R-04: "네 조건 모두 충족 → 등록 활성화 / 하나라도 미완료 → 등록 준비 중",
+   검수 15: "활성화 연결 중 하나가 실패하면 반쪽 등록이 남지 않는다".
+   조건을 UPDATE의 WHERE에 넣은 단일 문장 RPC라 계수→갱신 사이의 창이 없다 — 게이트를 하나씩
+   내려 보며 어떤 조합에서도 활성 0행임을 실측한다. owner 시점(트랜잭션·무결성 규칙). */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  s1 uuid;
+  c1 uuid;
+  en uuid;
+  en2 uuid;
+  g text;
+  gates constant text[] := array['relation_ok', 'contract_ok', 'payment_ok', 'schedule_ok'];
+  ok boolean;
+  n_active bigint;
+  v_student_status text;
+  v_activated timestamptz;
+  blocked boolean;
+  allowed boolean;
+begin
+  -- 하네스 시드의 students는 T2·T3뿐이다(8o와 같은 사정) — 검증용 T1 학생을 직접 만든다.
+  -- 미러 갱신을 관찰해야 하므로 활성이 아닌 상태(trial)로 시작한다.
+  insert into public.students (tenant_id, name, parent_phone, status)
+    values (t1, 'RLS 검증 학생(등록)', '01055554000', 'trial') returning id into s1;
+  insert into public.consultations (tenant_id, name, phone)
+    values (t1, 'RLS 검증 상담(등록)', '01055554000') returning id into c1;
+  insert into public.enrollments (tenant_id, student_id, consultation_id)
+    values (t1, s1, c1) returning id into en;
+
+  -- (a) 네 게이트 중 하나라도 false면 활성 0행 — 검수 13·14의 "등록 준비 중"이 곧 이 상태다
+  foreach g in array gates loop
+    -- 지목한 게이트 하나만 false, 나머지 셋은 true — 네 조합을 차례로 만든다
+    update public.enrollments
+       set relation_ok = (g <> 'relation_ok'),
+           contract_ok = (g <> 'contract_ok'),
+           payment_ok  = (g <> 'payment_ok'),
+           schedule_ok = (g <> 'schedule_ok')
+     where id = en;
+
+    ok := public.activate_enrollment(t1, en);
+    select count(*) into n_active
+      from public.enrollments where id = en and status = 'active';
+
+    insert into rls_result (scenario, detail, expected, actual, verdict)
+    values ('등록 4게이트(검수 12·15)', format('%s만 미완인 상태로 activate_enrollment', g),
+            'false + 활성 0행',
+            format('%s + 활성 %s행', case when ok then 'true(위반)' else 'false' end, n_active),
+            case when not ok and n_active = 0 then 'PASS' else 'FAIL' end);
+  end loop;
+
+  -- (b) 네 게이트가 모두 서면 활성 + 활성 시각 + 학생 미러가 한 트랜잭션에서 함께 확정된다
+  update public.enrollments
+     set relation_ok = true, contract_ok = true, payment_ok = true, schedule_ok = true
+   where id = en;
+
+  ok := public.activate_enrollment(t1, en);
+  select e.activated_at into v_activated from public.enrollments e where e.id = en;
+  select s.status into v_student_status from public.students s where s.id = s1;
+
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('등록 활성화(검수 12 · R-05)', '네 게이트 완비 후 activate_enrollment',
+          'true + 활성 시각 + 학생 미러 active',
+          format('%s / %s / students.status=%s',
+                 case when ok then 'true' else 'false' end,
+                 case when v_activated is null then '시각 없음' else '시각 있음' end,
+                 coalesce(v_student_status, '없음')),
+          case when ok and v_activated is not null and v_student_status = 'active'
+               then 'PASS' else 'FAIL' end);
+
+  -- (c) 멱등: 이미 활성인 등록의 재활성화는 false(활성 시각을 다시 찍지 않는다)
+  ok := public.activate_enrollment(t1, en);
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('등록 활성화(검수 12)', '이미 활성인 등록 재활성화', 'false',
+          case when ok then 'true(위반)' else 'false' end,
+          case when ok then 'FAIL' else 'PASS' end);
+
+  -- (d) RPC를 우회한 수동 UPDATE도 CHECK가 막는다 — 반쪽 활성의 DB측 바닥(검수 15)
+  insert into public.enrollments (tenant_id, student_id, consultation_id, payment_ok)
+    values (t1, s1, c1, true) returning id into en2;
+  blocked := false;
+  begin
+    update public.enrollments set status = 'active', activated_at = now() where id = en2;
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('등록 활성화(검수 15)', 'RPC 우회 수동 UPDATE로 게이트 미완 등록 활성화', '차단(check)',
+          case when blocked then '차단됨' else '반쪽 활성(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (e) 활성 등록은 학생당 하나(R-05 "활성 등록 1건") — 재등록은 새 등록이고 동시 활성은 아니다
+  update public.enrollments
+     set relation_ok = true, contract_ok = true, payment_ok = true, schedule_ok = true
+   where id = en2;
+  -- 부분 유니크에 걸리지만 호출부에는 예외가 아니라 게이트 미완과 같은 false로 수렴해야 한다
+  -- (00018 ⑧ 예외 블록). 예외가 새면 관리자 화면이 500을 받는다.
+  blocked := false;
+  ok := true;
+  begin
+    ok := public.activate_enrollment(t1, en2);
+  exception when others then blocked := true;
+  end;
+  select count(*) into n_active
+    from public.enrollments where tenant_id = t1 and student_id = s1 and status = 'active';
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('등록 활성 1건(R-05)', '같은 학생의 두 번째 등록 활성화', 'false(예외 없음) + 활성 1건',
+          format('%s + 활성 %s건',
+                 case when blocked then '예외 누출(위반)'
+                      when ok then 'true(위반)' else 'false' end, n_active),
+          case when not blocked and not ok and n_active = 1 then 'PASS' else 'FAIL' end);
+
+  -- (f) 계약: 동의에는 계약자 신원이 함께 있어야 한다(R-03 "성인 계약자 확인")
+  blocked := false;
+  begin
+    insert into public.contracts (tenant_id, enrollment_id, terms, agreed_at)
+      values (t1, en, '{"fee":400000}'::jsonb, now());
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('계약 동의(R-03)', '계약자 신원 없는 동의 INSERT', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (g) 유효 계약 1건(R-05): 조건 변경은 새 계약본 + 이전 동의 해제가 짝이어야 한다
+  allowed := true;
+  begin
+    insert into public.contracts (tenant_id, enrollment_id, terms,
+                                  agreed_at, agreed_by_name, agreed_by_phone)
+      values (t1, en, '{"fee":400000}'::jsonb, now(), 'RLS 계약자', '01055554000');
+  exception when others then allowed := false;
+  end;
+  blocked := false;
+  begin
+    insert into public.contracts (tenant_id, enrollment_id, terms,
+                                  agreed_at, agreed_by_name, agreed_by_phone)
+      values (t1, en, '{"fee":450000}'::jsonb, now(), 'RLS 계약자', '01055554000');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('계약 유효 1건(R-05)', '첫 동의 INSERT / 두 번째 동의 INSERT', '허용 / 차단',
+          format('%s / %s',
+                 case when allowed then '동의됨' else '차단됨(과잉)' end,
+                 case when blocked then '차단됨' else '허용됨(위반)' end),
+          case when allowed and blocked then 'PASS' else 'FAIL' end);
+
+  -- (h) 미동의 계약본(제안)은 여러 개 공존한다 — 조건 재협의 중인 제안까지 막지 않는다
+  allowed := true;
+  begin
+    insert into public.contracts (tenant_id, enrollment_id, terms)
+      values (t1, en, '{"fee":450000,"note":"재협의 제안"}'::jsonb);
+    insert into public.contracts (tenant_id, enrollment_id, terms)
+      values (t1, en, '{"fee":470000,"note":"재협의 제안2"}'::jsonb);
+  exception when others then allowed := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('계약 유효 1건(R-03)', '미동의 계약본(제안) 복수 INSERT', '허용',
+          case when allowed then '허용됨' else '차단됨(과잉)' end,
+          case when allowed then 'PASS' else 'FAIL' end);
+
+  -- (i) 활성화 RPC는 테넌트 경계를 넘지 않는다 — 타테넌트 id로 부르면 0행(false)
+  insert into public.enrollments (tenant_id, student_id, consultation_id,
+                                  relation_ok, contract_ok, payment_ok, schedule_ok)
+    values (t1, s1, c1, true, true, true, true) returning id into en2;
+  ok := public.activate_enrollment('00000000-0000-0000-0000-000000000002', en2);
+  select count(*) into n_active
+    from public.enrollments where id = en2 and status = 'active';
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('등록 활성화 테넌트 경계', '타테넌트 p_tenant_id로 activate_enrollment', 'false + 활성 0행',
+          format('%s + 활성 %s행', case when ok then 'true(위반)' else 'false' end, n_active),
+          case when not ok and n_active = 0 then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 8v. 대기 자리 제안(00018 ⑥⑨ · 검수 61·62) ─────────
+   정본 C-06 예외: "같은 자리를 여러 사람에게 동시에 제안하거나 확정하지 않는다"(검수 61),
+   "거절·만료 → 제안 종료 → 자리 반환 → 다음 대기자 검토"(검수 62).
+   부분 유니크가 최종 방어선이고 RPC는 그 위의 친절한 판정이다 — 둘 다 실측한다. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  c_a uuid;
+  c_b uuid;
+  ok boolean;
+  ok2 boolean;
+  blocked boolean;
+  n_offered bigint;
+begin
+  insert into public.consultations (tenant_id, name, phone)
+    values (t1, 'RLS 검증 대기자 A', '01055555000') returning id into c_a;
+  insert into public.consultations (tenant_id, name, phone)
+    values (t1, 'RLS 검증 대기자 B', '01055555001') returning id into c_b;
+
+  -- (a) 한 자리 한 사람: 첫 제안은 통과, 다른 대기자에게 같은 자리 제안은 false(예외 아님)
+  ok := public.offer_waitlist_seat(t1, c_a, 7, now() + interval '2 days');
+  ok2 := public.offer_waitlist_seat(t1, c_b, 7, now() + interval '2 days');
+  select count(*) into n_offered
+    from public.waitlist_offers where tenant_id = t1 and seat_no = 7 and status = 'offered';
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 제안(검수 61)', '같은 자리(7번)를 두 대기자에게 제안', 'true / false + offered 1건',
+          format('%s / %s + %s건',
+                 case when ok then 'true' else 'false' end,
+                 case when ok2 then 'true(위반)' else 'false' end, n_offered),
+          case when ok and not ok2 and n_offered = 1 then 'PASS' else 'FAIL' end);
+
+  -- (b) RPC를 우회한 직접 INSERT도 부분 유니크가 막는다(최종 방어선)
+  blocked := false;
+  begin
+    insert into public.waitlist_offers (tenant_id, consultation_id, seat_no, expires_at)
+      values (t1, c_b, 7, now() + interval '2 days');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 제안(검수 61)', 'RPC 우회 직접 INSERT로 같은 자리 중복 제안', '차단(부분 유니크)',
+          case when blocked then '차단됨' else '중복 제안(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (c) 거절 = 자리 반환(검수 62): 같은 자리를 다음 대기자에게 다시 제안할 수 있다
+  update public.waitlist_offers
+     set status = 'declined', responded_at = now()
+   where tenant_id = t1 and seat_no = 7 and status = 'offered';
+  ok := public.offer_waitlist_seat(t1, c_b, 7, now() + interval '2 days');
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 반환(검수 62)', '거절 후 같은 자리 재제안', 'true',
+          case when ok then 'true' else 'false(자리 미반환)' end,
+          case when ok then 'PASS' else 'FAIL' end);
+
+  -- (d) 만료도 반환이다 — 기한 경과 제안은 자리를 묶어두지 않는다
+  update public.waitlist_offers
+     set status = 'expired'
+   where tenant_id = t1 and seat_no = 7 and status = 'offered';
+  ok := public.offer_waitlist_seat(t1, c_a, 7, now() + interval '2 days');
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 반환(검수 62)', '만료 후 같은 자리 재제안', 'true',
+          case when ok then 'true' else 'false(자리 미반환)' end,
+          case when ok then 'PASS' else 'FAIL' end);
+
+  -- (e) 응답(수락·거절)에는 응답 시각이 함께 있어야 한다 — 언제 자리가 반환됐는지의 근거
+  blocked := false;
+  begin
+    update public.waitlist_offers set status = 'accepted'
+     where tenant_id = t1 and seat_no = 7 and status = 'offered';
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 제안(C-06)', '응답 시각 없는 accepted UPDATE', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (f) 기간부 제안(C-06 "승인된 기간의 자리 제안"): 이미 지난 기한으로는 자리를 묶지 않는다
+  ok := public.offer_waitlist_seat(t1, c_b, 8, now() - interval '1 day');
+  select count(*) into n_offered
+    from public.waitlist_offers where tenant_id = t1 and seat_no = 8;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 제안(C-06)', '이미 지난 기한으로 제안', 'false + 0건',
+          format('%s + %s건', case when ok then 'true(위반)' else 'false' end, n_offered),
+          case when not ok and n_offered = 0 then 'PASS' else 'FAIL' end);
+
+  -- (g) 번호 없는 제안(seat_no null)은 자리 경합 대상이 아니다 — 개별 협의는 서로 막지 않는다
+  ok := public.offer_waitlist_seat(t1, c_a, null, now() + interval '2 days');
+  ok2 := public.offer_waitlist_seat(t1, c_b, null, now() + interval '2 days');
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 제안(C-06)', '번호 없는 제안 2건(개별 협의)', '둘 다 true',
+          format('%s / %s',
+                 case when ok then 'true' else 'false(과잉)' end,
+                 case when ok2 then 'true' else 'false(과잉)' end),
+          case when ok and ok2 then 'PASS' else 'FAIL' end);
+
+  -- (h) 테넌트 경계: 자리 번호는 테넌트별로 독립이다(타테넌트의 7번 자리가 T1을 막지 않는다)
+  ok := public.offer_waitlist_seat('00000000-0000-0000-0000-000000000002',
+          (select cs.id from public.consultations cs
+            where cs.tenant_id = '00000000-0000-0000-0000-000000000002' limit 1),
+          7, now() + interval '2 days');
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('자리 제안 테넌트 경계', 'T1이 7번을 점유한 상태에서 T2의 7번 제안', 'true(독립)',
+          case when ok then 'true' else 'false(교차 차단·과잉)' end,
+          case when ok then 'PASS' else 'FAIL' end);
 end $$;
 
 /* ───────── 9. RLS 활성화 누락 테이블 탐지 (전 테이블 강제) ───────── */

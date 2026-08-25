@@ -13,6 +13,12 @@ export interface Tenant {
   subdomain: string | null;
   domainVerified: boolean;
   tutorReportNo: string | null;
+  // 결제선생 하위사업장 매핑(00019) — 파트너(apiKey) → 사용자(member) → 하위사업장(merchant) 3층.
+  // 단일 테넌트에서는 환경변수만으로 충분하므로 두 값은 없어도 된다(선택 필드) — 없거나 null이면
+  // lib/payssam/client.ts가 PAYSSAM_MEMBER_ID·PAYSSAM_MERCHANT_ID로 폴백한다.
+  // SaaS 확장(학원 2곳 이상)에서는 테넌트 값이 우선해야 청구서가 각자 사업장으로 나간다.
+  payssamMemberId?: string | null;
+  payssamMerchantId?: string | null;
 }
 
 /* ---------- 공개 사이트 콘텐츠 ---------- */
@@ -305,3 +311,48 @@ export type HomeworkAnswerStatus = "draft" | "approved";
 
 /** 질문 상태 — 답변 게시(answer_status=approved) 또는 해결 완료(resolved)로 닫힌다(검수 29). 열린 질문은 오늘 업무로 수렴. */
 export type HomeworkQuestionStatus = "open" | "resolved";
+
+/* ---------- 유입 퍼널 — 신청폼·시범·정규등록·대기 (T-01~T-04 · R-01~R-06 · O-04 · 00018) ---------- */
+
+/** 신청폼 종류 — trial(시범수업 신청 T-01) / regular(정규수업 신청 R-01). 같은 상담·같은 종류의 활성 폼은 1개다(검수 7). */
+export type IntakeFormKind = "trial" | "regular";
+
+/**
+ * 신청폼 상태 — sent(발급·발송 — 링크 유효) → submitted(제출 완료 — 최초 제출로 수렴)
+ * / closed(새 폼 발급·상담 결과 변경·철회로 닫힘 — 검수 6·7) / expired(기한 경과).
+ * 만료·종료된 링크는 되살리지 않는다 — 재발급은 새 행이다(T-01 링크 만료 예외).
+ */
+export type IntakeFormStatus = "sent" | "submitted" | "closed" | "expired";
+
+/**
+ * 시범 회차 상태 — proposed(제안·신청 접수 — 폼 제출만으로는 확정 아님, 검수 8)
+ * → scheduled(확정 — 일정 확정 + (유료면) 결제 확인 둘 다 통과, T-02·검수 9)
+ * → done(진행 완료) / noshow(노쇼 확정 — 10·20·30분 연락과 운영자 확인 후에만, 검수 10) / canceled.
+ */
+export type TrialStatus = "proposed" | "scheduled" | "done" | "noshow" | "canceled";
+
+/**
+ * 시범 결과(T-04) — regular_offer(정규수업 제안) / retrial(재시범) / followup(추가 확인·후속 상담)
+ * / declined(신청자 거절) / none(미진행). 자동 합격·부적합 판정은 없고,
+ * 결과가 바뀌면 이전 결과를 덮어쓰지 않고 새 결정 행을 남긴다(trial_results append-only).
+ */
+export type TrialResult =
+  | "regular_offer"
+  | "retrial"
+  | "followup"
+  | "declined"
+  | "none";
+
+/**
+ * 정규 등록 상태 — pending(등록 준비 중 — 네 게이트 미충족, 검수 13·14) → active(활성 — 원자적 RPC
+ * activate_enrollment로만 전환, 검수 12·15) → ended(등록 종료) / canceled(활성화 전 포기·만료, R-06).
+ * 등록의 정본은 enrollments이고 students.status는 기존 화면 호환용 미러다.
+ */
+export type EnrollmentStatus = "pending" | "active" | "ended" | "canceled";
+
+/**
+ * 대기 자리 제안 상태(C-06·O-04) — offered(제안 중 — 같은 자리를 다른 사람에게 동시에 제안하지 않는다, 검수 61)
+ * → accepted(수락 — 다음 단계 폼으로) / declined(거절) / expired(기한 만료).
+ * 거절·만료는 자리를 반환하고 다음 대기자 검토로 잇되, 대기순서만으로 자동 확정하지 않는다(검수 62).
+ */
+export type WaitlistOfferStatus = "offered" | "accepted" | "declined" | "expired";

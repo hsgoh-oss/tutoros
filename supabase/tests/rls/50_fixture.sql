@@ -1,12 +1,14 @@
--- 교차 접근 검증 픽스처: 계정별 25개 테이블(00001의 18개 + activity_log·adjustments·work_items
--- + payssam_events(00014) + homework_assignments·homework_submissions·homework_questions(00015))
+-- 교차 접근 검증 픽스처: 계정별 30개 테이블(00001의 18개 + activity_log·adjustments·work_items
+-- + payssam_events(00014) + homework_assignments·homework_submissions·homework_questions(00015)
+-- + trial_sessions·trial_results·enrollments·contracts·waitlist_offers(00018))
 -- 전부에 타테넌트(T2) 행을 1건씩 심는다.
 -- 이게 없으면 "타테넌트 행 0건"이 RLS 덕분인지 데이터가 없어서인지 구별할 수 없다.
 -- (seed.sql은 faqs·students·recruit_status에만 T2 행을 넣는다)
 -- 00016 신설 컬럼(후기 상태·보고서 철회·대체 연결·성적 소프트 삭제)까지 채워
 -- 스키마와 CHECK·복합 FK를 함께 검증한다(00014 payments 확장과 동일 취지).
--- 00017 신설 4종(portal_contacts·portal_relations·portal_access_links·portal_sessions)은
--- 정책 없는 RLS 계열이라 교차노출 스캔이 아닌 8n(전면 차단) 검증의 실데이터로 쓰인다.
+-- 00017 신설 4종(portal_contacts·portal_relations·portal_access_links·portal_sessions)과
+-- 00018 intake_forms는 정책 없는 RLS 계열이라 교차노출 스캔이 아닌 8n·8r(전면 차단) 검증의
+-- 실데이터로 쓰인다.
 
 do $$
 declare
@@ -17,6 +19,10 @@ declare
   r2 uuid;
   c2 uuid;
   pr2 uuid;
+  cs2 uuid;
+  fm2 uuid;
+  tn2 uuid;
+  en2 uuid;
 begin
   select id into strict s2 from public.students where tenant_id = t2 limit 1;
 
@@ -76,7 +82,8 @@ begin
     returning id into p2;
 
   insert into public.consultations (tenant_id, name, phone)
-    values (t2, 'T2 전용 상담자', '010-0000-0002');
+    values (t2, 'T2 전용 상담자', '010-0000-0002')
+    returning id into cs2;
 
   insert into public.consents (tenant_id, subject_type, subject_id, item)
     values (t2, 'student', s2, 'privacy');
@@ -146,4 +153,39 @@ begin
 
   insert into public.portal_sessions (tenant_id, contact_id, token_hash, expires_at)
     values (t2, c2, 'dummy-portal-session-hash-t2', now() + interval '30 days');
+
+  -- 00018 신설 6종(유입 퍼널) — 상담 하나에서 폼 → 시범 회차 → 결과 → 등록 → 계약 → 자리 제안까지
+  -- 한 줄기로 심는다. intake_forms는 정책 없는 RLS(8r 전면 차단 검증용), 나머지 5종은 테넌트
+  -- 정책 계열이라 교차노출 스캔 대상이다. 복합 FK(테넌트 일치)·CHECK(확정 게이트·동의 신원)·
+  -- 부분 유니크(활성 폼 1개·활성 등록 1건·자리 1인)도 이 삽입으로 함께 검증된다.
+  insert into public.intake_forms (tenant_id, consultation_id, kind, token_hash,
+                                   status, payload, submitted_at)
+    values (t2, cs2, 'regular', 'dummy-intake-form-hash-t2', 'submitted',
+            '{"note":"T2 전용 신청폼 제출 — 교차 노출 시 RLS 위반"}'::jsonb, now())
+    returning id into fm2;
+
+  -- 유료 시범 확정본: 결제 행(p2)이 결제 확인의 근거다(is_paid·payment_confirmed·payment_id 동반)
+  insert into public.trial_sessions (tenant_id, consultation_id, form_id, scheduled_at,
+                                     is_paid, payment_id, schedule_confirmed, payment_confirmed,
+                                     status, attended_at)
+    values (t2, cs2, fm2, now() - interval '7 days', true, p2, true, true, 'done',
+            now() - interval '7 days')
+    returning id into tn2;
+
+  insert into public.trial_results (tenant_id, trial_session_id, result, note, decided_by)
+    values (t2, tn2, 'regular_offer', 'T2 전용 시범 결과 — 교차 노출 시 RLS 위반',
+            'test-english@example.com');
+
+  insert into public.enrollments (tenant_id, student_id, consultation_id, form_id, status,
+                                  relation_ok, contract_ok, payment_ok, schedule_ok, activated_at)
+    values (t2, s2, cs2, fm2, 'active', true, true, true, true, now())
+    returning id into en2;
+
+  insert into public.contracts (tenant_id, enrollment_id, terms,
+                                agreed_at, agreed_by_name, agreed_by_phone)
+    values (t2, en2, '{"fee":480000,"days":["mon","thu"],"note":"T2 전용 계약 — 교차 노출 시 RLS 위반"}'::jsonb,
+            now(), 'T2 전용 계약자', '01000000002');
+
+  insert into public.waitlist_offers (tenant_id, consultation_id, seat_no, expires_at)
+    values (t2, cs2, 1, now() + interval '3 days');
 end $$;

@@ -8,6 +8,22 @@
 //                                      처리됐을 수 있으므로 실패로 확정하지 말고 readBill()로 대조할 것.
 //   {ok:false, code:"NOT_CONFIGURED"}: 환경변수 미설정 — 호출 자체를 하지 않음.
 //   {ok:false, code:그 외}           : API 명시 거절(코드·메시지 수신) — 요청이 접수되지 않은 것.
+//
+// 계정 3층 구조(결제선생 파트너 API V2 — docs/payssam-integration.md §1·§2):
+//   ① 파트너      : PAYSSAM_API_KEY 하나로 식별. 쌤포인트(발송 재화) 지갑을 파트너가 보유한다.
+//   ② 사용자      : 봉투의 member — 파트너 사용자 코드.
+//   ③ 하위사업장  : 봉투의 merchant — 실제 청구·정산 주체(학원 한 곳).
+// 이 레포는 멀티테넌트이므로 ③이 테넌트마다 달라야 한다 — member·merchant를 환경변수로 고정하면
+// 두 번째 학원의 청구서가 전부 1호 학원 사업장으로 나가 수납·정산이 뒤섞인다.
+// 해석 규칙은 하나다: **테넌트 값이 있으면 그 값, 없으면 기존 환경변수**(00019 tenants.payssam_*).
+// 단일 테넌트 운영에서는 환경변수만으로 충분하므로 모든 함수의 account 인자는 선택이고,
+// 인자 없이 호출하면 이전과 완전히 동일하게 동작한다(하위 호환). SaaS 확장 시에만 테넌트 값이 우선.
+// 파트너 인증키(apiKey)와 base URL은 파트너 단위라 계속 환경변수에만 둔다 — 키를 DB로 옮기지 않고,
+// base URL이 DB에 있으면 행 하나로 샌드박스/운영이 뒤바뀐다.
+// 연결 지점(2호 학원을 붙일 때 할 일): 청구를 내는 호출부 — app/admin/(protected)/payments/actions.ts,
+// app/api/payssam/callback/route.ts — 가 resolveTenant()(또는 세션의 테넌트 행)를 account로 넘기면
+// 그 시점부터 테넌트별 사업장으로 나간다. 한 청구의 발송·조회·파기·취소·현금영수증은 **같은 account**로
+// 호출해야 한다 — 사업장이 달라지면 그 청구서는 조회조차 되지 않는다.
 
 import { createHash, randomBytes } from "crypto";
 import type {
@@ -26,13 +42,51 @@ import type {
 
 const TIMEOUT_MS = 15_000;
 
+/**
+ * 청구를 낼 사업장 — Tenant(lib/types.ts)가 구조적으로 이 모양이라 resolveTenant() 결과를 그대로 넘길 수 있다.
+ * 별도 인터페이스로 두는 이유: 전송 계층이 도메인 타입·DB에 의존하지 않게 하기 위함(이 파일은 DB를 만지지 않는다).
+ */
+export interface PayssamAccount {
+  /** 봉투 member — 파트너 사용자 코드. 없으면 PAYSSAM_MEMBER_ID */
+  payssamMemberId?: string | null;
+  /** 봉투 merchant — 하위사업장(학원) 코드. 없으면 PAYSSAM_MERCHANT_ID */
+  payssamMerchantId?: string | null;
+}
+
+/** 공백뿐인 값은 미설정으로 본다 — ""나 " "가 봉투에 실려 나가면 전 요청이 거절로 쌓인다. */
+function present(value: string | null | undefined): string | undefined {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * member·merchant 해석 — 테넌트 값 우선, 없으면 환경변수 폴백.
+ * 필드 단위 폴백이다: 보통 member(파트너 사용자)는 파트너 전체가 공유하고 merchant(사업장)만
+ * 학원마다 다르므로, 테넌트에 merchant만 채우고 member는 환경변수를 그대로 쓰는 운영이 정상이다.
+ */
+function resolveAccount(account?: PayssamAccount | null): {
+  member?: string;
+  merchant?: string;
+} {
+  return {
+    member:
+      present(account?.payssamMemberId) ?? present(process.env.PAYSSAM_MEMBER_ID),
+    merchant:
+      present(account?.payssamMerchantId) ??
+      present(process.env.PAYSSAM_MERCHANT_ID),
+  };
+}
+
 // 4개 전부 있어야 "설정됨" — BASE_URL까지 요구해 기본값이 샌드박스/운영을 뒤바꾸는 사고를 막는다.
 // (solapi.ts와 같은 이유: 일부만 채워 게이트가 열리면 발송 시도가 전부 실패로 쌓여 켜기 전보다 나빠진다.)
-export function isPayssamConfigured(): boolean {
+// account를 넘기면 그 테넌트 기준으로 판정한다 — 환경변수에 member·merchant가 없어도 테넌트에
+// 있으면 설정됨이고, 반대로 둘 다 없으면 닫힌다. 인자 없이 호출하면 종전대로 환경변수만 본다.
+export function isPayssamConfigured(account?: PayssamAccount | null): boolean {
+  const { member, merchant } = resolveAccount(account);
   return Boolean(
     process.env.PAYSSAM_API_KEY &&
-      process.env.PAYSSAM_MEMBER_ID &&
-      process.env.PAYSSAM_MERCHANT_ID &&
+      member &&
+      merchant &&
       process.env.PAYSSAM_BASE_URL,
   );
 }
@@ -73,12 +127,16 @@ function defaultCallbackUrl(): string {
   return `${site.replace(/\/+$/, "")}/api/payssam/callback`;
 }
 
-/** {apiKey, member, merchant} 공통 봉투 — bill 계열 */
-function billEnvelope(bill: Record<string, unknown>): Record<string, unknown> {
+/** {apiKey, member, merchant} 공통 봉투 — bill 계열. member·merchant는 테넌트 우선·env 폴백. */
+function billEnvelope(
+  bill: Record<string, unknown>,
+  account?: PayssamAccount | null,
+): Record<string, unknown> {
+  const { member, merchant } = resolveAccount(account);
   return {
     apiKey: process.env.PAYSSAM_API_KEY,
-    member: process.env.PAYSSAM_MEMBER_ID,
-    merchant: process.env.PAYSSAM_MERCHANT_ID,
+    member,
+    merchant,
     bill,
   };
 }
@@ -86,11 +144,13 @@ function billEnvelope(bill: Record<string, unknown>): Record<string, unknown> {
 /** {apiKey, member, merchant} 공통 봉투 — cash-receipt 계열(키 이름이 bill이 아니라 cashReceipt) */
 function cashReceiptEnvelope(
   cashReceipt: Record<string, unknown>,
+  account?: PayssamAccount | null,
 ): Record<string, unknown> {
+  const { member, merchant } = resolveAccount(account);
   return {
     apiKey: process.env.PAYSSAM_API_KEY,
-    member: process.env.PAYSSAM_MEMBER_ID,
-    merchant: process.env.PAYSSAM_MERCHANT_ID,
+    member,
+    merchant,
     cashReceipt,
   };
 }
@@ -103,8 +163,11 @@ function cashReceiptEnvelope(
 async function postPayssam<T>(
   path: string,
   body: Record<string, unknown>,
+  // 설정 게이트도 같은 계정 기준으로 판정해야 한다 — 환경변수에 merchant가 없고 테넌트에만 있는
+  // 구성에서 게이트가 env만 보면 봉투는 멀쩡한데 호출이 막힌다.
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<T>> {
-  if (!isPayssamConfigured()) {
+  if (!isPayssamConfigured(account)) {
     return {
       ok: false,
       code: "NOT_CONFIGURED",
@@ -191,40 +254,60 @@ export interface SendBillParams {
   sendType?: "TALK" | "URL";
 }
 
-/** POST /bill — 청구서 생성·발송. 성공 data.shortUrl이 청구서 단축 URL. */
+/**
+ * POST /bill — 청구서 생성·발송. 성공 data.shortUrl이 청구서 단축 URL.
+ * account를 넘기면 그 테넌트의 하위사업장으로 청구가 나간다(생략 시 환경변수 사업장 — 기존 동작).
+ */
 export function sendBill(
   params: SendBillParams,
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<BillSendData>> {
   const price = String(params.price);
   // undefined 값은 JSON.stringify가 생략하므로 옵션 필드는 그대로 넘긴다.
   return postPayssam<BillSendData>(
     "/bill",
-    billEnvelope({
-      billId: params.billId,
-      sendType: params.sendType ?? "TALK",
-      billIssuer: params.billIssuer,
-      productName: params.productName,
-      price,
-      memberName: params.memberName,
-      phone: params.phone,
-      message: params.message,
-      expireDt: params.expireDt,
-      hash: payssamHash(params.billId, params.phone, price),
-      callbackUrl: params.callbackUrl ?? defaultCallbackUrl(),
-    }),
+    billEnvelope(
+      {
+        billId: params.billId,
+        sendType: params.sendType ?? "TALK",
+        billIssuer: params.billIssuer,
+        productName: params.productName,
+        price,
+        memberName: params.memberName,
+        phone: params.phone,
+        message: params.message,
+        expireDt: params.expireDt,
+        hash: payssamHash(params.billId, params.phone, price),
+        callbackUrl: params.callbackUrl ?? defaultCallbackUrl(),
+      },
+      account,
+    ),
+    account,
   );
 }
 
-/** POST /bill/resend — 카카오톡 재발송 */
+/** POST /bill/resend — 카카오톡 재발송. 발송 때와 같은 사업장(account)으로 조회·재발송해야 한다. */
 export function resendBill(
   billId: string,
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<BillResendData>> {
-  return postPayssam<BillResendData>("/bill/resend", billEnvelope({ billId }));
+  return postPayssam<BillResendData>(
+    "/bill/resend",
+    billEnvelope({ billId }, account),
+    account,
+  );
 }
 
 /** POST /bill/read — 청구서 단건 조회. data.apprState: F승인/W미결제/C취소/D파기. */
-export function readBill(billId: string): Promise<PayssamResult<BillReadData>> {
-  return postPayssam<BillReadData>("/bill/read", billEnvelope({ billId }));
+export function readBill(
+  billId: string,
+  account?: PayssamAccount | null,
+): Promise<PayssamResult<BillReadData>> {
+  return postPayssam<BillReadData>(
+    "/bill/read",
+    billEnvelope({ billId }, account),
+    account,
+  );
 }
 
 /**
@@ -235,16 +318,21 @@ export function readBill(billId: string): Promise<PayssamResult<BillReadData>> {
 export function destroyBill(
   billId: string,
   price: string | number,
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<BillDestroyData>> {
   const priceStr = String(price);
   return postPayssam<BillDestroyData>(
     "/bill/destroy",
-    billEnvelope({
-      billId,
-      price: priceStr,
-      // 요청에 phone 필드가 없는 계열은 2필드 hash(실측 — payssamHash 주석 참조).
-      hash: payssamHash(billId, null, priceStr),
-    }),
+    billEnvelope(
+      {
+        billId,
+        price: priceStr,
+        // 요청에 phone 필드가 없는 계열은 2필드 hash(실측 — payssamHash 주석 참조).
+        hash: payssamHash(billId, null, priceStr),
+      },
+      account,
+    ),
+    account,
   );
 }
 
@@ -253,16 +341,21 @@ export function cancelBill(
   billId: string,
   price: string | number,
   cancelReason: string,
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<BillCancelData>> {
   const priceStr = String(price);
   return postPayssam<BillCancelData>(
     "/bill/cancel",
-    billEnvelope({
-      billId,
-      price: priceStr,
-      cancelReason,
-      hash: payssamHash(billId, null, priceStr),
-    }),
+    billEnvelope(
+      {
+        billId,
+        price: priceStr,
+        cancelReason,
+        hash: payssamHash(billId, null, priceStr),
+      },
+      account,
+    ),
+    account,
   );
 }
 
@@ -284,22 +377,28 @@ export interface IssueCashReceiptParams {
 /** POST /cash-receipt/issue — 현금영수증 발행 */
 export function issueCashReceipt(
   params: IssueCashReceiptParams,
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<CashReceiptIssueData>> {
   const price = String(params.price);
   return postPayssam<CashReceiptIssueData>(
     "/cash-receipt/issue",
-    cashReceiptEnvelope({
-      billId: params.billId,
-      hash: payssamHash(params.billId, null, price), // 2필드 hash(실측)
-      price,
-      supplyPrice:
-        params.supplyPrice === undefined
-          ? undefined
-          : String(params.supplyPrice),
-      tax: params.tax === undefined ? undefined : String(params.tax),
-      issuanceNumber: params.issuanceNumber,
-      trader: params.trader,
-    }),
+    cashReceiptEnvelope(
+      {
+        billId: params.billId,
+        hash: payssamHash(params.billId, null, price), // 2필드 hash(실측)
+        price,
+        supplyPrice:
+          params.supplyPrice === undefined
+            ? undefined
+            : String(params.supplyPrice),
+        tax: params.tax === undefined ? undefined : String(params.tax),
+        issuanceNumber: params.issuanceNumber,
+        trader: params.trader,
+      },
+      // 증빙은 청구를 낸 사업장(면·과세 정책이 사업장별로 다르다)에서 발행돼야 한다.
+      account,
+    ),
+    account,
   );
 }
 
@@ -313,16 +412,21 @@ export interface CancelCashReceiptParams {
 /** POST /cash-receipt/cancel — 현금영수증 취소(환불 수렴 경로 — flow-canon 검수 45) */
 export function cancelCashReceipt(
   params: CancelCashReceiptParams,
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<CashReceiptCancelData>> {
   const price = String(params.price);
   return postPayssam<CashReceiptCancelData>(
     "/cash-receipt/cancel",
-    cashReceiptEnvelope({
-      billId: params.billId,
-      hash: payssamHash(params.billId, null, price), // 2필드 hash(실측)
-      price,
-      trader: params.trader,
-    }),
+    cashReceiptEnvelope(
+      {
+        billId: params.billId,
+        hash: payssamHash(params.billId, null, price), // 2필드 hash(실측)
+        price,
+        trader: params.trader,
+      },
+      account,
+    ),
+    account,
   );
 }
 
@@ -330,21 +434,34 @@ export function cancelCashReceipt(
 export function readCashReceipt(
   billId: string,
   price: string | number,
+  account?: PayssamAccount | null,
 ): Promise<PayssamResult<CashReceiptReadData>> {
   const priceStr = String(price);
   return postPayssam<CashReceiptReadData>(
     "/cash-receipt/read",
-    cashReceiptEnvelope({
-      billId,
-      hash: payssamHash(billId, null, priceStr), // 2필드 hash(실측)
-      price: priceStr,
-    }),
+    cashReceiptEnvelope(
+      {
+        billId,
+        hash: payssamHash(billId, null, priceStr), // 2필드 hash(실측)
+        price: priceStr,
+      },
+      account,
+    ),
+    account,
   );
 }
 
-/** POST /read/remain_count — 쌤포인트(발송 재화) 잔액 조회. 봉투가 아니라 {apiKey}만 보낸다. */
-export function readRemainPoint(): Promise<PayssamResult<RemainPointData>> {
-  return postPayssam<RemainPointData>("/read/remain_count", {
-    apiKey: process.env.PAYSSAM_API_KEY,
-  });
+/**
+ * POST /read/remain_count — 쌤포인트(발송 재화) 잔액 조회. 봉투가 아니라 {apiKey}만 보낸다.
+ * 포인트 지갑은 파트너(①) 단위라 잔액 자체는 테넌트와 무관하다 — account는 설정 게이트 판정에만 쓴다
+ * (환경변수에 merchant가 없고 테넌트에만 있는 구성에서 잔액 조회까지 막히지 않도록).
+ */
+export function readRemainPoint(
+  account?: PayssamAccount | null,
+): Promise<PayssamResult<RemainPointData>> {
+  return postPayssam<RemainPointData>(
+    "/read/remain_count",
+    { apiKey: process.env.PAYSSAM_API_KEY },
+    account,
+  );
 }
