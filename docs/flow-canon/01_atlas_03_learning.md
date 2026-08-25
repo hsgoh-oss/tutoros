@@ -44,7 +44,7 @@
   - [ ] 운영자 추가 과제 필요: 과제 흐름으로 연결.
   - [ ] AI 답변 초안: 승인 전 비노출.
   - [x] 다른 학생·무관계 보호자: 질문 존재 자체를 노출하지 않는다.
-- **현행 갭:** 🔶 부분(판정 2026-08-25) — `app/portal/[token]/actions.ts:409`·`:500` · `app/admin/(protected)/homework/actions.ts:702`·`:826`·`:834` · `supabase/migrations/00015_homework.sql:146`·`:204` · `lib/data/homework.ts:572` — 질문 접수(원 과제·수업·리포트 연결 강제, 본인에게 노출되는 원 기록만, 타 테넌트 리포트 연결은 복합 FK 차단)→오늘 업무(work_items question_asked) 수렴→답변 초안(draft 비노출)→승인 게시/해결 닫기까지 코드 구현, 학생 뷰는 본인 질문·승인된 답변만 조회(`lib/portal/data.ts:157`) — 실측은 접수 폼 렌더만이며 답변→승인→학생 확인 순환은 실측 없음, AI 답변 초안은 미구현(수동 답변만).
+- **현행 갭:** 🔶 부분(판정 2026-08-25) — `app/portal/[token]/actions.ts:409`·`:500` · `app/admin/(protected)/homework/actions.ts:702`·`:826`·`:834` · `supabase/migrations/00015_homework.sql:146`·`:204` · `lib/data/homework.ts:572` — 질문 접수(원 과제·수업·리포트 연결 강제, 본인에게 노출되는 원 기록만, 타 테넌트 리포트 연결은 복합 FK 차단)→오늘 업무(work_items question_asked) 수렴→답변 초안(draft 비노출)→승인 게시/해결 닫기까지 코드 구현, 학생 뷰는 본인 질문·승인된 답변만 조회(`lib/portal/data.ts:152`) — 실측은 접수 폼 렌더만이며 답변→승인→학생 확인 순환은 실측 없음, AI 답변 초안은 미구현(수동 답변만).
 
 ### H-05 기존 학습이력 가져오기·대사
 - [ ] **구현 완료** — 기존 진도·평가·파일·메모의 원본·범위 확정부터 모의 검토, 후보 분리, 승인, 학습이력 반영, 학생별 결과 대사까지 동작한다.
@@ -169,7 +169,7 @@
   - [x] 승인 전: 포털·알림·공유 비노출.
   - [ ] 게시 실패: 승인본 유지 → 게시 재시도.
   - [x] 알림 실패: 보고서 게시 유지 → 전달 재시도.
-- **현행 갭:** ✅ 있음(판정 2026-08-25) — `app/admin/(protected)/reports/actions.ts:184`·`:233`·`:241`·`:317`·`:366`·`:410`·`:445`·`:487` · `lib/data/reports.ts:139` · `lib/data/crm.ts:195` · `app/portal/[token]/page.tsx:66` · `lib/portal/data.ts:103`·`:117` · `lib/ai/validate.ts:105` · `lib/notify/send.ts:245` · `app/api/cron/flush/route.ts:36` — 근거 수집(수업·성적)→가명화 AI 초안(항상 draft)→운영자 수정(발송 후 금지)·승인(draft만)→발송 전 클린 검사→포털 게시(approved/sent만 노출·실명 복원)→알림(업무 상태와 전달 상태 delivery_status 분리 — 실패가 게시를 뒤집지 않음, 큐 크론 재시도)까지 생성→승인→포털 실명 복원 E2E 실측. 00016이 status 체크에 retracted를 더하면서도 전달 상태 'failed'가 업무 상태로 되돌아오지 않는 분리는 그대로임을 RLS 하네스 8m-b(`supabase/tests/rls/99_rls_test.sql:833`)로 실증 — 남은 갭: 사람 직접 작성 경로·보고 기간 지정 없음, 근거 없는 항목을 '기록 없음'으로 강제하는 규칙은 문안 검증 수준이지 근거 대조 단계가 아니다.
+- **현행 갭:** ✅ 있음(판정 2026-08-25) — `app/admin/(protected)/reports/actions.ts:184`·`:234`·`:239`·`:317`·`:366`·`:410`·`:445`·`:487` · `lib/data/reports.ts:139` · `lib/data/crm.ts:195` · `app/portal/[token]/page.tsx:66` · `lib/portal/data.ts:103`·`:117` · `lib/ai/validate.ts:105` · `lib/notify/send.ts:245` · `app/api/cron/flush/route.ts:36` — 근거 수집(수업·성적)→가명화 AI 초안(항상 draft)→운영자 수정(발송 후 금지)·승인(draft만)→발송 전 클린 검사→포털 게시(approved/sent만 노출·실명 복원)→알림(업무 상태와 전달 상태 delivery_status 분리 — 실패가 게시를 뒤집지 않음, 큐 크론 재시도)까지 생성→승인→포털 실명 복원 E2E 실측. 00016이 status 체크에 retracted를 더하면서도 전달 상태 'failed'가 업무 상태로 되돌아오지 않는 분리는 그대로임을 RLS 하네스 8m-b(`supabase/tests/rls/99_rls_test.sql:833`)로 실증 — 남은 갭: 사람 직접 작성 경로·보고 기간 지정 없음, 근거 없는 항목을 '기록 없음'으로 강제하는 규칙은 문안 검증 수준이지 근거 대조 단계가 아니다.
 
 ### G-03 보고서 정정·철회·공유
 - [ ] **구현 완료** — 오류·정정 요청부터 원 보고서·근거 확인, 새 보고서본, 운영자 재승인, 최신본 게시, 이전본 대체 표시까지 동작한다.
