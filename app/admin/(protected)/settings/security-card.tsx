@@ -79,7 +79,7 @@ export function SecurityCard({ currentEmail }: { currentEmail: string }) {
   return (
     <div className="space-y-8">
       <div>
-        <h3 className="text-[15px] font-black text-ink">전 세션 로그아웃</h3>
+        <h3 className="text-[15px] font-semibold text-ink">전 세션 로그아웃</h3>
         <p className="mt-1 text-sm leading-relaxed text-muted">
           기기 분실·세션 탈취가 의심되면 모든 기기의 로그인을 즉시 무효화합니다.
           현재 세션도 함께 종료되어 다시 로그인해야 합니다.
@@ -98,7 +98,7 @@ export function SecurityCard({ currentEmail }: { currentEmail: string }) {
       </div>
 
       <div className="border-t border-line pt-8">
-        <h3 className="text-[15px] font-black text-ink">운영자 이메일 교체</h3>
+        <h3 className="text-[15px] font-semibold text-ink">운영자 이메일 교체</h3>
         <p className="mt-1 text-sm leading-relaxed text-muted">
           현재 운영자 <span className="font-bold text-ink">{currentEmail}</span> 를 새
           이메일로 교체합니다. 새 이메일로 발송된 인증번호를 확인하면 즉시 교체되며,

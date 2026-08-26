@@ -12,7 +12,7 @@ export function EmptyState({
 }) {
   return (
     <div className="rounded-panel border border-dashed border-line bg-soft px-6 py-12 text-center">
-      <p className="text-sm font-extrabold text-ink-soft">{title}</p>
+      <p className="text-sm font-semibold text-ink-soft">{title}</p>
       {description && (
         <p className="mt-1.5 text-sm text-muted">{description}</p>
       )}

@@ -60,7 +60,7 @@ export default async function DdayPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">D-day 관리</h1>
+        <h1 className="text-xl font-semibold tracking-tight">D-day 관리</h1>
         <p className="mt-1 text-sm text-muted">
           공개 사이트에 노출되는 D-day 배너를 관리합니다.
         </p>
@@ -69,7 +69,7 @@ export default async function DdayPage() {
       {!connected && <DbBanner />}
 
       <Card className="mb-6">
-        <h2 className="mb-4 text-sm font-black tracking-tight">D-day 추가</h2>
+        <h2 className="mb-4 text-sm font-semibold tracking-tight">D-day 추가</h2>
         <SubmitForm action={createDday} submitLabel="추가">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="이름" required>
@@ -160,7 +160,7 @@ export default async function DdayPage() {
       )}
 
       <Card className="mt-8">
-        <h2 className="mb-4 text-sm font-black tracking-tight">백업 복원</h2>
+        <h2 className="mb-4 text-sm font-semibold tracking-tight">백업 복원</h2>
         {backups.length === 0 ? (
           <p className="text-sm text-muted">백업 이력이 없습니다.</p>
         ) : (

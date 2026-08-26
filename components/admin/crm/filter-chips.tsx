@@ -23,7 +23,7 @@ export function FilterChips({
       <Link
         href={basePath}
         className={cn(
-          "inline-flex min-h-11 items-center rounded-full border px-4 text-xs font-bold tracking-tight transition-colors",
+          "inline-flex min-h-[var(--ui-h-sm)] items-center rounded-[var(--radius-control)] border px-3.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight transition-colors",
           !current
             ? "border-brand-600 bg-brand-50 text-brand-700"
             : "border-line bg-white text-ink-soft hover:border-brand-200",
@@ -36,7 +36,7 @@ export function FilterChips({
           key={opt.value}
           href={`${basePath}?${paramKey}=${opt.value}`}
           className={cn(
-            "inline-flex min-h-11 items-center rounded-full border px-4 text-xs font-bold tracking-tight transition-colors",
+            "inline-flex min-h-[var(--ui-h-sm)] items-center rounded-[var(--radius-control)] border px-3.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight transition-colors",
             current === opt.value
               ? "border-brand-600 bg-brand-50 text-brand-700"
               : "border-line bg-white text-ink-soft hover:border-brand-200",

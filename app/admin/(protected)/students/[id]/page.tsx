@@ -158,7 +158,7 @@ export default async function StudentDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-3 text-xl font-black tracking-tight">
+          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight">
             {student.name}
             <Badge tone={studentStatusTone(student.status)}>
               {studentStatusLabel(student.status)}
@@ -185,7 +185,7 @@ export default async function StudentDetailPage({
                관계·결제·일정 재확인 + 사유를 거쳐야 활성 전환되며, adjustments(enrollment)에
                재등록 이력이 남는다. 완전한 새 등록 엔티티 생성은 M2 몫. */
             <Card>
-              <h2 className="mb-2 text-sm font-black text-ink-soft">재등록 확인</h2>
+              <h2 className="mb-2 text-sm font-semibold text-ink-soft">재등록 확인</h2>
               <p className="mb-4 text-xs leading-relaxed text-muted">
                 종료된 등록은 다시 활성화하지 않고 새 등록으로 처리하는 것이 원칙입니다.
                 아래 항목을 실제로 다시 확인한 뒤 재등록해 주세요. 재등록 내역은
@@ -237,7 +237,7 @@ export default async function StudentDetailPage({
           )}
 
           <Card>
-            <h2 className="mb-4 text-sm font-black text-ink-soft">기본 정보</h2>
+            <h2 className="mb-4 text-sm font-semibold text-ink-soft">기본 정보</h2>
             {student.status === "ended" && (
               <p className="mb-4 rounded-lg bg-soft px-3 py-2 text-xs leading-relaxed text-muted">
                 종료된 등록은 이 폼에서 상태를 되돌릴 수 없습니다. 다시 수업을 시작하려면
@@ -252,7 +252,7 @@ export default async function StudentDetailPage({
 
           <Card>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-black text-ink-soft">최근 수업 기록</h2>
+              <h2 className="text-sm font-semibold text-ink-soft">최근 수업 기록</h2>
               <Link
                 href={`/admin/lessons?student=${student.id}`}
                 className="text-xs font-bold text-brand-700 hover:underline"
@@ -286,7 +286,7 @@ export default async function StudentDetailPage({
 
           <Card>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-black text-ink-soft">최근 성적</h2>
+              <h2 className="text-sm font-semibold text-ink-soft">최근 성적</h2>
               <Link
                 href={`/admin/grades?student=${student.id}`}
                 className="text-xs font-bold text-brand-700 hover:underline"
@@ -309,7 +309,7 @@ export default async function StudentDetailPage({
                         {formatKDate(g.examDate)}
                       </p>
                     </div>
-                    <p className="text-sm font-extrabold">
+                    <p className="text-sm font-semibold">
                       {g.grade ? `${g.grade}등급` : g.rawScore != null ? `${g.rawScore}점` : "-"}
                       {g.percentile != null && (
                         <span className="ml-1 text-xs font-bold text-muted">
@@ -327,7 +327,7 @@ export default async function StudentDetailPage({
         <div className="space-y-6">
           <Card>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-black text-ink-soft">최근 결제</h2>
+              <h2 className="text-sm font-semibold text-ink-soft">최근 결제</h2>
               <Link
                 href={`/admin/payments?student=${student.id}`}
                 className="text-xs font-bold text-brand-700 hover:underline"
@@ -361,7 +361,7 @@ export default async function StudentDetailPage({
 
           <Card>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-black text-ink-soft">AI 리포트</h2>
+              <h2 className="text-sm font-semibold text-ink-soft">AI 리포트</h2>
               <Link
                 href={`/admin/reports?student=${student.id}`}
                 className="text-xs font-bold text-brand-700 hover:underline"
@@ -378,7 +378,7 @@ export default async function StudentDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">알림 이력</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">알림 이력</h2>
             {notifications.length === 0 ? (
               <p className="text-sm text-muted">발송된 알림이 없습니다.</p>
             ) : (
@@ -404,7 +404,7 @@ export default async function StudentDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">자료</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">자료</h2>
             {materials.length === 0 ? (
               <p className="text-sm text-muted">등록된 자료가 없습니다.</p>
             ) : (
@@ -432,7 +432,7 @@ export default async function StudentDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">동의 내역</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">동의 내역</h2>
             {consents.length === 0 ? (
               <p className="text-sm text-muted">기록된 동의 내역이 없습니다.</p>
             ) : (
@@ -457,7 +457,7 @@ export default async function StudentDetailPage({
           <Card>
             {student.status === "ended" ? (
               <>
-                <h2 className="mb-2 text-sm font-black text-ink-soft">포털 관계</h2>
+                <h2 className="mb-2 text-sm font-semibold text-ink-soft">포털 관계</h2>
                 <p className="rounded-lg bg-soft px-3 py-2 text-xs leading-relaxed text-muted">
                   등록이 종료된 학생에게는 새 초대를 발급할 수 없습니다. 기존 초대 링크도
                   열리지 않습니다. 다시 수업을 시작하려면 재등록 확인 절차를 먼저 진행해 주세요.
@@ -478,7 +478,7 @@ export default async function StudentDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-2 text-sm font-black text-ink-soft">
+            <h2 className="mb-2 text-sm font-semibold text-ink-soft">
               학생·학부모 리포트 링크
             </h2>
             <p className="mb-3 text-xs leading-relaxed text-muted">
@@ -489,7 +489,7 @@ export default async function StudentDetailPage({
                 링크를 쓴다). 역할별 초대는 사람마다 링크가 갈라져 회수도 사람 단위로 된다.
                 기능은 그대로 두고 안내만 덧붙인다 — 전환 시점은 운영자가 정한다. */}
             <p className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-xs leading-relaxed text-brand-700">
-              위의 <strong className="font-black">포털 관계</strong>에서 역할별 초대로
+              위의 <strong className="font-semibold">포털 관계</strong>에서 역할별 초대로
               전환을 권장합니다. 역할별 초대는 받는 사람마다 링크가 달라 권한을 따로 회수할
               수 있습니다. 이 링크는 그대로 계속 쓸 수 있습니다.
             </p>

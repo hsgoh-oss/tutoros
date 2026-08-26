@@ -26,7 +26,7 @@ export default async function MessagesPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">메시지 발송</h1>
+        <h1 className="text-xl font-semibold tracking-tight">메시지 발송</h1>
         <p className="mt-1 text-sm text-muted">
           학생·학부모에게 개별 안내를 보내거나 재등록 안내(광고)를 발송합니다. 알림톡 우선,
           실패 시 SMS로 폴백됩니다.
@@ -43,7 +43,7 @@ export default async function MessagesPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
-            <h2 className="text-sm font-black text-ink-soft">개별 메시지</h2>
+            <h2 className="text-sm font-semibold text-ink-soft">개별 메시지</h2>
             <p className="mt-1 mb-4 text-sm text-muted">
               선택한 학생의 학부모(또는 학생 본인)에게 직접 작성한 안내를 발송합니다.
             </p>
@@ -72,7 +72,7 @@ export default async function MessagesPage() {
           </Card>
 
           <Card>
-            <h2 className="text-sm font-black text-ink-soft">재등록 안내 (광고)</h2>
+            <h2 className="text-sm font-semibold text-ink-soft">재등록 안내 (광고)</h2>
             <p className="mt-1 mb-4 text-sm text-muted">
               <strong className="text-ink-soft">마케팅 수신동의</strong>가 있는 학부모에게만
               발송됩니다. (광고) 표기·야간(21~08시) 발송 금지가 자동 적용됩니다.

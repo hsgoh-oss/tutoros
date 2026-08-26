@@ -229,7 +229,7 @@ export default async function EnrollmentDetailPage({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-black tracking-tight">
+            <h1 className="text-xl font-semibold tracking-tight">
               {enrollment.studentName ?? "알 수 없음"} 정규 등록
             </h1>
             <Badge tone={enrollmentStatusTone(enrollment.status)}>
@@ -267,7 +267,7 @@ export default async function EnrollmentDetailPage({
 
       {isPending && (
         <div className="mb-6 rounded-panel border border-amber-100 bg-amber-50 px-5 py-4">
-          <p className="text-sm font-black text-amber-700">등록 준비 중</p>
+          <p className="text-sm font-semibold text-amber-700">등록 준비 중</p>
           <p className="mt-1 text-sm text-amber-700">
             {preparingNotice({
               relationOk: enrollment.relationOk,
@@ -512,7 +512,7 @@ export default async function EnrollmentDetailPage({
 
       {isPending && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">등록 활성화</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">등록 활성화</h2>
           {canActivate ? (
             <>
               <p className="mt-1 text-sm text-muted">
@@ -555,7 +555,7 @@ export default async function EnrollmentDetailPage({
 
       {isActive && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">활성 등록</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">활성 등록</h2>
           <p className="mt-1 text-sm text-muted">
             활성 {formatKDateTime(enrollment.activatedAt)} · 학생 상태 미러:{" "}
             {student ? studentStatusLabel(student.status) : "-"}
@@ -577,7 +577,7 @@ export default async function EnrollmentDetailPage({
 
       {isActive && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">등록 종료</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">등록 종료</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             종료하면 학생 상태도 종료로 맞춰지고, 그 상태를 읽는 기존 포털 접근 판정이 즉시 닫힙니다
             (E-04 접근 회수). 미수·환불이 남아 있으면 결제 화면에서 정산을 먼저 정리해 주세요.
@@ -597,7 +597,7 @@ export default async function EnrollmentDetailPage({
 
       {isPending && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">활성화 전 취소</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">활성화 전 취소</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             계약 미동의·미결제·일정 미합의·정원 상실·고객 철회로 준비가 끝났을 때 닫습니다(R-06).
             학생 상태는 건드리지 않습니다 — 이 등록은 활성화된 적이 없습니다. 이미 수납된 금액이
@@ -618,7 +618,7 @@ export default async function EnrollmentDetailPage({
 
       {(enrollment.status === "ended" || enrollment.status === "canceled") && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">
+          <h2 className="text-sm font-semibold text-ink-soft">
             {enrollment.status === "ended" ? "종료된 등록" : "취소된 등록"}
           </h2>
           <p className="mt-1 text-sm text-muted">
@@ -634,7 +634,7 @@ export default async function EnrollmentDetailPage({
 
       {enrollment.contracts.length > 0 && (
         <Card>
-          <h2 className="text-sm font-black text-ink-soft">계약 이력</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">계약 이력</h2>
           <p className="mt-1 mb-3 text-xs text-muted">
             조건이 바뀌면 이전 계약본을 고치지 않고 새 계약본을 만듭니다 — 동의된 계약본은 한 등록에
             하나뿐입니다(R-03 · R-05).

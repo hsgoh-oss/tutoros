@@ -91,7 +91,7 @@ function SeatStat({ label, value, hint }: { label: string; value: string; hint?:
   return (
     <div className="rounded-panel border border-line px-4 py-3">
       <p className="text-xs font-bold text-muted">{label}</p>
-      <p className="mt-1 text-lg font-black tracking-tight text-ink">{value}</p>
+      <p className="mt-1 text-lg font-semibold tracking-tight text-ink">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
@@ -135,7 +135,7 @@ export default async function RecruitPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">모집 현황</h1>
+        <h1 className="text-xl font-semibold tracking-tight">모집 현황</h1>
         <p className="mt-1 text-sm text-muted">
           공개 배너 문구와 접수 상태를 관리하고, 남은 자리를 확인해 대기자에게 자리를 제안합니다.
         </p>
@@ -146,7 +146,7 @@ export default async function RecruitPage() {
       {/* ① 정원 산정 — 남은 자리 = 정원 − 활성 등록 − 열린 제안(O-04) */}
       <Card className="mb-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-black tracking-tight">정원 산정</h2>
+          <h2 className="text-sm font-semibold tracking-tight">정원 산정</h2>
           <span className="text-xs text-muted">
             남은 자리 = 모집 인원 − 활성 등록 − 열린 자리 제안
           </span>
@@ -201,7 +201,7 @@ export default async function RecruitPage() {
 
       {/* ② 공개 모집 상태 — 저장은 recruit_status만 바꾼다(등록·제안 불변, 검수 63) */}
       <Card>
-        <h2 className="mb-4 text-sm font-black tracking-tight">공개 모집 상태</h2>
+        <h2 className="mb-4 text-sm font-semibold tracking-tight">공개 모집 상태</h2>
         <SubmitForm action={saveRecruitStatus} submitLabel="저장">
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="모집 상태" required>
@@ -269,7 +269,7 @@ export default async function RecruitPage() {
       {/* ③ 대기 자리 제안 — 한 자리에 한 사람만(검수 61) */}
       <Card className="mt-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-black tracking-tight">대기 자리 제안</h2>
+          <h2 className="text-sm font-semibold tracking-tight">대기 자리 제안</h2>
           <span className="text-xs text-muted">대기 중(보류) 상담 {waiting.length}명</span>
         </div>
 
@@ -333,7 +333,7 @@ export default async function RecruitPage() {
 
       {/* ④ 제안 이력 — 거절·만료는 자리 반환, 다음 대기자 선정은 운영자 판단(검수 62) */}
       <Card className="mt-8">
-        <h2 className="mb-4 text-sm font-black tracking-tight">자리 제안 이력</h2>
+        <h2 className="mb-4 text-sm font-semibold tracking-tight">자리 제안 이력</h2>
         {offers.length === 0 ? (
           <p className="text-sm text-muted">아직 보낸 자리 제안이 없습니다.</p>
         ) : (
@@ -419,7 +419,7 @@ export default async function RecruitPage() {
       </Card>
 
       <Card className="mt-8">
-        <h2 className="mb-4 text-sm font-black tracking-tight">백업 복원</h2>
+        <h2 className="mb-4 text-sm font-semibold tracking-tight">백업 복원</h2>
         {backups.length === 0 ? (
           <p className="text-sm text-muted">백업 이력이 없습니다.</p>
         ) : (

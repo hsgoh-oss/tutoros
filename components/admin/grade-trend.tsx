@@ -148,7 +148,7 @@ export function GradeTrend({ grades }: { grades: GradeTrendPoint[] }) {
   return (
     <Card className="mb-6">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-black tracking-tight">성적 추이</h2>
+        <h2 className="text-sm font-semibold tracking-tight">성적 추이</h2>
         <span className="text-xs font-bold text-muted">{metric.label} 기준</span>
       </div>
       <svg

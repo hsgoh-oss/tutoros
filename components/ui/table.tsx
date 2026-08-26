@@ -32,7 +32,7 @@ export function Th({
   return (
     <th
       className={cn(
-        "border-b border-line bg-soft px-4 py-3 text-left text-xs font-bold text-muted",
+        "border-b border-line bg-soft px-4 py-[var(--ui-row-y)] text-left text-xs [font-weight:var(--ui-w-label)] text-muted",
         className,
       )}
       {...props}
@@ -46,7 +46,7 @@ export function Td({
 }: TdHTMLAttributes<HTMLTableCellElement>) {
   return (
     <td
-      className={cn("border-b border-line px-4 py-3 align-middle", className)}
+      className={cn("border-b border-line px-4 py-[var(--ui-row-y)] align-middle", className)}
       {...props}
     />
   );

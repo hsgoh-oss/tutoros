@@ -116,7 +116,7 @@ export default async function TrialDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex flex-wrap items-center gap-3 text-xl font-black tracking-tight">
+          <h1 className="flex flex-wrap items-center gap-3 text-xl font-semibold tracking-tight">
             {trial.consultationName ?? "상담 정보 없음"} 시범 회차
             <Badge tone={trialStatusTone(trial.status)}>{trialStatusLabel(trial.status)}</Badge>
             {trial.isPaid ? <Badge tone="soft">유료</Badge> : <Badge tone="soft">무료</Badge>}
@@ -136,7 +136,7 @@ export default async function TrialDetailPage({
         <div className="space-y-6 lg:col-span-2">
           {/* ① 일정 합의 — 검수 8 */}
           <Card>
-            <h2 className="mb-1 text-sm font-black text-ink-soft">일정 합의</h2>
+            <h2 className="mb-1 text-sm font-semibold text-ink-soft">일정 합의</h2>
             <p className="mb-4 text-xs text-muted">
               일시를 입력하고 신청자와 합의가 끝났으면 합의 표시를 함께 켜세요. 일정만 합의된
               상태는 확정이 아니라 결제 대기입니다(T-02).
@@ -185,7 +185,7 @@ export default async function TrialDetailPage({
 
           {/* ② 비용·결제 — 검수 9·14 */}
           <Card>
-            <h2 className="mb-1 text-sm font-black text-ink-soft">비용·결제</h2>
+            <h2 className="mb-1 text-sm font-semibold text-ink-soft">비용·결제</h2>
             <p className="mb-4 text-xs text-muted">
               무료 시범은 결제 단계를 통과 처리하는 것이 아니라 <strong>결제 불필요</strong>로
               기록됩니다. 유료 시범은 청구를 연결하고 완납을 확인해야 확정할 수 있습니다.
@@ -281,7 +281,7 @@ export default async function TrialDetailPage({
 
           {/* ③ 시범 확정 — T-02 결과물 */}
           <Card>
-            <h2 className="mb-1 text-sm font-black text-ink-soft">시범 확정</h2>
+            <h2 className="mb-1 text-sm font-semibold text-ink-soft">시범 확정</h2>
             <p className="mb-4 text-xs text-muted">
               일정 합의와 결제 확인이 모두 갖춰졌을 때만 확정됩니다. 확정하면 신청자에게 확정
               안내가 나갑니다 — 안내가 실패해도 회차는 유지되고 발송만 재시도합니다(T-02).
@@ -368,7 +368,7 @@ export default async function TrialDetailPage({
           {/* ④ 변경·취소·노쇼 — T-03 */}
           {(isProposed || isScheduled) && (
             <Card>
-              <h2 className="mb-1 text-sm font-black text-ink-soft">변경·취소·노쇼</h2>
+              <h2 className="mb-1 text-sm font-semibold text-ink-soft">변경·취소·노쇼</h2>
               <p className="mb-5 text-xs text-muted">
                 요청 주체와 귀책을 함께 남깁니다. 운영자 귀책이면 무상 재예약 또는 전액 환불,
                 신청자 요청이면 승인된 환불·차감 정책을 따릅니다 — 정산 자체는 결제 관리에서
@@ -431,7 +431,7 @@ export default async function TrialDetailPage({
 
           {/* ⑤ 시범 결과 — T-04 · 검수 11 */}
           <Card>
-            <h2 className="mb-1 text-sm font-black text-ink-soft">시범 결과</h2>
+            <h2 className="mb-1 text-sm font-semibold text-ink-soft">시범 결과</h2>
             <p className="mb-4 text-xs text-muted">
               결과는 덮어쓰지 않습니다 — 결정이 바뀌면 이전 결정을 남긴 채 새 결정을 추가합니다.
               현재 결과는 가장 최근 결정입니다(T-04).
@@ -448,7 +448,7 @@ export default async function TrialDetailPage({
                   >
                     <Badge tone={trialResultTone(r.result)}>{trialResultLabel(r.result)}</Badge>
                     {index === trial.results.length - 1 && (
-                      <span className="text-xs font-black text-brand-700">현재 결과</span>
+                      <span className="text-xs font-semibold text-brand-700">현재 결과</span>
                     )}
                     <span className="text-xs text-muted">
                       {formatKDateTime(r.decidedAt)}
@@ -499,7 +499,7 @@ export default async function TrialDetailPage({
                   {" "}
                   <Link
                     href={`/admin/consultations/${consultation.id}`}
-                    className="font-black underline"
+                    className="font-semibold underline"
                   >
                     상담 상세로 이동 →
                   </Link>
@@ -512,7 +512,7 @@ export default async function TrialDetailPage({
         {/* 오른쪽: 요약 */}
         <div className="space-y-6">
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">신청자</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">신청자</h2>
             <div className="space-y-1.5 text-sm">
               <p className="font-bold">{trial.consultationName ?? "상담 정보 없음"}</p>
               {trial.consultationPhone && (
@@ -546,7 +546,7 @@ export default async function TrialDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">회차 요약</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">회차 요약</h2>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">상태</dt>

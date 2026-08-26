@@ -10,7 +10,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-card border border-line p-6 shadow-card",
+        "rounded-card border border-line p-[var(--ui-card-p)] shadow-card",
         !hasBgOverride && "bg-white",
         className,
       )}

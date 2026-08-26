@@ -10,6 +10,7 @@ import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import { createPackage } from "./actions";
 import { PackageTargetSelect } from "./target-select";
 import {
@@ -52,7 +53,7 @@ export default async function PackagesPage({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">수업 묶음</h1>
+        <h1 className="text-xl font-semibold tracking-tight">수업 묶음</h1>
         <p className="mt-1 text-sm text-muted">
           계약 조건으로 전체 회차를 만들고, 출결이 확정될 때마다 회차가 차감됩니다. 잔액은 저장된
           숫자가 아니라 회차 원장의 합이라 언제나 근거로 되짚을 수 있습니다.
@@ -64,22 +65,22 @@ export default async function PackagesPage({
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <p className="text-xs font-bold text-muted">진행 중</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-emerald-600">{activeCount}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-emerald-600">{activeCount}</p>
           <p className="mt-1 text-xs text-muted">회차를 만들고 차감할 수 있는 묶음</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">활성화 대기</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-amber-600">{draftCount}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-600">{draftCount}</p>
           <p className="mt-1 text-xs text-muted">등록 활성·계약 동의 확인 후 활성화</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">충돌 회차</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-orange-600">{conflicted}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-orange-600">{conflicted}</p>
           <p className="mt-1 text-xs text-muted">재협의 전까지 확정하지 않은 회차</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">귀속 미확정</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-rose-600">{unresolved}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-rose-600">{unresolved}</p>
           <p className="mt-1 text-xs text-muted">
             <Link href="/admin/attendance" className="underline">
               계약 귀속을 확정
@@ -91,7 +92,7 @@ export default async function PackagesPage({
 
       {available.length > 0 && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">수업 묶음 만들기</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">수업 묶음 만들기</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             활성 등록과 동의된 계약이 있는 학생만 고를 수 있습니다. 만들면 <strong>준비</strong>{" "}
             상태이며, 여기서 일정이 생기거나 결제가 확정되지는 않습니다.
@@ -139,14 +140,14 @@ export default async function PackagesPage({
         </Card>
       )}
 
-      <Card className="mb-6">
+      <Toolbar>
         <FilterChips
           basePath="/admin/packages"
           paramKey="status"
           current={filterStatus}
           options={PACKAGE_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
-      </Card>
+      </Toolbar>
 
       {rows.length === 0 ? (
         <EmptyState
@@ -192,8 +193,8 @@ export default async function PackagesPage({
                     <span
                       className={
                         (p.balance?.remaining ?? 0) < 0
-                          ? "font-black text-rose-600"
-                          : "font-black text-ink"
+                          ? "font-semibold text-rose-600"
+                          : "font-semibold text-ink"
                       }
                     >
                       {p.balance?.remaining ?? p.totalSessions}

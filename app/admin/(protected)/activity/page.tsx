@@ -48,7 +48,7 @@ export default async function ActivityPage() {
         >
           ← 대시보드
         </Link>
-        <h1 className="mt-2 text-xl font-black tracking-tight">변경 이력</h1>
+        <h1 className="mt-2 text-xl font-semibold tracking-tight">변경 이력</h1>
         <p className="mt-1 text-sm text-muted">
           주요 변경 작업의 감사 로그를 최근순으로 확인합니다.
         </p>

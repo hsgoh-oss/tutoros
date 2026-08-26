@@ -73,7 +73,7 @@ export function ConflictAwareForm({
 
       {conflicts.length > 0 && (
         <div className="mt-3 rounded-panel border border-amber-100 bg-amber-50 p-4">
-          <p className="text-xs font-black text-amber-700">겹치는 일정 {conflicts.length}건</p>
+          <p className="text-xs font-semibold text-amber-700">겹치는 일정 {conflicts.length}건</p>
           <ul className="mt-2 space-y-1 text-xs text-amber-700">
             {conflicts.map((c, i) => (
               <li key={`${c}-${i}`}>· {c}</li>

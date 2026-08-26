@@ -46,7 +46,7 @@ export default async function AttendancePage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">출결·정정</h1>
+        <h1 className="text-xl font-semibold tracking-tight">출결·정정</h1>
         <p className="mt-1 text-sm text-muted">
           사람이 판단해야 끝나는 일만 모았습니다. 정정은 원 기록을 덮어쓰지 않고 조정 이력을 쌓으며,
           예약 제한은 자동으로 걸리거나 풀리지 않습니다.
@@ -58,28 +58,28 @@ export default async function AttendancePage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <p className="text-xs font-bold text-muted">심사 대기 정정</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-amber-600">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-600">
             {corrections.length}
           </p>
           <p className="mt-1 text-xs text-muted">승인 시 잔액이 다시 계산됩니다</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">귀속 미확정 회차</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-rose-600">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-rose-600">
             {unresolved.length}
           </p>
           <p className="mt-1 text-xs text-muted">잔액·환불 계산에서 제외 중</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">예약 위험 검토</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-orange-600">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-orange-600">
             {riskItems.length}
           </p>
           <p className="mt-1 text-xs text-muted">반복 노쇼 누적 — 판단 대기</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">활성 예약 제한</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-ink">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
             {activeRestrictions.length}
           </p>
           <p className="mt-1 text-xs text-muted">
@@ -91,7 +91,7 @@ export default async function AttendancePage() {
       </div>
 
       <Card className="mb-6">
-        <h2 className="mb-3 text-sm font-black text-ink-soft">심사 대기 정정 (L-06)</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-soft">심사 대기 정정 (L-06)</h2>
         {corrections.length === 0 ? (
           <p className="text-sm text-muted">심사할 정정 요청이 없습니다.</p>
         ) : (
@@ -157,7 +157,7 @@ export default async function AttendancePage() {
       </Card>
 
       <Card className="mb-6">
-        <h2 className="mb-3 text-sm font-black text-ink-soft">귀속 미확정 회차 (L-10)</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-soft">귀속 미확정 회차 (L-10)</h2>
         <p className="mb-3 text-sm text-muted">
           적용 계약이 확정되지 않은 회차입니다. 확정 전까지 잔액·환불·매출·보고서 계산에서
           확정 사실처럼 쓰이지 않습니다. 각 회차에서 유효 계약 후보를 확인해 확정하세요.
@@ -200,7 +200,7 @@ export default async function AttendancePage() {
       </Card>
 
       <Card className="mb-6">
-        <h2 className="mb-3 text-sm font-black text-ink-soft">예약 위험 검토 (L-08)</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-soft">예약 위험 검토 (L-08)</h2>
         <p className="mb-3 text-sm text-muted">
           반복 노쇼가 누적되면 검토 업무만 생깁니다 — 제한은 자동으로 걸리지 않습니다. 원 출결·정정·
           연락 이력을 확인한 뒤 제한 없음 / 위험 확정 중 하나로 판단하세요. 제한은 새 예약·추가 자리
@@ -244,7 +244,7 @@ export default async function AttendancePage() {
       </Card>
 
       <Card>
-        <h2 className="mb-3 text-sm font-black text-ink-soft">예약 제한 이력</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-soft">예약 제한 이력</h2>
         {restrictions.length === 0 ? (
           <EmptyState title="예약 제한이 없습니다" description="제한은 운영자 판단으로만 생깁니다." />
         ) : (

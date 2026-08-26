@@ -66,7 +66,7 @@ export default async function ScheduleDetailPage({
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-black tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             {studentName} · {formatKDateTime(schedule.scheduledAt)}
           </h1>
           <p className="mt-1 text-sm text-muted">
@@ -100,7 +100,7 @@ export default async function ScheduleDetailPage({
 
       {schedule.status === "conflict" && (
         <Card className="mb-6 border-orange-200 bg-orange-50/40">
-          <h2 className="text-sm font-black text-orange-800">충돌 회차 — 아직 확정되지 않았습니다</h2>
+          <h2 className="text-sm font-semibold text-orange-800">충돌 회차 — 아직 확정되지 않았습니다</h2>
           <p className="mt-1 text-sm text-orange-900">
             {schedule.conflictReason ?? "기존 일정과 겹칩니다."} 재협의 후 아래에서 취소하거나, 새
             시각으로 보강을 만들어 대체하세요.
@@ -110,7 +110,7 @@ export default async function ScheduleDetailPage({
 
       {!schedule.contractId && (
         <Card className="mb-6 border-rose-200 bg-rose-50/40">
-          <h2 className="text-sm font-black text-rose-800">계약 귀속 미확정 (L-10)</h2>
+          <h2 className="text-sm font-semibold text-rose-800">계약 귀속 미확정 (L-10)</h2>
           <p className="mt-1 mb-3 text-sm text-rose-900">
             이 회차는 잔액·환불·매출 계산에 확정 사실처럼 쓰이지 않으며 차감도 되지 않습니다.
             {candidates.length === 0 &&
@@ -148,7 +148,7 @@ export default async function ScheduleDetailPage({
 
       {!settled && !closed && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">출결 확정</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">출결 확정</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             회차당 한 번만 확정됩니다. 바꾸려면 아래 <strong>정정 요청</strong>을 거쳐야 합니다 —
             확정을 덮어쓰는 경로는 없습니다.
@@ -191,7 +191,7 @@ export default async function ScheduleDetailPage({
 
       {!settled && !closed && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">
+          <h2 className="text-sm font-semibold text-ink-soft">
             미참석 연락 기록 (L-04) · 무응답 {noAnswerCount}/3
           </h2>
           <p className="mt-1 mb-3 text-sm text-muted">
@@ -265,7 +265,7 @@ export default async function ScheduleDetailPage({
       {!closed && (
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
           <Card>
-            <h2 className="text-sm font-black text-ink-soft">회차 취소 (L-05)</h2>
+            <h2 className="text-sm font-semibold text-ink-soft">회차 취소 (L-05)</h2>
             <p className="mt-1 mb-3 text-sm text-muted">
               차감 여부가 곧 정책 판정 결과입니다. 활성 보강이 달린 회차는 차감 취소할 수 없습니다 —
               원 회차와 대체 회차를 동시에 차감하지 않습니다.
@@ -287,7 +287,7 @@ export default async function ScheduleDetailPage({
           </Card>
 
           <Card>
-            <h2 className="text-sm font-black text-ink-soft">보강 만들기 (L-05)</h2>
+            <h2 className="text-sm font-semibold text-ink-soft">보강 만들기 (L-05)</h2>
             <p className="mt-1 mb-3 text-sm text-muted">
               원 회차를 <strong>무차감</strong>으로 닫고 대체 회차를 만듭니다. 차감은 대체 회차에서
               일어나며, 원 회차당 활성 보강은 하나뿐입니다. 겹치는 시각이면 만들지 않습니다.
@@ -311,7 +311,7 @@ export default async function ScheduleDetailPage({
 
       {settled && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">출결 정정 요청 (L-06)</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">출결 정정 요청 (L-06)</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             확정된 출결은 <strong>{attendanceLabel(schedule.attendance)}</strong> ·{" "}
             {deductionLabel(schedule.deductionState)}입니다. 원 기록은 그대로 두고 정정 요청을
@@ -357,7 +357,7 @@ export default async function ScheduleDetailPage({
 
       {corrections.length > 0 && (
         <Card>
-          <h2 className="mb-3 text-sm font-black text-ink-soft">정정 이력</h2>
+          <h2 className="mb-3 text-sm font-semibold text-ink-soft">정정 이력</h2>
           <TableWrap>
             <Table>
               <thead>

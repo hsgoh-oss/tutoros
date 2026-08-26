@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listConsultations, formatKDate } from "@/lib/data/crm";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import { listForms } from "@/lib/data/intake";
 import {
   CONSULTATION_STATUS_OPTIONS,
@@ -46,7 +46,7 @@ export default async function ConsultationsPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">상담 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">상담 관리</h1>
           <p className="mt-1 text-sm text-muted">
             신청된 상담을 확인하고 학생 등록으로 전환합니다.
           </p>
@@ -55,7 +55,7 @@ export default async function ConsultationsPage({
 
       {!connected && <DbBanner />}
 
-      <Card className="mb-6">
+      <Toolbar>
         <FilterChips
           basePath="/admin/consultations"
           paramKey="status"
@@ -65,7 +65,7 @@ export default async function ConsultationsPage({
             label: o.label,
           }))}
         />
-      </Card>
+      </Toolbar>
 
       {consultations.length === 0 ? (
         <EmptyState

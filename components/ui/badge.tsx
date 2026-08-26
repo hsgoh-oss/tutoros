@@ -19,7 +19,7 @@ export function Badge({ tone = "brand", className, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold tracking-tight",
+        "inline-flex items-center gap-1 rounded-[var(--radius-control)] border px-2.5 py-0.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight",
         TONE[tone],
         className,
       )}

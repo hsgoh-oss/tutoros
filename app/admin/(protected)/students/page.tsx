@@ -2,13 +2,13 @@ import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listStudents, formatKDate } from "@/lib/data/crm";
 import { buttonClass } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/form";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import {
   STUDENT_STATUS_OPTIONS,
   classTypeLabel,
@@ -37,7 +37,7 @@ export default async function StudentsPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">학생 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">학생 관리</h1>
           <p className="mt-1 text-sm text-muted">
             재원 학생을 관리하고 수업·성적·결제 이력을 확인합니다.
           </p>
@@ -52,7 +52,7 @@ export default async function StudentsPage({
 
       {!connected && <DbBanner />}
 
-      <Card className="mb-6 space-y-4">
+      <Toolbar>
         <FilterChips
           basePath="/admin/students"
           paramKey="status"
@@ -62,19 +62,20 @@ export default async function StudentsPage({
             label: o.label,
           }))}
         />
-        <form method="get" className="flex max-w-sm gap-2">
+        {/* 필터 칩과 같은 줄에 붙여 툴바 한 줄로 끝낸다 — 검색은 보조 조작이라 폭을 크게 주지 않는다. */}
+        <form method="get" className="ml-auto flex gap-2">
           {status && <input type="hidden" name="status" value={status} />}
           <Input
             name="q"
             defaultValue={q ?? ""}
             placeholder="이름 검색"
-            className="py-2 text-sm"
+            className="h-9 w-48 py-0 text-sm"
           />
           <button type="submit" className={buttonClass("ghost", "sm")}>
             검색
           </button>
         </form>
-      </Card>
+      </Toolbar>
 
       {students.length === 0 ? (
         <EmptyState

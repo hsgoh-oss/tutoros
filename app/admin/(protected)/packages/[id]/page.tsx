@@ -56,7 +56,7 @@ export default async function PackageDetailPage({
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-black tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             {pkg.studentName ?? "알 수 없음"}
             {pkg.title && <span className="ml-2 text-sm font-bold text-muted">{pkg.title}</span>}
           </h1>
@@ -77,7 +77,7 @@ export default async function PackageDetailPage({
         <Card>
           <p className="text-xs font-bold text-muted">남은 회차</p>
           <p
-            className={`mt-2 text-2xl font-black tracking-tight ${
+            className={`mt-2 text-2xl font-semibold tracking-tight ${
               (balance?.remaining ?? 0) < 0 ? "text-rose-600" : "text-ink"
             }`}
           >
@@ -87,21 +87,21 @@ export default async function PackageDetailPage({
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">소진</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-brand-700">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-700">
             {balance?.consumed ?? 0}
           </p>
           <p className="mt-1 text-xs text-muted">차감된 회차(복원분 제외 전)</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">충돌 회차</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-orange-600">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-orange-600">
             {balance?.conflictedSessions ?? 0}
           </p>
           <p className="mt-1 text-xs text-muted">재협의 전까지 확정하지 않습니다</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">귀속 미확정</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-rose-600">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-rose-600">
             {balance?.unresolvedSessions ?? 0}
           </p>
           <p className="mt-1 text-xs text-muted">잔액·환불 계산에 넣지 않습니다</p>
@@ -110,7 +110,7 @@ export default async function PackageDetailPage({
 
       {pkg.status === "draft" && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">활성화</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">활성화</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             등록이 활성이고 계약이 동의된 경우에만 통과합니다. 활성화해야 회차를 만들 수 있습니다 —
             일정 생성이 결제·계약 완료를 대신하지는 않습니다.
@@ -121,7 +121,7 @@ export default async function PackageDetailPage({
 
       {pkg.status === "active" && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">회차 만들기</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">회차 만들기</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             반복 조건으로 후보를 만들고, 기존 일정과 겹치는 후보는 <strong>충돌</strong>로 남겨
             재협의 업무를 만듭니다. 정상 회차는 그대로 확정됩니다. 이미 만든 시각은 다시 만들지
@@ -136,7 +136,7 @@ export default async function PackageDetailPage({
 
       {conflicts.length > 0 && (
         <Card className="mb-6 border-orange-200 bg-orange-50/40">
-          <h2 className="text-sm font-black text-orange-800">
+          <h2 className="text-sm font-semibold text-orange-800">
             충돌 회차 {conflicts.length}건 — 재협의 필요
           </h2>
           <ul className="mt-2 space-y-1 text-sm text-orange-900">
@@ -154,7 +154,7 @@ export default async function PackageDetailPage({
 
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="text-sm font-black text-ink-soft">회차 조정</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">회차 조정</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             서비스 회차 부여·계약 변경에 따른 감액을 원장에 남깁니다. 기존 기입은 고치지 않고 새 행만
             쌓입니다 — 사유가 곧 근거입니다.
@@ -173,7 +173,7 @@ export default async function PackageDetailPage({
 
         {pkg.status !== "ended" && (
           <Card>
-            <h2 className="text-sm font-black text-ink-soft">묶음 종료</h2>
+            <h2 className="text-sm font-semibold text-ink-soft">묶음 종료</h2>
             <p className="mt-1 mb-3 text-sm text-muted">
               종료해도 원장은 그대로 남습니다 — 남은 회차는 정산·환불 계산의 근거입니다.
             </p>
@@ -187,7 +187,7 @@ export default async function PackageDetailPage({
       </div>
 
       <Card className="mb-6">
-        <h2 className="mb-3 text-sm font-black text-ink-soft">회차 원장</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-soft">회차 원장</h2>
         {ledger.length === 0 ? (
           <p className="text-sm text-muted">아직 기입이 없습니다. 잔액은 계약 회차 그대로입니다.</p>
         ) : (
@@ -211,7 +211,7 @@ export default async function PackageDetailPage({
                         {ledgerKindLabel(l.kind)}
                       </Badge>
                     </Td>
-                    <Td className="font-black">
+                    <Td className="font-semibold">
                       {l.delta > 0 ? "+" : ""}
                       {l.delta}
                     </Td>
@@ -226,7 +226,7 @@ export default async function PackageDetailPage({
       </Card>
 
       <Card>
-        <h2 className="mb-3 text-sm font-black text-ink-soft">회차 목록</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-soft">회차 목록</h2>
         {schedules.length === 0 ? (
           <EmptyState
             title="회차가 없습니다"

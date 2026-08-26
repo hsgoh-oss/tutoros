@@ -31,7 +31,7 @@ export default async function AdminLoginPage({
     <div className="flex min-h-screen items-center justify-center bg-soft px-5">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <p className="text-2xl font-black tracking-tight text-ink">
+          <p className="text-2xl font-semibold tracking-tight text-ink">
             {tenant.brandName}
           </p>
           <p className="mt-1.5 text-sm text-muted">

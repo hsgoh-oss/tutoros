@@ -11,6 +11,7 @@ import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import { createEnrollment } from "./actions";
 import {
   ENROLLMENT_STATUS_OPTIONS,
@@ -61,7 +62,7 @@ export default async function EnrollmentsPage({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">정규 등록</h1>
+        <h1 className="text-xl font-semibold tracking-tight">정규 등록</h1>
         <p className="mt-1 text-sm text-muted">
           관계·계약·결제·일정 네 조건이 모두 확인돼야 등록이 활성화됩니다(R-04). 조건이 남아 있는
           동안에는 &lsquo;등록 준비 중&rsquo;이며 확정 수업으로 안내하지 않습니다.
@@ -73,22 +74,22 @@ export default async function EnrollmentsPage({
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <p className="text-xs font-bold text-muted">등록 준비 중</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-amber-600">{pendingCount}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-600">{pendingCount}</p>
           <p className="mt-1 text-xs text-muted">네 조건 확인 대기</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">활성화 가능</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-brand-700">{readyCount}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-700">{readyCount}</p>
           <p className="mt-1 text-xs text-muted">네 조건 충족 — 활성화만 남음</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">활성 등록</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-emerald-600">{activeCount}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-emerald-600">{activeCount}</p>
           <p className="mt-1 text-xs text-muted">지금 자리를 쓰고 있는 등록</p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">남은 자리</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-ink">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
             {seats.seatCount === null ? "미설정" : `${seats.remainingSeats ?? 0}`}
           </p>
           <p className="mt-1 text-xs text-muted">
@@ -106,7 +107,7 @@ export default async function EnrollmentsPage({
 
       {studentOptions.length > 0 && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">등록 만들기</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">등록 만들기</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             학생을 연결해 <strong>등록 준비 중</strong> 상태로 만듭니다. 네 게이트는 모두 미완으로
             시작하며, 여기서 활성화되는 것은 없습니다. 제출된 정규 신청폼을 고르면 그 폼의 상담이
@@ -149,14 +150,14 @@ export default async function EnrollmentsPage({
         </Card>
       )}
 
-      <Card className="mb-6">
+      <Toolbar>
         <FilterChips
           basePath="/admin/enrollments"
           paramKey="status"
           current={filterStatus}
           options={ENROLLMENT_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
-      </Card>
+      </Toolbar>
 
       {rows.length === 0 ? (
         <EmptyState

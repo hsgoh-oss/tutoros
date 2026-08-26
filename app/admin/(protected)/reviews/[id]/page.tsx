@@ -32,7 +32,7 @@ export default async function ReviewDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-black tracking-tight">후기 수정</h1>
+          <h1 className="text-xl font-semibold tracking-tight">후기 수정</h1>
           {status && (
             <Badge
               tone={

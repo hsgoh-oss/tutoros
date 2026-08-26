@@ -13,7 +13,7 @@ export default async function NewSchedulePage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">일정 신규 등록</h1>
+        <h1 className="text-xl font-semibold tracking-tight">일정 신규 등록</h1>
         <p className="mt-1 text-sm text-muted">
           학생과 수업 일시를 선택해 일정을 등록합니다.
         </p>

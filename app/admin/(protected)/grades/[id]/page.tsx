@@ -59,7 +59,7 @@ export default async function GradeDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">{grade.examName}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{grade.examName}</h1>
           <p className="mt-1 text-sm text-muted">
             성적을 정정하거나 철회합니다. 모든 정정·철회는 사유와 함께 이력으로 남습니다.
           </p>
@@ -100,7 +100,7 @@ export default async function GradeDetailPage({
 
       {/* A-06 조정 이력 — 원 결과는 덮어써 사라지지 않고, 무엇이 어떤 값에서 어떤 값으로 왜 바뀌었는지 남는다. */}
       <Card className="mt-6 max-w-3xl">
-        <h2 className="text-sm font-black tracking-tight">조정 이력</h2>
+        <h2 className="text-sm font-semibold tracking-tight">조정 이력</h2>
         {adjustments.length === 0 ? (
           <p className="mt-2 text-sm text-muted">
             조정 이력이 없습니다. 정정·철회 시 사유와 변경 전후 값이 여기에 기록됩니다.
@@ -130,7 +130,7 @@ export default async function GradeDetailPage({
 
       {/* A-06 철회 — 물리 삭제 대신 deleted_at 스탬프. 사유 필수, 목록·조회에서 제외된다. */}
       <Card className="mt-6 max-w-3xl border-rose-200">
-        <h2 className="text-sm font-black tracking-tight text-rose-600">
+        <h2 className="text-sm font-semibold tracking-tight text-rose-600">
           성적 삭제(철회)
         </h2>
         <p className="mt-2 text-sm text-muted">

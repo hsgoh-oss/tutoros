@@ -20,6 +20,7 @@ import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import {
   PAYMENT_STATUS_OPTIONS,
   PAYSSAM_POINT_PER_SEND,
@@ -92,7 +93,7 @@ export default async function PaymentsPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">결제 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">결제 관리</h1>
           <p className="mt-1 text-sm text-muted">
             수강료 청구와 납부 현황을 관리합니다.
           </p>
@@ -113,26 +114,26 @@ export default async function PaymentsPage({
       >
         <Card>
           <p className="text-xs font-bold text-muted">이번 달 완납</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-ink">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
             {formatWon(summary.paidThisMonth)}
           </p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">미납 합계</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-rose-600">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-rose-600">
             {formatWon(summary.overdueTotal)}
           </p>
         </Card>
         <Card>
           <p className="text-xs font-bold text-muted">청구 대기</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-amber-600">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-600">
             {formatWon(summary.pendingTotal)}
           </p>
         </Card>
         {payssamBalance !== null && (
           <Card>
             <p className="text-xs font-bold text-muted">쌤포인트 잔액</p>
-            <p className="mt-2 text-2xl font-black tracking-tight text-ink">
+            <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
               {payssamBalance.toLocaleString("ko-KR")}P
             </p>
             <p className="mt-1 text-xs text-muted">
@@ -159,7 +160,7 @@ export default async function PaymentsPage({
 
       {studentOptions.length > 0 && (
         <Card className="mb-6">
-          <h2 className="text-sm font-black text-ink-soft">4주 청구 사이클 생성</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">4주 청구 사이클 생성</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
             선택한 학생의 직전 청구를 이어 다음 4주 청구를 생성합니다(금액·수단 승계, 발송은 수동).
           </p>
@@ -178,7 +179,7 @@ export default async function PaymentsPage({
         </Card>
       )}
 
-      <Card className="mb-6">
+      <Toolbar>
         <FilterChips
           basePath="/admin/payments"
           paramKey="status"
@@ -188,7 +189,7 @@ export default async function PaymentsPage({
             label: o.label,
           }))}
         />
-      </Card>
+      </Toolbar>
 
       {payments.length === 0 ? (
         <EmptyState

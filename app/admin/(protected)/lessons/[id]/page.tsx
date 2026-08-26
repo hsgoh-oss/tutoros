@@ -26,7 +26,7 @@ export default async function LessonDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             {student?.name ?? "알 수 없음"} · {lesson.sessionNumber}회차
           </h1>
           <p className="mt-1 text-sm text-muted">{formatKDate(lesson.lessonDate)} 수업</p>

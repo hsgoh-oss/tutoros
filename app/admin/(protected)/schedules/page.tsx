@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listSchedules, formatKDate, formatKDateTime } from "@/lib/data/crm";
 import { buttonClass } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
@@ -23,6 +22,7 @@ import {
   scheduleStatusTone,
 } from "./constants";
 import { deleteSchedule, sendMakeupNotice, updateScheduleStatus } from "./actions";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 
 // 주·월 네비게이션은 **KST 달력 문자열**("YYYY-MM-DD" / "YYYY-MM")로만 다룬다.
 // Date 객체로 다루면 서버(UTC)에서 로컬 조각을 읽게 되어 KST 00~09시 회차가 이전 주·월로 새어
@@ -88,7 +88,7 @@ export default async function SchedulesPage({
     <>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">일정 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">일정 관리</h1>
           <p className="mt-1 text-sm text-muted">
             {view === "month"
               ? "월간 달력에서 수업 일정을 한눈에 확인합니다."
@@ -126,7 +126,7 @@ export default async function SchedulesPage({
       <div>
         {header}
 
-        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <Toolbar className="justify-between">
           <div className="flex flex-wrap items-center gap-2">
             {viewToggle}
             <span className="mx-1 h-5 w-px bg-line" />
@@ -150,7 +150,7 @@ export default async function SchedulesPage({
             </Link>
           </div>
           <p className="text-sm font-bold text-ink-soft">{formatKMonth(monthStart)}</p>
-        </Card>
+        </Toolbar>
 
         <ScheduleCalendar schedules={schedules} month={monthStart} />
       </div>
@@ -172,7 +172,7 @@ export default async function SchedulesPage({
     <div>
       {header}
 
-      <Card className="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <Toolbar className="justify-between">
         <div className="flex flex-wrap items-center gap-2">
           {viewToggle}
           <span className="mx-1 h-5 w-px bg-line" />
@@ -198,7 +198,7 @@ export default async function SchedulesPage({
         <p className="text-sm font-bold text-ink-soft">
           {formatKDate(monday)} ~ {formatKDate(sunday)}
         </p>
-      </Card>
+      </Toolbar>
 
       {schedules.length === 0 ? (
         <EmptyState

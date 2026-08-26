@@ -21,7 +21,7 @@ export default async function FaqPage() {
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">FAQ 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">FAQ 관리</h1>
           <p className="mt-1 text-sm text-muted">
             공개 사이트에 노출되는 자주 묻는 질문을 관리합니다.
           </p>
@@ -104,7 +104,7 @@ export default async function FaqPage() {
 
       {backups.length > 0 && (
         <Card className="mt-8">
-          <h2 className="mb-3 text-sm font-black text-ink-soft">백업 이력 (최근 12개)</h2>
+          <h2 className="mb-3 text-sm font-semibold text-ink-soft">백업 이력 (최근 12개)</h2>
           <ul className="space-y-2">
             {backups.map((b) => (
               <li

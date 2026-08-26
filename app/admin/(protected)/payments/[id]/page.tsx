@@ -97,7 +97,7 @@ export default async function PaymentDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             {student?.name ?? "알 수 없음"} 청구
           </h1>
           <p className="mt-1 text-sm text-muted">
@@ -114,7 +114,7 @@ export default async function PaymentDetailPage({
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <h2 className="mb-4 text-sm font-black text-ink-soft">기본 정보</h2>
+            <h2 className="mb-4 text-sm font-semibold text-ink-soft">기본 정보</h2>
             <dl className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <dt className="text-muted">학생</dt>
@@ -167,7 +167,7 @@ export default async function PaymentDetailPage({
           {showPayssamCard && (
             <Card>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-black text-ink-soft">결제선생</h2>
+                <h2 className="text-sm font-semibold text-ink-soft">결제선생</h2>
                 {ps?.bill_id && (
                   <Badge tone={payssamApprStateTone(ps.appr_state)}>
                     {payssamApprStateLabel(ps.appr_state)}
@@ -305,7 +305,7 @@ export default async function PaymentDetailPage({
                   {/* 현금영수증 — 완납 건 증빙(검수 45 수렴 대상). 발급됨이면 승인번호+취소, 아니면 발급 폼. */}
                   {statusEx === "paid" && (
                     <div className="border-t border-line pt-4">
-                      <h3 className="mb-3 text-sm font-black text-ink-soft">현금영수증</h3>
+                      <h3 className="mb-3 text-sm font-semibold text-ink-soft">현금영수증</h3>
                       {ps.cash_receipt_state === "issued" ? (
                         <div className="space-y-3">
                           <dl className="grid grid-cols-2 gap-4 text-sm">
@@ -357,7 +357,7 @@ export default async function PaymentDetailPage({
 
         <div className="space-y-6">
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">처리</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">처리</h2>
             <div className="flex flex-col items-start gap-3">
               {actionable && (
                 <ActionButton

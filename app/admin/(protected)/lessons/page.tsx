@@ -32,7 +32,7 @@ export default async function LessonsPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">수업 기록</h1>
+          <h1 className="text-xl font-semibold tracking-tight">수업 기록</h1>
           <p className="mt-1 text-sm text-muted">
             {filteredStudent
               ? `${filteredStudent.name} 학생의 수업 기록입니다.`

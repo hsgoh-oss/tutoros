@@ -18,7 +18,7 @@ export default async function MaterialsPage() {
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">자료 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">자료 관리</h1>
           <p className="mt-1 text-sm text-muted">
             학생별 또는 전체 공유 학습 자료를 업로드하고 관리합니다.
           </p>

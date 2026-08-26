@@ -47,7 +47,7 @@ export function InlineSelect({
         }
       }}
       className={cn(
-        "rounded-panel border border-line bg-white px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-600 disabled:opacity-50",
+        "rounded-[var(--radius-control)] border border-line bg-white px-2.5 py-1 text-xs [font-weight:var(--ui-w-label)] outline-none focus:border-brand-600 disabled:opacity-50",
         className,
       )}
     >

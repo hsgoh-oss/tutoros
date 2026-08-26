@@ -61,7 +61,7 @@ export default async function TrialsPage({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">시범수업 관리</h1>
+        <h1 className="text-xl font-semibold tracking-tight">시범수업 관리</h1>
         <p className="mt-1 text-sm text-muted">
           시범 회차의 일정 합의·결제 확인·확정과 변경·취소·노쇼, 그리고 시범 결과를 기록합니다.
           일정과 결제가 모두 갖춰졌을 때만 확정됩니다.
@@ -164,7 +164,7 @@ export default async function TrialsPage({
       )}
 
       <Card className="mt-8">
-        <h2 className="mb-1 text-sm font-black text-ink-soft">새 시범 회차 제안</h2>
+        <h2 className="mb-1 text-sm font-semibold text-ink-soft">새 시범 회차 제안</h2>
         <p className="mb-4 text-xs text-muted">
           한 상담에 진행 중인 회차는 하나만 둡니다(검수 6). 이미 진행 중인 회차가 있으면 그 회차를
           닫거나 재예약하세요. 유료 여부는 만든 뒤에도 바꿀 수 있습니다.

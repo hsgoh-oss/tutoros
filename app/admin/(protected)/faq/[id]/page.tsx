@@ -21,7 +21,7 @@ export default async function FaqDetailPage({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">FAQ 수정</h1>
+        <h1 className="text-xl font-semibold tracking-tight">FAQ 수정</h1>
       </div>
 
       <Card className="max-w-2xl">

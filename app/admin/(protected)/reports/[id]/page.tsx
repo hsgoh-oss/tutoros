@@ -63,7 +63,7 @@ export default async function ReportDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-3 text-xl font-black tracking-tight">
+          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight">
             {reportTypeLabel(report.type)} 리포트
             <Badge tone={reportStatusTone(report.status)}>{reportStatusLabel(report.status)}</Badge>
             {/* 전달 상태 뱃지 — 업무 상태와 분리 표시. 미발송(none)은 헤더에서 생략(초안·내부용 소음 방지). */}
@@ -96,7 +96,7 @@ export default async function ReportDetailPage({
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">내용 미리보기 · 수정</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">내용 미리보기 · 수정</h2>
             {/* 발송 완료본은 수정 금지, 철회본은 이력 보존(본문 덮어쓰기 금지 — 정정은 새 리포트) — 읽기 전용. */}
             {report.status === "sent" || report.status === "retracted" ? (
               <div className="whitespace-pre-wrap rounded-panel bg-soft p-4 text-sm">
@@ -114,7 +114,7 @@ export default async function ReportDetailPage({
         <div className="space-y-6">
           {issues.length > 0 && (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">품질 검사</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">품질 검사</h2>
               <ul className="space-y-3">
                 {[...blockingIssues, ...warnIssues].map((issue) => (
                   <li key={issue.rule} className="text-sm">
@@ -137,7 +137,7 @@ export default async function ReportDetailPage({
           )}
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">발송 처리</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">발송 처리</h2>
             {report.status === "retracted" ? (
               // G-03 — 철회본은 승인·발송 경로가 모두 닫힌다(재활성 금지). 재공개는 정정본 생성으로만.
               <p className="text-sm text-muted">
@@ -191,7 +191,7 @@ export default async function ReportDetailPage({
           {/* G-03 철회 정보 — 철회된 행이 곧 철회 이력: 시각·사유를 그대로 보여 준다. */}
           {report.status === "retracted" && (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">철회 정보</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">철회 정보</h2>
               <p className="text-sm text-ink-soft">{formatKDateTime(report.retractedAt)} 철회</p>
               <p className="mt-1.5 whitespace-pre-wrap text-sm text-muted">
                 사유: {report.retractReason ?? "-"}
@@ -210,7 +210,7 @@ export default async function ReportDetailPage({
           {/* G-03 대체 연결 — 이 리포트가 정정본으로 대체한 이전 본(철회본) 이력. */}
           {replaced.length > 0 && (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">대체한 이전 본</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">대체한 이전 본</h2>
               <ul className="space-y-2">
                 {replaced.map((r) => (
                   <li key={r.id}>
@@ -232,7 +232,7 @@ export default async function ReportDetailPage({
           {/* G-03 철회 · 정정 — 게시본의 철회와 정정본 생성(이전 본 대체) 진입점. */}
           {(canRetract || canRevise) && (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">철회 · 정정</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">철회 · 정정</h2>
               {canRetract && (
                 <>
                   <p className="mb-3 text-sm text-muted">
@@ -276,7 +276,7 @@ export default async function ReportDetailPage({
 
           {student && (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">연결 학생</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">연결 학생</h2>
               <Link
                 href={`/admin/students/${student.id}`}
                 className="text-sm font-bold text-brand-700 hover:underline"

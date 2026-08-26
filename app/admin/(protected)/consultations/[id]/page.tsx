@@ -43,7 +43,7 @@ export default async function ConsultationDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">{consultation.name}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{consultation.name}</h1>
           <p className="mt-1 text-sm text-muted">{formatKDate(consultation.createdAt)} 신청</p>
         </div>
         <div className="flex items-center gap-3">
@@ -63,7 +63,7 @@ export default async function ConsultationDetailPage({
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <h2 className="mb-4 text-sm font-black text-ink-soft">기본 정보</h2>
+            <h2 className="mb-4 text-sm font-semibold text-ink-soft">기본 정보</h2>
             <dl className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <dt className="text-muted">연락처</dt>
@@ -115,7 +115,7 @@ export default async function ConsultationDetailPage({
 
           {consultation.checklistItems.length > 0 && (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">자기진단 체크리스트</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">자기진단 체크리스트</h2>
               <div className="flex flex-wrap gap-2">
                 {consultation.checklistItems.map((item) => (
                   <Badge key={item} tone="soft">
@@ -128,7 +128,7 @@ export default async function ConsultationDetailPage({
 
           {consultation.prefill && (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">
                 수업료 계산기 프리필
               </h2>
               <dl className="grid grid-cols-3 gap-4 text-sm">
@@ -149,7 +149,7 @@ export default async function ConsultationDetailPage({
           )}
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">메모</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">메모</h2>
             <SubmitForm action={updateConsultationMemo} submitLabel="메모 저장">
               <input type="hidden" name="id" value={consultation.id} />
               <Textarea
@@ -184,7 +184,7 @@ export default async function ConsultationDetailPage({
           />
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">학생 전환</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">학생 전환</h2>
             {consultation.studentId ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted">이미 학생으로 전환되었습니다.</p>
@@ -206,7 +206,7 @@ export default async function ConsultationDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">시범수업 확정 안내</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">시범수업 확정 안내</h2>
             <p className="mb-3 text-sm text-muted">
               일시를 입력하고 발송하면 학부모({consultation.guardianPhone ?? consultation.phone})에게
               시범수업 확정 알림톡(실패 시 SMS)이 전송됩니다.
@@ -224,7 +224,7 @@ export default async function ConsultationDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">동의 내역</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">동의 내역</h2>
             {consents.length === 0 ? (
               <p className="text-sm text-muted">기록된 동의 내역이 없습니다.</p>
             ) : (

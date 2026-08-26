@@ -3,12 +3,12 @@ import { getAdminSession } from "@/lib/auth/session";
 import { formatKDate, hasDb } from "@/lib/data/crm";
 import { listAssignments, listOpenQuestions } from "@/lib/data/homework";
 import { buttonClass } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import {
   HOMEWORK_STATUS_OPTIONS,
   homeworkStatusLabel,
@@ -56,7 +56,7 @@ export default async function HomeworkPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">과제 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">과제 관리</h1>
           <p className="mt-1 text-sm text-muted">
             과제 초안을 만들어 검토 후 배부하고, 제출 검토·피드백·질문 답변을 처리합니다.
           </p>
@@ -93,7 +93,7 @@ export default async function HomeworkPage({
         </div>
       )}
 
-      <Card className="mb-6">
+      <Toolbar>
         <FilterChips
           basePath="/admin/homework"
           paramKey="status"
@@ -106,7 +106,7 @@ export default async function HomeworkPage({
             { value: "archived", label: "보관" }, // H-07 보관 — 기본 목록에서 접힌 과제
           ]}
         />
-      </Card>
+      </Toolbar>
 
       {assignments.length === 0 ? (
         <EmptyState

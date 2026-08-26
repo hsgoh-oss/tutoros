@@ -169,7 +169,7 @@ export default async function DashboardPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">대시보드</h1>
+        <h1 className="text-xl font-semibold tracking-tight">대시보드</h1>
         <p className="mt-1 text-sm text-muted">주요 현황을 한눈에 확인합니다.</p>
       </div>
 
@@ -177,7 +177,7 @@ export default async function DashboardPage() {
 
       <Card className="mb-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-black tracking-tight">오늘 업무</h2>
+          <h2 className="text-sm font-semibold tracking-tight">오늘 업무</h2>
           <span className="text-xs font-bold text-muted">
             열린 업무 {openWork.length}건
           </span>
@@ -232,35 +232,35 @@ export default async function DashboardPage() {
         )}
       </Card>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/admin/consultations">
-          <Card className="h-full transition-transform hover:-translate-y-0.5">
-            <p className="text-xs font-bold text-muted">신규 상담</p>
-            <p className="mt-2 text-2xl font-black tracking-tight text-ink">
+          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
+            <p className="text-xs font-medium text-muted">신규 상담</p>
+            <p className="mt-1.5 text-xl font-semibold tracking-tight text-ink">
               {newConsultations.length}건
             </p>
           </Card>
         </Link>
         <Link href="/admin/students">
-          <Card className="h-full transition-transform hover:-translate-y-0.5">
-            <p className="text-xs font-bold text-muted">재원 학생</p>
-            <p className="mt-2 text-2xl font-black tracking-tight text-ink">
+          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
+            <p className="text-xs font-medium text-muted">재원 학생</p>
+            <p className="mt-1.5 text-xl font-semibold tracking-tight text-ink">
               {activeStudents.length}명
             </p>
           </Card>
         </Link>
         <Link href="/admin/schedules">
-          <Card className="h-full transition-transform hover:-translate-y-0.5">
-            <p className="text-xs font-bold text-muted">이번 주 일정</p>
-            <p className="mt-2 text-2xl font-black tracking-tight text-ink">
+          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
+            <p className="text-xs font-medium text-muted">이번 주 일정</p>
+            <p className="mt-1.5 text-xl font-semibold tracking-tight text-ink">
               {weekSchedules.length}건
             </p>
           </Card>
         </Link>
         <Link href="/admin/payments">
-          <Card className="h-full transition-transform hover:-translate-y-0.5">
-            <p className="text-xs font-bold text-muted">이번 달 완납 / 미납</p>
-            <p className="mt-2 text-lg font-black tracking-tight text-ink">
+          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
+            <p className="text-xs font-medium text-muted">이번 달 완납 / 미납</p>
+            <p className="mt-2 text-lg font-semibold tracking-tight text-ink">
               {formatWon(paymentSummary.paidThisMonth)}
               <span className="mx-1.5 text-muted">/</span>
               <span className="text-rose-600">
@@ -274,7 +274,7 @@ export default async function DashboardPage() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-black tracking-tight">오늘 수업</h2>
+            <h2 className="text-sm font-semibold tracking-tight">오늘 수업</h2>
             <Link
               href="/admin/schedules"
               className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
@@ -310,7 +310,7 @@ export default async function DashboardPage() {
 
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-black tracking-tight">청구 필요 (D-3)</h2>
+            <h2 className="text-sm font-semibold tracking-tight">청구 필요 (D-3)</h2>
             <Link
               href="/admin/payments"
               className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
@@ -336,7 +336,7 @@ export default async function DashboardPage() {
                         마감 {formatKDate(p.dueDate)}
                       </p>
                     </div>
-                    <span className="shrink-0 text-sm font-black tracking-tight text-ink">
+                    <span className="shrink-0 text-sm font-semibold tracking-tight text-ink">
                       {formatWon(p.amount)}
                     </span>
                   </Link>
@@ -350,7 +350,7 @@ export default async function DashboardPage() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-black tracking-tight">D-day</h2>
+            <h2 className="text-sm font-semibold tracking-tight">D-day</h2>
             <Link
               href="/admin/settings"
               className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
@@ -373,7 +373,7 @@ export default async function DashboardPage() {
                       {formatKDate(d.examDate)}
                     </p>
                   </div>
-                  <span className="shrink-0 text-sm font-black tracking-tight text-brand-600">
+                  <span className="shrink-0 text-sm font-semibold tracking-tight text-brand-600">
                     {ddayLabel(d.examDate)}
                   </span>
                 </li>
@@ -384,7 +384,7 @@ export default async function DashboardPage() {
 
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-black tracking-tight">모집 상태</h2>
+            <h2 className="text-sm font-semibold tracking-tight">모집 상태</h2>
             <Link
               href="/admin/settings"
               className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
@@ -416,7 +416,7 @@ export default async function DashboardPage() {
 
       <Card className="mb-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-black tracking-tight">최근 상담</h2>
+          <h2 className="text-sm font-semibold tracking-tight">최근 상담</h2>
           <Link
             href="/admin/consultations"
             className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
@@ -470,7 +470,7 @@ export default async function DashboardPage() {
 
       <Card>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-black tracking-tight">최근 변경</h2>
+          <h2 className="text-sm font-semibold tracking-tight">최근 변경</h2>
           <Link
             href="/admin/activity"
             className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"

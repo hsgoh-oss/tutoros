@@ -12,7 +12,7 @@ export default async function NewGradePage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">성적 신규 등록</h1>
+        <h1 className="text-xl font-semibold tracking-tight">성적 신규 등록</h1>
         <p className="mt-1 text-sm text-muted">학생의 시험 성적을 등록합니다.</p>
       </div>
 

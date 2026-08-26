@@ -8,7 +8,7 @@ import type {
 } from "react";
 
 const control =
-  "w-full rounded-panel border border-line bg-white px-4 py-3 text-[15px] text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-soft";
+  "w-full rounded-[var(--radius-field)] border border-line bg-white px-4 py-2.5 text-[15px] text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-soft";
 
 export function Field({
   label,
@@ -25,7 +25,7 @@ export function Field({
 }) {
   return (
     <label className={cn("block", className)} {...props}>
-      <span className="mb-1.5 flex items-center gap-1 text-sm font-bold text-ink-soft">
+      <span className="mb-1.5 flex items-center gap-1 text-sm [font-weight:var(--ui-w-label)] text-ink-soft">
         {label}
         {required && <span className="text-brand-600">*</span>}
       </span>

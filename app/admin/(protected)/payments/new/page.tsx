@@ -22,7 +22,7 @@ export default async function NewPaymentPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">신규 청구</h1>
+        <h1 className="text-xl font-semibold tracking-tight">신규 청구</h1>
         <p className="mt-1 text-sm text-muted">
           생성된 청구는 &apos;청구&apos; 상태로 등록됩니다.
         </p>

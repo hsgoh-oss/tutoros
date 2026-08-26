@@ -30,7 +30,7 @@ export default async function NewHomeworkPage({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">과제 초안 만들기</h1>
+        <h1 className="text-xl font-semibold tracking-tight">과제 초안 만들기</h1>
         <p className="mt-1 text-sm text-muted">
           초안은 학생·보호자에게 노출되지 않습니다. 상세 화면에서 검토한 뒤 배부하면 알림이 나갑니다.
         </p>

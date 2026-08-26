@@ -53,7 +53,7 @@ export function NoshowPanel({
       <p className="rounded-panel bg-soft px-4 py-3 text-xs leading-relaxed text-muted">
         노쇼는 자동으로 판정하지 않습니다. 시작 후 {NOSHOW_CONTACT_MINUTES.join("·")}분에 연락하고
         그 결과를 각각 기록한 뒤, 세 번 모두 무응답이고 {NOSHOW_CONFIRM_AFTER_MINUTES}분이 지났을 때만
-        운영자가 확정합니다. <strong className="font-black text-ink-soft">확정 전에는 금액·등록 판단에
+        운영자가 확정합니다. <strong className="font-semibold text-ink-soft">확정 전에는 금액·등록 판단에
         반영하지 않습니다</strong> — 결제 차감·환불·등록 결정은 확정 이후에 시작하세요.
       </p>
 

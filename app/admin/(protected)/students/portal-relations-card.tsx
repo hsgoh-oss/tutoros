@@ -222,7 +222,7 @@ export function PortalRelationsCard({
 
   return (
     <div>
-      <h2 className="mb-2 text-sm font-black text-ink-soft">포털 관계</h2>
+      <h2 className="mb-2 text-sm font-semibold text-ink-soft">포털 관계</h2>
       <p className="mb-4 text-xs leading-relaxed text-muted">
         역할별로 초대를 발급하면 받는 사람마다 자기 링크로 로그인합니다. 역할이 다르면
         권한도 따로 관리되고, 회수하면 그 사람의 링크와 로그인 세션이 함께 닫힙니다.
@@ -278,7 +278,7 @@ export function PortalRelationsCard({
 
       <form onSubmit={handleInvite} className="mt-5 border-t border-line pt-4">
         <input type="hidden" name="studentId" value={studentId} />
-        <p className="mb-3 text-xs font-black text-ink-soft">
+        <p className="mb-3 text-xs font-semibold text-ink-soft">
           {studentName} 학생 포털 초대 발급
         </p>
         <div className="space-y-3">

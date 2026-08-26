@@ -3,12 +3,12 @@ import { getAdminSession } from "@/lib/auth/session";
 import { formatKDate, hasDb } from "@/lib/data/crm";
 import { listReports } from "@/lib/data/reports";
 import { buttonClass } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
 import { FilterChips } from "@/components/admin/crm/filter-chips";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import {
   REPORT_TYPE_OPTIONS,
   reportAudienceLabel,
@@ -39,7 +39,7 @@ export default async function ReportsPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black tracking-tight">AI 리포트</h1>
+          <h1 className="text-xl font-semibold tracking-tight">AI 리포트</h1>
           <p className="mt-1 text-sm text-muted">
             수업·주간·월간·시험 리포트와 상담 브리핑을 생성하고 승인 후 발송합니다.
           </p>
@@ -62,14 +62,14 @@ export default async function ReportsPage({
         </div>
       )}
 
-      <Card className="mb-6">
+      <Toolbar>
         <FilterChips
           basePath="/admin/reports"
           paramKey="type"
           current={type}
           options={REPORT_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
-      </Card>
+      </Toolbar>
 
       {reports.length === 0 ? (
         <EmptyState

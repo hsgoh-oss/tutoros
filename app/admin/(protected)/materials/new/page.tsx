@@ -23,7 +23,7 @@ export default async function NewMaterialPage({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">자료 업로드</h1>
+        <h1 className="text-xl font-semibold tracking-tight">자료 업로드</h1>
         <p className="mt-1 text-sm text-muted">
           특정 학생 또는 전체 공유 자료를 업로드합니다. (pdf·jpg·png·webp, 10MB 이하)
         </p>

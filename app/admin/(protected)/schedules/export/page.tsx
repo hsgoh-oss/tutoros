@@ -27,7 +27,7 @@ export default async function ScheduleExportPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-black tracking-tight">일정 내보내기</h1>
+          <h1 className="text-xl font-semibold tracking-tight">일정 내보내기</h1>
           <p className="mt-1 text-sm text-muted">
             대상 학생의 해당 기간 회차만 담습니다. 연락처·내부 메모·다른 학생 정보는 포함되지
             않습니다. 해당 기간에 일정이 없으면 빈 파일 대신 안내로 끝납니다.

@@ -26,7 +26,7 @@ export function GateCard({
   return (
     <div className="rounded-panel border border-line bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-black text-ink">
+        <p className="text-sm font-semibold text-ink">
           <span className="mr-2 text-muted">{step}</span>
           {GATE_LABEL[gate]}
         </p>

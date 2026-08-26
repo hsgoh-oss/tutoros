@@ -25,7 +25,7 @@ export default async function SettingsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-black tracking-tight">사이트 설정</h1>
+        <h1 className="text-xl font-semibold tracking-tight">사이트 설정</h1>
         <p className="mt-1 text-sm text-muted">
           사업자 정보와 연락 채널을 관리합니다. 저장 시 공개 사이트에 즉시 반영됩니다.
         </p>
@@ -104,7 +104,7 @@ export default async function SettingsPage() {
 
       {/* 관리자 보안 — 전 세션 로그아웃·운영자 이메일 교체 (P-10). DB 미연결이면 동작하지 않는다(액션이 안내). */}
       <Card className="mt-8 max-w-3xl">
-        <h2 className="text-lg font-black tracking-tight">관리자 보안</h2>
+        <h2 className="text-lg font-semibold tracking-tight">관리자 보안</h2>
         <p className="mt-1 mb-6 text-sm text-muted">
           세션 회수와 운영자 승계를 관리합니다. 두 작업 모두 완료 후 재로그인이 필요합니다.
         </p>

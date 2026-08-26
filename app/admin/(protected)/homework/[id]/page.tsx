@@ -106,7 +106,7 @@ export default async function HomeworkDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-3 text-xl font-black tracking-tight">
+          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight">
             {assignment.title}
             <Badge tone={homeworkStatusTone(assignment.status)}>
               {homeworkStatusLabel(assignment.status)}
@@ -129,7 +129,7 @@ export default async function HomeworkDetailPage({
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">과제 정보</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">과제 정보</h2>
             {assignment.description ? (
               <div className="whitespace-pre-wrap rounded-panel bg-soft p-4 text-sm">
                 {assignment.description}
@@ -161,7 +161,7 @@ export default async function HomeworkDetailPage({
 
           {isDraft ? (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">초안 수정</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">초안 수정</h2>
               <p className="mb-4 text-xs text-muted">
                 초안은 학생·보호자에게 노출되지 않습니다. 배부 후에는 내용을 수정할 수 없고 새
                 과제본으로 만들어야 합니다.
@@ -183,7 +183,7 @@ export default async function HomeworkDetailPage({
             </Card>
           ) : (
             <Card>
-              <h2 className="mb-3 text-sm font-black text-ink-soft">내용 변경</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink-soft">내용 변경</h2>
               <p className="text-sm text-muted">
                 게시된 과제는 내용을 수정하지 않습니다 — 새 과제본을 만들어 재검토·재배부해
                 주세요(기존 과제는 철회·취소·종료로 정리).
@@ -198,7 +198,7 @@ export default async function HomeworkDetailPage({
           )}
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">
               제출 이력 타임라인
               <span className="ml-2 font-bold text-muted">
                 재제출은 이전 제출을 덮어쓰지 않고 회차로 쌓입니다
@@ -222,7 +222,7 @@ export default async function HomeworkDetailPage({
 
         <div className="space-y-6">
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">진행 처리</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">진행 처리</h2>
             {assignment.status === "draft" && (
               <div className="flex flex-col items-start gap-3">
                 <p className="text-sm text-muted">
@@ -292,7 +292,7 @@ export default async function HomeworkDetailPage({
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-black text-ink-soft">최신 제출 검토·피드백</h2>
+            <h2 className="mb-3 text-sm font-semibold text-ink-soft">최신 제출 검토·피드백</h2>
             {!latest ? (
               <p className="text-sm text-muted">
                 검토할 제출이 없습니다. 재제출이 들어오면 새 회차가 최신 검토 대상이 됩니다.
@@ -375,7 +375,7 @@ export default async function HomeworkDetailPage({
       </div>
 
       <Card className="mt-6">
-        <h2 className="mb-3 text-sm font-black text-ink-soft">질문 스레드</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-soft">질문 스레드</h2>
         <p className="mb-4 text-xs text-muted">
           답변 초안은 승인 전 학생·보호자에게 노출되지 않으며, 질문은 답변 게시 또는 해결 완료로
           닫힙니다. 다른 학생에게는 질문 존재 자체가 보이지 않습니다.
@@ -470,7 +470,7 @@ function SubmissionTimelineItem({
   return (
     <li className="rounded-panel border border-line p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-black">{s.attemptNo}회차</span>
+        <span className="text-sm font-semibold">{s.attemptNo}회차</span>
         {isLatestActive && <Badge tone="brand">최신 검토 대상</Badge>}
         {s.late && <Badge tone="warning">지연 제출</Badge>}
         {s.withdrawnAt ? (

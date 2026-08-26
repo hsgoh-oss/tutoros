@@ -182,7 +182,7 @@ export function IntakeFormsCard({
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-black text-ink-soft">신청폼</h2>
+        <h2 className="text-sm font-semibold text-ink-soft">신청폼</h2>
         {openForm ? (
           <Badge tone="brand">
             {INTAKE_KIND_SHORT_LABEL[openForm.kind]} 폼 발송됨
@@ -256,7 +256,7 @@ export function IntakeFormsCard({
       )}
 
       <div className="mt-5 border-t border-line pt-4">
-        <h3 className="mb-3 text-xs font-black text-ink-soft">발급 이력</h3>
+        <h3 className="mb-3 text-xs font-semibold text-ink-soft">발급 이력</h3>
         {forms.length === 0 ? (
           <p className="text-sm text-muted">아직 발급한 신청폼이 없습니다.</p>
         ) : (
