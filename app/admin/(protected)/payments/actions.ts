@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
+import { resolveTenant } from "@/lib/tenant";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { formatKDate, formatWon } from "@/lib/data/crm";
 import { getSiteContent } from "@/lib/data/content";
@@ -579,6 +580,9 @@ export async function sendPayssamBillAction(
 
   const billId = generateBillId();
   const productName = `수강료 (${formatKDate(payment.period_start)}~${formatKDate(payment.period_end)})`;
+  // 청구서 발급처명 — 명세 표에는 옵션이지만 요청 예시에는 들어 있고, 카카오톡·청구서 화면에
+  // "누가 보낸 청구서인지"로 노출되는 값이라 비워 둘 이유가 없다. 학부모가 받는 화면의 문제이기도 하다.
+  const billIssuer = (await resolveTenant()).brandName;
 
   // 청구서 발송은 금전 전환(money) — 감사 선기록 실패 시 외부 호출 자체를 하지 않는다(fail-closed).
   const result = await runCritical(
@@ -596,6 +600,7 @@ export async function sendPayssamBillAction(
     async (): Promise<CrmActionResult> => {
       const sent = await sendBill({
         billId,
+        billIssuer,
         productName,
         price: payment.amount,
         memberName,
