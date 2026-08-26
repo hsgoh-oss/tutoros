@@ -6,7 +6,14 @@ import { Container, Section, SectionHeading } from "@/components/public/section"
 import { Badge } from "@/components/ui/badge";
 import { TableWrap, Table, Th, Td } from "@/components/ui/table";
 
-export const metadata: Metadata = { title: "환불 규정" };
+export const metadata: Metadata = {
+  title: "환불 규정",
+  alternates: { canonical: "/refund-policy" },
+  openGraph: {
+    title: "환불 규정",
+    url: "/refund-policy",
+  },
+};
 
 function Article({
   no,

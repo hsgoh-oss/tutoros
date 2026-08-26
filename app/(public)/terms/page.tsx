@@ -5,7 +5,14 @@ import type { ReactNode } from "react";
 import { Container, Section, SectionHeading } from "@/components/public/section";
 import { Badge } from "@/components/ui/badge";
 
-export const metadata: Metadata = { title: "이용약관" };
+export const metadata: Metadata = {
+  title: "이용약관",
+  alternates: { canonical: "/terms" },
+  openGraph: {
+    title: "이용약관",
+    url: "/terms",
+  },
+};
 
 function Article({
   no,

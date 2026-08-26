@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { kstTodayDateOnly } from "@/lib/kst";
 
 // 상담 폼 공용 스키마 — 클라이언트(react-hook-form resolver)와 서버 액션(lib/actions/consult.ts)
 // 양쪽에서 동일하게 재검증한다(클라 우회 차단).
@@ -24,7 +25,7 @@ const OLDEST_AGE = 21; // 재수·N수 상단
 const YOUNGEST_AGE = 10; // 만 14세 미만 판별이 가능하도록 충분히 낮게
 
 export function birthYearRange(): { min: number; max: number } {
-  const currentYear = new Date().getFullYear();
+  const currentYear = Number(kstTodayDateOnly().slice(0, 4));
   return { min: currentYear - OLDEST_AGE, max: currentYear - YOUNGEST_AGE };
 }
 
@@ -45,7 +46,7 @@ const PHONE_REGEX = /^01[016789]-\d{3,4}-\d{4}$/;
 const MINOR_AGE_THRESHOLD = 15;
 
 export function isMinorBirthYear(birthYear: number): boolean {
-  const currentYear = new Date().getFullYear();
+  const currentYear = Number(kstTodayDateOnly().slice(0, 4));
   return currentYear - birthYear < MINOR_AGE_THRESHOLD;
 }
 

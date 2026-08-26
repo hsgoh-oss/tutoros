@@ -11,7 +11,10 @@ import { RatesPreview } from "@/components/public/home/rates-preview";
 import { ConsultSteps } from "@/components/public/home/consult-steps";
 import { CtaBand } from "@/components/public/home/cta-band";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
+
 export const metadata: Metadata = {
+  alternates: { canonical: "/" },
   description:
     "김과외 전국 상위 0.2% 튜터의 1:1 수학 과외. 내신·수능·수리논술 맞춤 수업, 매 수업 학부모 리포트 발송. 대면·화상 수업 상담 환영.",
 };
@@ -20,8 +23,43 @@ export default async function HomePage() {
   const tenant = await resolveTenant();
   const content = await getSiteContent(tenant.id);
 
+  // 검색·AI 답변에서 "어떤 사업체인지"를 읽을 수 있게 하는 최소 구조화 데이터.
+  // 후기 평점은 실제 등록된 후기가 있을 때만 싣는다 — 없는 평점을 지어내지 않는다.
+  const reviewCount = content.reviews.length;
+  const ratingValue =
+    reviewCount > 0
+      ? content.reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
+      : null;
+
+  const orgJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "EducationalOrganization",
+    name: tenant.brandName,
+    url: SITE_URL,
+    description:
+      "김과외 전국 상위 0.2% 튜터의 1:1 수학 과외. 내신·수능·수리논술 맞춤 수업.",
+    image: `${SITE_URL}/img/og-axiom.png`,
+    areaServed: "KR",
+    knowsLanguage: "ko",
+    ...(ratingValue !== null
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: Number(ratingValue.toFixed(1)),
+            reviewCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+      />
       <Hero badges={content.badges} />
 
       <Section className="bg-soft">

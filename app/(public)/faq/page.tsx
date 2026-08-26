@@ -7,7 +7,18 @@ import { buttonClass } from "@/components/ui/button";
 import { FaqExplorer } from "@/components/public/faq/faq-explorer";
 import Link from "next/link";
 
-export const metadata: Metadata = { title: "자주 묻는 질문" };
+export const metadata: Metadata = {
+  title: "자주 묻는 질문",
+  description:
+    "상담·수업·수업료·운영에 대해 자주 묻는 질문을 모았습니다.",
+  alternates: { canonical: "/faq" },
+  openGraph: {
+    title: "자주 묻는 질문",
+    url: "/faq",
+    description:
+      "상담·수업·수업료·운영에 대해 자주 묻는 질문을 모았습니다.",
+  },
+};
 
 export default async function FaqPage() {
   const tenant = await resolveTenant();

@@ -5,7 +5,14 @@ import type { ReactNode } from "react";
 import { Container, Section, SectionHeading } from "@/components/public/section";
 import { Badge } from "@/components/ui/badge";
 
-export const metadata: Metadata = { title: "개인정보 처리방침" };
+export const metadata: Metadata = {
+  title: "개인정보 처리방침",
+  alternates: { canonical: "/privacy" },
+  openGraph: {
+    title: "개인정보 처리방침",
+    url: "/privacy",
+  },
+};
 
 function Article({
   no,

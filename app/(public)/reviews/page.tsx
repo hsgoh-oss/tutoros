@@ -7,7 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { ReviewTabs } from "@/components/public/reviews/review-tabs";
 
-export const metadata: Metadata = { title: "수강 후기" };
+export const metadata: Metadata = {
+  title: "수강 후기",
+  description:
+    "실제로 수업을 들은 학생·학부모가 남긴 후기만 싣습니다.",
+  alternates: { canonical: "/reviews" },
+  openGraph: {
+    title: "수강 후기",
+    url: "/reviews",
+    description:
+      "실제로 수업을 들은 학생·학부모가 남긴 후기만 싣습니다.",
+  },
+};
 
 export default async function ReviewsPage() {
   const tenant = await resolveTenant();

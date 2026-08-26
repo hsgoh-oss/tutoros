@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   title: "튜터 소개",
   description:
     "한양대 수리논술 최초합격, 김과외 전국 상위 0.2% 튜터 고현서 선생님을 소개합니다.",
+  alternates: { canonical: "/tutor" },
+  openGraph: {
+    title: "튜터 소개",
+    url: "/tutor",
+  },
 };
 
 const CREDENTIALS = [

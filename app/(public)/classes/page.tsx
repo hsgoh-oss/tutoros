@@ -9,7 +9,18 @@ import { FieldTabs } from "@/components/public/classes/field-tabs";
 import { GradePath } from "@/components/public/classes/grade-path";
 import { DEFAULT_GRADE_PATH } from "@/lib/defaults";
 
-export const metadata: Metadata = { title: "수업 안내" };
+export const metadata: Metadata = {
+  title: "수업 안내",
+  description:
+    "내신·수능·수리논술까지, 목표에 맞춘 1:1 수학 수업 안내.",
+  alternates: { canonical: "/classes" },
+  openGraph: {
+    title: "수업 안내",
+    url: "/classes",
+    description:
+      "내신·수능·수리논술까지, 목표에 맞춘 1:1 수학 수업 안내.",
+  },
+};
 
 export default async function ClassesPage() {
   const tenant = await resolveTenant();

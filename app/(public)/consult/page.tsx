@@ -7,7 +7,18 @@ import { buttonClass } from "@/components/ui/button";
 import { ConsultForm } from "@/components/public/consult/consult-form";
 import { ConsultSteps } from "@/components/public/home/consult-steps";
 
-export const metadata: Metadata = { title: "상담 신청" };
+export const metadata: Metadata = {
+  title: "상담 신청",
+  description:
+    "무료 상담 신청. 지금 상황을 알려주시면 맞춤 상담을 도와드립니다.",
+  alternates: { canonical: "/consult" },
+  openGraph: {
+    title: "상담 신청",
+    url: "/consult",
+    description:
+      "무료 상담 신청. 지금 상황을 알려주시면 맞춤 상담을 도와드립니다.",
+  },
+};
 
 export default async function ConsultPage({
   searchParams,
