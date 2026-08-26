@@ -226,11 +226,18 @@ export default async function RecruitPage() {
             </Field>
           </div>
 
-          <Field label="안내 문구" className="mt-5">
+          {/* 비워 두는 것이 기본이다. 손으로 쓴 문구는 매달 손으로 고쳐야 하고, 그래서 늦는다
+              (실제로 8월 말까지 "7월 … 모집 중"이 홈 최상단에 떠 있었다).
+              생성 규칙은 components/public/recruit-banner.tsx 의 recruitMessage. */}
+          <Field
+            label="안내 문구"
+            hint="비워 두면 상태와 정원으로 이번 달 문구를 자동 생성합니다(예: 2026년 8월 신규 수강생 2명 모집 중). 직접 쓰면 그 문구가 우선합니다."
+            className="mt-5"
+          >
             <Textarea
               name="message"
               defaultValue={recruit?.message ?? ""}
-              placeholder="예: 7월 신규 수강생 2명 모집 중"
+              placeholder="비워 두면 자동 생성"
             />
           </Field>
 
