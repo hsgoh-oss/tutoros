@@ -45,9 +45,14 @@ export function ActionButton({
           window.alert(result.error ?? "처리에 실패했습니다.");
         }
       }}
+      // 표 안에 같은 액션이 열 줄씩 반복된다 — 전부 유채색이면 목록이 시끄럽고,
+      // 특히 '삭제'가 늘 빨갛게 켜져 있으면 경보로서의 힘을 잃는다.
+      // 평소엔 가라앉히고 커서를 올렸을 때만 성격을 드러낸다.
       className={cn(
-        "text-xs font-bold hover:underline disabled:opacity-50",
-        tone === "danger" ? "text-rose-600" : "text-brand-700",
+        "text-xs font-medium underline-offset-2 transition-colors hover:underline disabled:opacity-50",
+        tone === "danger"
+          ? "text-muted hover:text-rose-600"
+          : "text-ink-soft hover:text-brand-700",
         className,
       )}
     >

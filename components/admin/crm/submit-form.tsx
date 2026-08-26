@@ -39,16 +39,24 @@ export function SubmitForm({
   return (
     <form action={formAction} className={className}>
       {children}
-      {state && !state.ok && (
-        <p className="mt-3 text-sm font-bold text-rose-600">{state.error}</p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className={cn(buttonClass("primary", "md"), "mt-4")}
-      >
-        {pending ? pendingLabel : submitLabel}
-      </button>
+      {/*
+        에러와 버튼은 한 겹 감싼다. 폼 자체에 grid className이 오면(예: D-day 수정) 버튼이
+        그리드 셀이 되어 열 폭만큼 늘어난다 — 작은 '추가' 버튼 옆에 540px짜리 파란 막대가
+        생겼던 원인이다. col-span-full은 그리드가 아닐 때 아무 일도 하지 않으므로
+        두 경우 모두 안전하다.
+      */}
+      <div className="col-span-full">
+        {state && !state.ok && (
+          <p className="mb-3 text-sm font-semibold text-rose-600">{state.error}</p>
+        )}
+        <button
+          type="submit"
+          disabled={pending}
+          className={cn(buttonClass("primary", "md"), "mt-4")}
+        >
+          {pending ? pendingLabel : submitLabel}
+        </button>
+      </div>
     </form>
   );
 }

@@ -163,7 +163,7 @@ export function ConsultForm({
             )}
           </Field>
 
-          <Field label="연락처" required hint="010-1234-5678">
+          <Field label="연락처" required>
             <Controller
               control={control}
               name="phone"
@@ -316,7 +316,7 @@ export function ConsultForm({
                       </p>
                     )}
                   </Field>
-                  <Field label="보호자 연락처" required hint="010-1234-5678">
+                  <Field label="보호자 연락처" required>
                     <Controller
                       control={control}
                       name="guardianPhone"

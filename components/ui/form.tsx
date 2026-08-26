@@ -7,8 +7,14 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 
+// 입력칸의 공통 겉모습. 높이는 여기에 두지 않는다 — 한 줄짜리(input·select)와 여러 줄(textarea)이
+// 서로 다르기 때문이다.
 const control =
-  "w-full rounded-[var(--radius-field)] border border-line bg-white px-4 py-2.5 text-[15px] text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-soft";
+  "w-full rounded-[var(--radius-field)] border border-line bg-white px-3.5 text-[15px] text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-soft";
+
+// 한 줄 입력은 버튼과 같은 높이 토큰을 쓴다. 예전엔 padding으로 높이가 정해져 입력 45px·버튼 40px로
+// 5px씩 어긋났고, 나란히 놓인 폼에서 눈에 띄게 삐뚤어 보였다.
+const controlOneLine = "h-[var(--ui-h-md)]";
 
 export function Field({
   label,
@@ -39,7 +45,7 @@ export function Input({
   className,
   ...props
 }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(control, className)} {...props} />;
+  return <input className={cn(control, controlOneLine, className)} {...props} />;
 }
 
 export function Textarea({
@@ -47,7 +53,7 @@ export function Textarea({
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
-    <textarea className={cn(control, "min-h-28 resize-y", className)} {...props} />
+    <textarea className={cn(control, "min-h-28 resize-y py-2.5", className)} {...props} />
   );
 }
 
@@ -59,7 +65,7 @@ export function Select({
   // appearance-none으로 네이티브 화살표를 지우므로, 직접 쉐브론을 얹어 "드롭다운" 어포던스를 준다.
   return (
     <div className="relative">
-      <select className={cn(control, "appearance-none pr-10", className)} {...props}>
+      <select className={cn(control, controlOneLine, "appearance-none pr-10", className)} {...props}>
         {children}
       </select>
       <svg

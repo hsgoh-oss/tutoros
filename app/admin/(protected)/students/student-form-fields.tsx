@@ -9,7 +9,7 @@ export function StudentFormFields({ student }: { student?: Student }) {
         <Input name="name" defaultValue={student?.name ?? ""} placeholder="홍길동" />
       </Field>
 
-      <Field label="학부모 연락처" required hint="010-1234-5678">
+      <Field label="학부모 연락처" required>
         <Input
           name="parentPhone"
           defaultValue={student?.parentPhone ?? ""}

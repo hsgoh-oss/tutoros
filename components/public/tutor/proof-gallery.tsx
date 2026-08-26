@@ -2,11 +2,15 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
 
+// 정사각 카드에 원본 비율이 다른 사진을 넣으므로 어디를 남길지 항목마다 정한다.
+// 기본(가운데)으로 두면 세로 사진인 프로필(233x350)이 정수리에서 잘린다 — 얼굴이 든 사진은
+// 위쪽을 남기고, 문서 스캔은 가운데가 자연스럽다.
 const ITEMS = [
-  { src: "/img/thumb-score-real.jpg", caption: "성적 증빙 자료" },
-  { src: "/img/thumb-card-real.jpg", caption: "튜터 인증 자료" },
-  { src: "/img/thumb-profile.jpg", caption: "프로필 사진" },
+  { src: "/img/thumb-score-real.jpg", caption: "성적 증빙 자료", focus: "object-center" },
+  { src: "/img/thumb-card-real.jpg", caption: "튜터 인증 자료", focus: "object-center" },
+  { src: "/img/thumb-profile.jpg", caption: "프로필 사진", focus: "object-top" },
 ] as const;
 
 export function ProofGallery() {
@@ -47,7 +51,10 @@ export function ProofGallery() {
                 alt={item.caption}
                 width={440}
                 height={440}
-                className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                className={cn(
+                  "aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105",
+                  item.focus,
+                )}
               />
             </button>
             <figcaption className="p-4 text-center text-sm font-bold tracking-tight text-muted">

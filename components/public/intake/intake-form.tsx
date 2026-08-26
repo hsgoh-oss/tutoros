@@ -292,7 +292,7 @@ export function IntakeForm({
                 />
                 <ErrorText id="intake-guardianname-error" message={errors.guardianName?.message} />
               </Field>
-              <Field label="보호자 연락처" required hint="010-1234-5678">
+              <Field label="보호자 연락처" required>
                 <Controller
                   control={control}
                   name="guardianPhone"
@@ -342,7 +342,7 @@ export function IntakeForm({
                       message={errors.contractorName?.message}
                     />
                   </Field>
-                  <Field label="계약자 연락처" required hint="010-1234-5678">
+                  <Field label="계약자 연락처" required>
                     <Controller
                       control={control}
                       name="contractorPhone"
@@ -394,7 +394,7 @@ export function IntakeForm({
                     />
                     <ErrorText id="intake-payername-error" message={errors.payerName?.message} />
                   </Field>
-                  <Field label="납부자 연락처" required hint="010-1234-5678">
+                  <Field label="납부자 연락처" required>
                     <Controller
                       control={control}
                       name="payerPhone"
