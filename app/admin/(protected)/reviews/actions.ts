@@ -15,6 +15,7 @@ import {
   publishEvidenceCopies,
   removeScreenshotObjects,
 } from "./storage";
+import { POLICY_VERSION } from "@/lib/policy";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
 const STORAGE_ERROR =
@@ -212,7 +213,7 @@ export async function createReview(formData: FormData): Promise<CrmActionResult>
         subject_type: "review",
         subject_id: inserted.id,
         item: "review",
-        policy_version: "v0.9",
+        policy_version: POLICY_VERSION,
         via: "admin",
       });
       if (consentError) {

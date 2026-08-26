@@ -63,7 +63,6 @@ export default async function TrialsPage({
       <div className="mb-8">
         <h1 className="text-xl font-semibold tracking-tight">시범수업 관리</h1>
         <p className="mt-1 text-sm text-muted">
-          시범 회차의 일정 합의·결제 확인·확정과 변경·취소·노쇼, 그리고 시범 결과를 기록합니다.
           일정과 결제가 모두 갖춰졌을 때만 확정됩니다.
         </p>
       </div>

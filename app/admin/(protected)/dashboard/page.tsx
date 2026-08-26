@@ -170,7 +170,6 @@ export default async function DashboardPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-xl font-semibold tracking-tight">대시보드</h1>
-        <p className="mt-1 text-sm text-muted">주요 현황을 한눈에 확인합니다.</p>
       </div>
 
       {!connected && <DbBanner />}

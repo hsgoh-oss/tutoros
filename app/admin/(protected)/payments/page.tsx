@@ -94,9 +94,6 @@ export default async function PaymentsPage({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">결제 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            수강료 청구와 납부 현황을 관리합니다.
-          </p>
         </div>
         <Link href="/admin/payments/new" className={buttonClass("primary", "sm")}>
           신규 청구

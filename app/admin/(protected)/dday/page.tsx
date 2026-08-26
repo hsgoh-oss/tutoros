@@ -61,9 +61,6 @@ export default async function DdayPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-xl font-semibold tracking-tight">D-day 관리</h1>
-        <p className="mt-1 text-sm text-muted">
-          공개 사이트에 노출되는 D-day 배너를 관리합니다.
-        </p>
       </div>
 
       {!connected && <DbBanner />}

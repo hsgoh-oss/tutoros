@@ -10,6 +10,7 @@ import {
   intakeFormSchema,
   type IntakeFormValues,
 } from "@/components/public/intake/schema";
+import { POLICY_VERSION } from "@/lib/policy";
 
 // 신청폼 제출(공개) — T-01 시범 신청폼 제출 · R-01 정규 신청폼 제출.
 //
@@ -25,7 +26,6 @@ import {
 // 폼 제출이 곧 일정 확정이 아니라는 사실(검수 8)은 화면 문구뿐 아니라 데이터로도 지켜진다 —
 // 이 액션은 trial_sessions·enrollments를 만들지 않고 운영자 검토 업무만 만든다.
 
-const POLICY_VERSION = "v0.9"; // 상담 폼(lib/actions/consult.ts)과 같은 정책본 버전
 
 const DB_ERROR_MESSAGE =
   "지금은 제출할 수 없습니다. 잠시 후 다시 시도해 주세요.";

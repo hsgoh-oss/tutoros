@@ -89,11 +89,6 @@ export default async function SchedulesPage({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">일정 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            {view === "month"
-              ? "월간 달력에서 수업 일정을 한눈에 확인합니다."
-              : "주간 수업 일정을 확인하고 상태를 관리합니다."}
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/admin/schedules/export" className={buttonClass("outline", "sm")}>

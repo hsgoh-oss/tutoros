@@ -42,9 +42,6 @@ export default async function ReviewsPage() {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">후기 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            공개 사이트에 노출되는 학생·학부모 후기를 관리합니다.
-          </p>
         </div>
         <Link href="/admin/reviews/new" className={buttonClass("primary", "sm")}>
           신규 등록

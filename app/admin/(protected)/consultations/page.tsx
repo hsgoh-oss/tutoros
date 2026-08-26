@@ -47,9 +47,6 @@ export default async function ConsultationsPage({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">상담 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            신청된 상담을 확인하고 학생 등록으로 전환합니다.
-          </p>
         </div>
       </div>
 

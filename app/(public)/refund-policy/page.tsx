@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Container, Section, SectionHeading } from "@/components/public/section";
 import { Badge } from "@/components/ui/badge";
 import { TableWrap, Table, Th, Td } from "@/components/ui/table";
+import { POLICY_EFFECTIVE_DATE, POLICY_VERSION } from "@/lib/policy";
 
 export const metadata: Metadata = {
   title: "환불 규정",
@@ -50,8 +51,8 @@ export default function RefundPolicyPage() {
         <SectionHeading as="h1" eyebrow="약관" title="환불 규정" />
 
         <div className="mb-10 flex flex-wrap items-center gap-3 rounded-panel border border-line bg-soft px-5 py-4 text-sm text-muted">
-          <Badge tone="warning">v0.9 초안</Badge>
-          <span>시행 예정일 2026-08-14</span>
+          <Badge tone="soft">{POLICY_VERSION}</Badge>
+          <span>{POLICY_EFFECTIVE_DATE} 시행</span>
         </div>
 
         <Article no={1} title="적용 범위">

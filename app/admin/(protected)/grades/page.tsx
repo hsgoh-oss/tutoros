@@ -23,9 +23,6 @@ export default async function GradesPage({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">성적 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            학생별 시험 성적을 기록하고 추이를 확인합니다.
-          </p>
         </div>
         <Link href="/admin/grades/new" className={buttonClass("primary", "sm")}>
           신규 등록

@@ -38,9 +38,6 @@ export default async function StudentsPage({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">학생 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            재원 학생을 관리하고 수업·성적·결제 이력을 확인합니다.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <CsvUpload />

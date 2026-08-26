@@ -57,9 +57,6 @@ export default async function HomeworkPage({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">과제 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            과제 초안을 만들어 검토 후 배부하고, 제출 검토·피드백·질문 답변을 처리합니다.
-          </p>
         </div>
         <Link href="/admin/homework/new" className={buttonClass("primary", "sm")}>
           신규 등록

@@ -40,9 +40,6 @@ export default async function ReportsPage({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">AI 리포트</h1>
-          <p className="mt-1 text-sm text-muted">
-            수업·주간·월간·시험 리포트와 상담 브리핑을 생성하고 승인 후 발송합니다.
-          </p>
         </div>
         <Link href="/admin/reports/new" className={buttonClass("primary", "sm")}>
           신규 생성

@@ -9,13 +9,13 @@ import {
   isMinorBirthYear,
   type ConsultFormValues,
 } from "@/components/public/consult/schema";
+import { POLICY_VERSION } from "@/lib/policy";
 
 // 상담 폼 제출 — 만 14세 미만 판정은 스키마 superRefine로 서버 재검증(클라 우회 차단).
 // consultations insert 후 consents 기록에 실패하면, 방금 만든 상담 행을 되돌려 "동의 없는 접수"를 막는다.
 // O-04 모집 상태 반영: 마감(closed)이면 접수 거부, 대기만 가능(waitlist)이면 접수는 받되
 // 대기 신청(consultations.status='hold')으로 구분해 적재한다 — 관리자 모집 화면의 대기자 목록이 된다.
 
-const POLICY_VERSION = "v0.9";
 const DB_ERROR_MESSAGE =
   "데이터베이스 미연결 상태입니다. 잠시 후 다시 시도하거나 카카오톡으로 문의해 주세요.";
 // O-04 접수 거부 안내 — '마감(closed)'은 접수 자체를 닫는다(대기 신청도 받지 않는다).

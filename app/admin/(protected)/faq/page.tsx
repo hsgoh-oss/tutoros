@@ -22,9 +22,6 @@ export default async function FaqPage() {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">FAQ 관리</h1>
-          <p className="mt-1 text-sm text-muted">
-            공개 사이트에 노출되는 자주 묻는 질문을 관리합니다.
-          </p>
         </div>
         <Link href="/admin/faq/new" className={buttonClass("primary", "sm")}>
           신규 등록
