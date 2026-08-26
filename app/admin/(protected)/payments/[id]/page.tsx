@@ -30,6 +30,7 @@ import {
   markPaid,
   resendPayssamBillAction,
   sendPayssamBillAction,
+  sendPayssamBillUrlAction,
   sendPaymentRequestNotice,
   syncPayssamBillAction,
 } from "../actions";
@@ -188,13 +189,27 @@ export default async function PaymentDetailPage({
                         학부모 카카오톡으로 결제선생 청구서를 발송합니다 (건당{" "}
                         {PAYSSAM_POINT_PER_SEND}P 차감).
                       </p>
-                      <ActionButton
-                        action={sendPayssamBillAction}
-                        id={payment.id}
-                        label="카카오톡 청구서 발송"
-                        pendingLabel="발송 중..."
-                        confirmText={`결제선생 카카오톡 청구서를 발송하시겠습니까?\n쌤포인트 ${PAYSSAM_POINT_PER_SEND}P가 차감됩니다.`}
-                      />
+                      <div className="flex flex-wrap items-center gap-4">
+                        <ActionButton
+                          action={sendPayssamBillAction}
+                          id={payment.id}
+                          label="카카오톡 청구서 발송"
+                          pendingLabel="발송 중..."
+                          confirmText={`결제선생 카카오톡 청구서를 발송하시겠습니까?\n쌤포인트 ${PAYSSAM_POINT_PER_SEND}P가 차감됩니다.`}
+                        />
+                        {/*
+                          카카오톡이 막혔을 때(포인트 미충전·계정 미연결 등)의 우회로.
+                          청구서는 똑같이 만들어지고 단축 URL만 받아오므로, 운영자가 그 링크를
+                          직접 전달하면 결제·콜백·수납은 카카오톡 발송과 동일하게 이어진다.
+                        */}
+                        <ActionButton
+                          action={sendPayssamBillUrlAction}
+                          id={payment.id}
+                          label="링크만 발급 (카톡 미발송)"
+                          pendingLabel="발급 중..."
+                          confirmText={"카카오톡을 보내지 않고 청구서 링크만 발급합니다.\n쌤포인트는 차감되지 않으며, 발급된 링크는 직접 전달하셔야 합니다."}
+                        />
+                      </div>
                     </>
                   ) : (
                     <p className="text-sm text-muted">

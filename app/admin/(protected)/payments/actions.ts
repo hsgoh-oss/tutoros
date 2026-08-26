@@ -529,12 +529,31 @@ async function createPayssamWorkItem(
 }
 
 /**
- * ① 청구서 발송 — POST /bill (sendType=TALK, 학부모 카카오톡).
+ * ① 청구서 발송 — POST /bill.
+ *
+ * sendType은 둘이다. TALK은 학부모 카카오톡으로 바로 보내고 쌤포인트를 차감한다.
+ * URL은 카카오톡을 쓰지 않고 청구서 단축 URL만 받아온다 — 포인트가 들지 않으므로,
+ * 카카오톡 발송이 막혔을 때(포인트 미충전·계정 미연결 등) 운영자가 링크를 직접 전달해
+ * 청구를 이어갈 수 있는 우회로다. 어느 쪽이든 청구서 자체는 동일하게 생성된다.
  * 가드: method=payssaem · status=pending · bill_id 없음 · 수기 완납 아님(검수 39).
  * NETWORK(결과 불명)면 billId를 저장하지 않고 원장(unmatched)+업무 큐로 수렴 —
  * 재클릭 시 새 billId로 발송하므로 유령 청구서가 내부 행을 오염시키지 않는다(파트너 생성 ID라 안전).
  */
-export async function sendPayssamBillAction(id: string): Promise<CrmActionResult> {
+/**
+ * 링크만 발급 — 카카오톡을 쓰지 않는 발송(포인트 미차감).
+ *
+ * 별도 export인 이유: ActionButton은 클라이언트 컴포넌트라 서버 액션 참조만 넘길 수 있다.
+ * 서버 컴포넌트에서 `(id) => sendPayssamBillAction(id, "URL")` 같은 인라인 함수를 넘기면
+ * 직렬화할 수 없어 런타임에서 깨진다.
+ */
+export async function sendPayssamBillUrlAction(id: string): Promise<CrmActionResult> {
+  return sendPayssamBillAction(id, "URL");
+}
+
+export async function sendPayssamBillAction(
+  id: string,
+  sendType: "TALK" | "URL" = "TALK",
+): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
@@ -569,7 +588,7 @@ export async function sendPayssamBillAction(id: string): Promise<CrmActionResult
       action: "payssam_send",
       targetType: "payment",
       targetId: id,
-      summary: `결제선생 청구서 발송: ${formatWon(payment.amount)}`,
+      summary: `결제선생 청구서 ${sendType === "URL" ? "링크 발급" : "카카오톡 발송"}: ${formatWon(payment.amount)}`,
       category: "money",
       before: { status: payment.status, bill_id: null },
       after: { bill_id: billId, amount: payment.amount, student_id: payment.student_id },
@@ -581,7 +600,7 @@ export async function sendPayssamBillAction(id: string): Promise<CrmActionResult
         price: payment.amount,
         memberName,
         phone,
-        sendType: "TALK",
+        sendType,
         // callbackUrl은 클라이언트가 PAYSSAM_CALLBACK_URL → SITE_URL+/api/payssam/callback로 보강한다.
       });
       if (!sent.ok) {
