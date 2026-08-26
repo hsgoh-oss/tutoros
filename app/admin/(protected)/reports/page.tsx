@@ -20,6 +20,16 @@ import {
 } from "./constants";
 import type { ReportType } from "@/lib/types";
 
+/**
+ * 모델 식별자를 사람이 읽을 만큼만 남긴다.
+ * "claude-haiku-4-5-20251001"을 그대로 두면 목록에서 가장 넓은 열을 차지하는데, 운영자에게
+ * 필요한 건 어느 등급으로 만들었는지뿐이다. 정확한 버전은 리포트 상세에 남아 있다.
+ */
+function shortModel(model: string | null | undefined): string {
+  if (!model) return "-";
+  return model.replace(/^claude-/, "").replace(/-\d{8}$/, "");
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -131,7 +141,9 @@ export default async function ReportsPage({
                       </Badge>
                     )}
                   </Td>
-                  <Td className="text-xs text-muted">{r.modelUsed ?? "-"}</Td>
+                  <Td className="whitespace-nowrap text-xs text-muted">
+                    {shortModel(r.modelUsed)}
+                  </Td>
                   <Td>{formatKDate(r.createdAt)}</Td>
                 </tr>
               ))}
