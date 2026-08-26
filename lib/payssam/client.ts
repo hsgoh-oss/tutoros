@@ -209,11 +209,18 @@ async function postPayssam<T>(
       // 거절 응답은 통째로 남긴다. 결제선생은 "must not be null"처럼 어느 필드인지 말하지 않는
       // 문구를 자주 돌려주는데, 본문에 필드명이 함께 오는 경우가 있어 그게 유일한 단서다.
       // (알림 발송에서 발신번호 미등록을 못 찾아 헤맸던 것과 같은 부류의 결함이라 같이 고친다.)
+      // 요청까지 함께 남긴다 — "우리가 뭘 잘못 보냈나"는 응답만 봐서는 끝내 알 수 없다.
+      // apiKey는 가리고, 나머지는 실제 전송한 그대로 찍는다(길이·null 여부가 단서다).
+      const safeBody = JSON.parse(JSON.stringify(body)) as Record<string, unknown>;
+      if (typeof safeBody.apiKey === "string") {
+        safeBody.apiKey = `<len=${safeBody.apiKey.length}>`;
+      }
       console.error(
         "[payssam] 거절",
         path,
         `code=${parsed.code}`,
-        text.slice(0, 800),
+        "resp=" + text.slice(0, 500),
+        "req=" + JSON.stringify(safeBody).slice(0, 900),
       );
       return {
         ok: false,
