@@ -206,13 +206,22 @@ async function postPayssam<T>(
       };
     }
     if (parsed.code !== "0000") {
+      // 거절 응답은 통째로 남긴다. 결제선생은 "must not be null"처럼 어느 필드인지 말하지 않는
+      // 문구를 자주 돌려주는데, 본문에 필드명이 함께 오는 경우가 있어 그게 유일한 단서다.
+      // (알림 발송에서 발신번호 미등록을 못 찾아 헤맸던 것과 같은 부류의 결함이라 같이 고친다.)
+      console.error(
+        "[payssam] 거절",
+        path,
+        `code=${parsed.code}`,
+        text.slice(0, 800),
+      );
       return {
         ok: false,
         code: parsed.code,
         error:
           typeof parsed.message === "string" && parsed.message
-            ? parsed.message
-            : "결제선생 API가 요청을 거절했습니다.",
+            ? `${parsed.message} (${parsed.code})`
+            : `결제선생 API가 요청을 거절했습니다 (${parsed.code}).`,
       };
     }
     return { ok: true, data: (parsed.data ?? {}) as T };
