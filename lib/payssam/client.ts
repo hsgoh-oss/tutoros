@@ -465,6 +465,27 @@ export function readCashReceipt(
  * 포인트 지갑은 파트너(①) 단위라 잔액 자체는 테넌트와 무관하다 — account는 설정 게이트 판정에만 쓴다
  * (환경변수에 merchant가 없고 테넌트에만 있는 구성에서 잔액 조회까지 막히지 않도록).
  */
+/**
+ * POST /read/merchant/remain_count — **하위사업장** 쌤포인트 잔액.
+ *
+ * readRemainPoint(/read/remain_count)와 다른 계정을 본다. 앞의 것은 apiKey만 보내 **파트너
+ * 관리 사업장**의 잔액을 돌려주고, 이건 member·merchant까지 보내 그 하위사업장의 잔액을 준다.
+ *
+ * 어느 쪽이 실제로 차감되는지는 파트너제휴 계약 방식에 달렸다 — '파트너 일관 관리'면 앞의 것,
+ * '사업장 개별 관리'면 이쪽이다. 그래서 화면에는 둘 다 보여야 한다: 파트너 잔액만 보고
+ * "포인트 충분함"이라고 판단하면, 정작 차감되는 하위사업장이 0이어서 발송이 막힌다.
+ */
+export function readMerchantRemainPoint(
+  account?: PayssamAccount | null,
+): Promise<PayssamResult<RemainPointData>> {
+  const { member, merchant } = resolveAccount(account);
+  return postPayssam<RemainPointData>(
+    "/read/merchant/remain_count",
+    { apiKey: process.env.PAYSSAM_API_KEY, member, merchant },
+    account,
+  );
+}
+
 export function readRemainPoint(
   account?: PayssamAccount | null,
 ): Promise<PayssamResult<RemainPointData>> {

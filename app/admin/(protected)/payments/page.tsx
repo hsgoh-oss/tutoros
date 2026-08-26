@@ -9,7 +9,11 @@ import {
   listStudentOptions,
 } from "@/lib/data/crm";
 import { createServiceClient } from "@/lib/supabase/server";
-import { isPayssamConfigured, readRemainPoint } from "@/lib/payssam/client";
+import {
+  isPayssamConfigured,
+  readMerchantRemainPoint,
+  readRemainPoint,
+} from "@/lib/payssam/client";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,13 +83,27 @@ export default async function PaymentsPage({
   }
 
   // 쌤포인트 잔액 — 연동 설정 시에만 조회, 실패하면 카드 미표시(검수 38 잔액 소진 대비 안내).
+  //
+  // 둘을 함께 본다. /read/remain_count는 apiKey만 보내 **파트너 관리 사업장** 잔액을 주고,
+  // /read/merchant/remain_count는 member·merchant까지 보내 **하위사업장** 잔액을 준다.
+  // 실제로 차감되는 쪽은 파트너제휴 계약 방식에 달렸으므로(파트너 일관 관리 / 사업장 개별 관리),
+  // 한쪽만 보여주면 "포인트 충분한데 왜 안 나가지"가 된다 — 실제로 그렇게 헤맸다.
   let payssamBalance: number | null = null;
   let payssamChargeUrl: string | null = null;
+  let merchantBalance: number | null = null;
+  let merchantChargeUrl: string | null = null;
   if (session && isPayssamConfigured()) {
-    const point = await readRemainPoint();
+    const [point, merchantPoint] = await Promise.all([
+      readRemainPoint(),
+      readMerchantRemainPoint(),
+    ]);
     if (point.ok && typeof point.data.balance === "number") {
       payssamBalance = point.data.balance;
       payssamChargeUrl = point.data.chargeUrl ?? null;
+    }
+    if (merchantPoint.ok && typeof merchantPoint.data.balance === "number") {
+      merchantBalance = merchantPoint.data.balance;
+      merchantChargeUrl = merchantPoint.data.chargeUrl ?? null;
     }
   }
 
@@ -132,10 +150,37 @@ export default async function PaymentsPage({
             <p className="text-xs font-bold text-muted">쌤포인트 잔액</p>
             <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
               {payssamBalance.toLocaleString("ko-KR")}P
+              <span className="ml-1 text-xs font-normal text-muted">파트너</span>
+            </p>
+            {/*
+              실제로 차감되는 쪽은 계약 방식에 달렸다(파트너 일관 관리 / 사업장 개별 관리).
+              파트너 잔액만 보고 판단하면, 정작 하위사업장이 0이어서 발송이 막혀도 알 수 없다.
+            */}
+            <p className="mt-0.5 text-sm font-semibold tracking-tight text-ink">
+              {merchantBalance === null
+                ? "하위사업장 조회 실패"
+                : `${merchantBalance.toLocaleString("ko-KR")}P`}
+              <span className="ml-1 text-xs font-normal text-muted">하위사업장</span>
             </p>
             <p className="mt-1 text-xs text-muted">
-              카카오톡 청구서 1건당 {PAYSSAM_POINT_PER_SEND}P 차감(재발송 포함)
+              청구서 1건당 {PAYSSAM_POINT_PER_SEND}P 차감(재발송 포함). 계약 방식에 따라 둘 중
+              한쪽에서 빠집니다.
             </p>
+            {merchantBalance !== null && merchantBalance < PAYSSAM_POINT_WARN_THRESHOLD && (
+              <p className="mt-1 text-xs font-semibold text-rose-600">
+                하위사업장 잔액 부족 — 이 계정에서 차감되는 계약이면 발송이 막힙니다.{" "}
+                {merchantChargeUrl && (
+                  <a
+                    href={merchantChargeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    충전하기
+                  </a>
+                )}
+              </p>
+            )}
             {payssamBalance < PAYSSAM_POINT_WARN_THRESHOLD && (
               <p className="mt-1 text-xs font-bold text-rose-600">
                 잔액 부족 — 발송 가능 건수가 100건 미만입니다.{" "}
