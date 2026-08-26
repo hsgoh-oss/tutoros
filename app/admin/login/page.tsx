@@ -38,7 +38,7 @@ export default async function AdminLoginPage({
             관리자 로그인 — 비밀번호 없이 이메일 인증번호로 로그인합니다.
           </p>
         </div>
-        <Card className="p-8">
+        <Card className="p-6">
           <LoginForm next={destination} />
         </Card>
       </div>
