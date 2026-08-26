@@ -1,22 +1,17 @@
 import type { Metadata } from "next";
 import { resolveTenant } from "@/lib/tenant";
 import { getSiteContent } from "@/lib/data/content";
-import { Container, Section, SectionHeading } from "@/components/public/section";
-import { Card } from "@/components/ui/card";
-import { buttonClass } from "@/components/ui/button";
+import { Container } from "@/components/public/section";
 import { FaqExplorer } from "@/components/public/faq/faq-explorer";
-import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "자주 묻는 질문",
-  description:
-    "상담·수업·수업료·운영에 대해 자주 묻는 질문을 모았습니다.",
+  description: "상담과 수업 전 자주 묻는 질문을 확인하세요.",
   alternates: { canonical: "/faq" },
   openGraph: {
     title: "자주 묻는 질문",
     url: "/faq",
-    description:
-      "상담·수업·수업료·운영에 대해 자주 묻는 질문을 모았습니다.",
+    description: "상담과 수업 전 자주 묻는 질문을 확인하세요.",
   },
 };
 
@@ -42,48 +37,28 @@ export default async function FaqPage() {
       {faqJsonLd && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(faqJsonLd).replace(/</g, "\\u003c"),
+          }}
         />
       )}
-      <Section className="pt-14 md:pt-20">
-        <Container className="max-w-3xl">
-          <SectionHeading
-            as="h1"
-            eyebrow="FAQ"
-            title="자주 묻는 질문"
-            desc="상담 전 궁금한 점을 먼저 확인해 보세요."
-          />
+
+      <section className="axm-page-hero">
+        <Container>
+          <h1>자주 묻는 질문</h1>
+          <p>
+            상담 전 가장 많이 문의 주시는 내용을 정리했습니다.
+            <br />
+            원하는 답을 찾지 못하셨다면 카카오톡으로 편하게 문의해 주세요.
+          </p>
+        </Container>
+      </section>
+
+      <section className="axm-section">
+        <Container>
           <FaqExplorer faqs={content.faqs} />
         </Container>
-      </Section>
-
-      <Section className="pt-0">
-        <Container className="max-w-3xl">
-          <Card className="flex flex-col items-start gap-4 border-brand-100 bg-brand-50/40 p-8 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-lg font-black tracking-tight text-ink">
-                원하는 답을 못 찾으셨나요?
-              </p>
-              <p className="mt-1 text-sm tracking-tight text-muted">
-                상담 폼을 남겨 주시거나 카카오톡으로 편하게 문의해 주세요.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <a
-                href={content.settings.kakaoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={buttonClass("ghost", "md")}
-              >
-                카카오톡 문의
-              </a>
-              <Link href="/consult" className={buttonClass("primary", "md")}>
-                상담 신청
-              </Link>
-            </div>
-          </Card>
-        </Container>
-      </Section>
+      </section>
     </>
   );
 }

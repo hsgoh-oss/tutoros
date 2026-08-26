@@ -37,6 +37,7 @@ export interface SiteSettings {
   kimProfileUrl: string;
   kimReviewUrl: string;
   tutorReportNo: string | null; // 개인과외교습자 신고번호 — 입력 시에만 푸터 노출
+  commerceNo: string | null; // 통신판매업신고번호 — 입력 시에만 푸터 노출(공정위 조회 링크 포함)
   gaId: string | null;
   bankAccount: string | null; // 계좌이체 안내 문구 (예: "국민은행 123-45-6789 고현서") — 청구 안내에 노출
   seoDescription: string;

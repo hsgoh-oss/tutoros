@@ -18,7 +18,7 @@ export const DEFAULT_TENANT: Tenant = {
 export const DEFAULT_CONTENT: SiteContent = {
   settings: {
     brandName: "AXIOM MATH LAB",
-    tagline: "증명하는 수학, 액시엄매스랩",
+    tagline: "원인 진단 기반 1:1 맞춤 수학 수업",
     bizName: "액시엄매스랩",
     ceoName: "고현서",
     bizNo: "489-57-00885",
@@ -32,10 +32,12 @@ export const DEFAULT_CONTENT: SiteContent = {
     kimReviewUrl:
       "https://kimstudy.com/tutor/s/e0d107b4-c91a-4aca-9381-717157e99ecb?O3WRXJQK9E=D1072AQ1A",
     tutorReportNo: null,
+    // 통신판매업신고번호 — 값이 있을 때만 푸터에 노출한다(없는 번호를 지어내지 않는다).
+    commerceNo: null,
     gaId: "G-TEKQVSK73W",
     bankAccount: null,
     seoDescription:
-      "김과외 전국 상위 0.2% 튜터의 1:1 수학 과외. 내신·수능·수리논술 맞춤 수업, 매 수업 학부모 리포트 발송. 대면·화상 수업 상담 환영.",
+      "학생의 풀이 과정과 학습 상태를 먼저 진단하고, 목표 결과까지 필요한 학습 순서를 설계하는 1:1 맞춤 수학 수업.",
   },
 
   rates: { inperson: 80000, video: 60000, trial: 50000 },

@@ -18,15 +18,17 @@ const pretendard = localFont({
 // 상대 canonical·이미지 경로가 절대 URL로 풀린다.
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
 const BRAND = "AXIOM MATH LAB";
+// 정본(axiom-platform)의 사이트 설명. 실적을 앞세우지 않고 무엇을 하는 수업인지 먼저 말한다.
 const DESCRIPTION =
-  "김과외 전국 상위 0.2% 튜터의 1:1 수학 과외. 내신·수능·수리논술, 매 수업 학부모 리포트까지.";
+  "학생의 풀이 과정과 학습 상태를 먼저 진단하고, 목표 결과까지 필요한 학습 순서를 설계하는 1:1 맞춤 수학 수업.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${BRAND} — 1:1 수학 과외`,
+    default: BRAND,
     template: `%s | ${BRAND}`,
   },
+  applicationName: BRAND,
   description: DESCRIPTION,
   alternates: { canonical: "/" },
   openGraph: {
@@ -34,20 +36,20 @@ export const metadata: Metadata = {
     siteName: BRAND,
     locale: "ko_KR",
     url: "/",
-    title: `${BRAND} — 1:1 수학 과외`,
+    title: BRAND,
     description: DESCRIPTION,
     images: [
       {
         url: "/img/og-axiom.png",
         width: 1200,
         height: 630,
-        alt: `${BRAND} — 1:1 수학 과외`,
+        alt: BRAND,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${BRAND} — 1:1 수학 과외`,
+    title: BRAND,
     description: DESCRIPTION,
     images: ["/img/og-axiom.png"],
   },

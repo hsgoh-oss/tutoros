@@ -24,17 +24,17 @@ export function ReviewTabs({ reviews }: { reviews: Review[] }) {
 
   return (
     <div>
-      <div className="mb-8 inline-flex rounded-full border border-line bg-soft p-1">
+      <div className="mb-8 inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-line">
         {TABS.map((t) => (
           <button
             key={t.value}
             type="button"
             onClick={() => setTab(t.value)}
             className={cn(
-              "inline-flex min-h-12 items-center rounded-full px-5 text-sm font-extrabold tracking-tight transition-colors",
+              "inline-flex min-h-11 items-center border-l border-line px-5 text-sm font-extrabold tracking-[-0.02em] transition-colors first:border-l-0",
               tab === t.value
-                ? "bg-brand-600 text-white shadow-lift"
-                : "text-muted hover:text-ink-soft",
+                ? "bg-ink text-white"
+                : "bg-white text-muted hover:text-brand-600",
             )}
           >
             {t.label}
@@ -43,11 +43,11 @@ export function ReviewTabs({ reviews }: { reviews: Review[] }) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="rounded-panel bg-soft px-6 py-10 text-center text-sm text-muted">
+        <p className="rounded-[var(--radius-panel)] border border-line bg-soft px-6 py-10 text-center text-sm text-muted">
           해당 조건의 후기가 아직 없습니다.
         </p>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2">
           {filtered.map((review) => (
             <div key={review.id} className={review.isPinned ? "md:col-span-2" : undefined}>
               <ReviewCard review={review} />

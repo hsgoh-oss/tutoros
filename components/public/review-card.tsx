@@ -5,7 +5,7 @@ import type { Review } from "@/lib/types";
 
 export function ReviewCard({ review }: { review: Review }) {
   return (
-    <Card className="flex h-full flex-col gap-4 p-7">
+    <Card className="flex h-full flex-col gap-4 rounded-[var(--radius-panel)] p-6">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={review.reviewerType === "parent" ? "brand" : "soft"}>
           {review.reviewerType === "parent" ? "학부모" : "학생"}
@@ -21,7 +21,7 @@ export function ReviewCard({ review }: { review: Review }) {
         {"★".repeat(review.rating)}
         <span className="text-line">{"★".repeat(5 - review.rating)}</span>
       </p>
-      <p className="grow text-[15px] leading-[1.86] tracking-tight text-ink-soft">
+      <p className="grow [font:var(--font-body)] text-ink-soft">
         {review.content}
       </p>
       {review.screenshots.length > 0 && (
@@ -29,7 +29,7 @@ export function ReviewCard({ review }: { review: Review }) {
           {review.screenshots.map((src) => (
             <div
               key={src}
-              className="relative h-20 w-20 overflow-hidden rounded-panel border border-line bg-soft sm:h-24 sm:w-24"
+              className="relative h-20 w-20 overflow-hidden rounded-[var(--radius-sm)] border border-line bg-soft sm:h-24 sm:w-24"
             >
               <Image
                 src={src}
@@ -42,7 +42,7 @@ export function ReviewCard({ review }: { review: Review }) {
           ))}
         </div>
       )}
-      <div className="flex items-center justify-between text-xs text-muted">
+      <div className="flex items-center justify-between text-xs text-faint">
         <span>{review.source && `${review.source} 후기`}</span>
         <span>{review.reviewedAt}</span>
       </div>

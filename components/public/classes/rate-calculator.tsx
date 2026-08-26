@@ -86,7 +86,7 @@ export function RateCalculator({ rates }: { rates: Rates }) {
     [rate, hours, freq, total],
   );
 
-  const consultHref = `/consult?mode=${mode}&hours=${hours}&freq=${freq}`;
+  const consultHref = `/apply?mode=${mode}&hours=${hours}&freq=${freq}`;
 
   return (
     <div id="calculator" className="rounded-card border border-line bg-white p-8 shadow-card md:p-10">

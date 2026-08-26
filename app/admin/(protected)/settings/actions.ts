@@ -47,6 +47,7 @@ export async function updateSiteInfo(formData: FormData): Promise<CrmActionResul
   const kimProfileUrl = String(formData.get("kimProfileUrl") ?? "").trim();
   const kimReviewUrl = String(formData.get("kimReviewUrl") ?? "").trim();
   const tutorReportNo = String(formData.get("tutorReportNo") ?? "").trim() || null;
+  const commerceNo = String(formData.get("commerceNo") ?? "").trim() || null;
   const gaId = String(formData.get("gaId") ?? "").trim() || null;
   const bankAccount = String(formData.get("bankAccount") ?? "").trim() || null;
 
@@ -66,6 +67,7 @@ export async function updateSiteInfo(formData: FormData): Promise<CrmActionResul
     kimProfileUrl,
     kimReviewUrl,
     tutorReportNo,
+    commerceNo,
     gaId,
     bankAccount,
   };

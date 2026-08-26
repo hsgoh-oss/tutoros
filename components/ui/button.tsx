@@ -4,19 +4,23 @@ import type { ButtonHTMLAttributes } from "react";
 export type ButtonVariant = "primary" | "outline" | "ghost" | "white";
 export type ButtonSize = "sm" | "md" | "lg";
 
-// hover 상승·그림자·굵기·높이는 전부 표면 변수로 뺀다(app/globals.css) — 공개 사이트는 CTA처럼,
-// 관리자는 도구 버튼처럼 보이게 하려고 같은 컴포넌트를 두 얼굴로 쓴다.
-const LIFT = "hover:[transform:translateY(var(--ui-lift))]";
-
+// 정본(axiom-platform)의 .btn — 최소 높이 48px, 반경 10px, 굵기 800, 자간 -0.025em.
+// 그림자도 hover 상승도 없다: 버튼은 떠오르는 물체가 아니라 눌리는 면이다.
+// 높이·굵기·반경은 표면 변수로 빼서 관리자에서 한 단계 더 조인다(app/globals.css).
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: `bg-brand-600 text-white shadow-lift hover:bg-brand-700 ${LIFT}`,
-  outline: `bg-white text-brand-600 border border-brand-200 shadow-card hover:border-brand-600 hover:bg-brand-50 ${LIFT}`,
-  ghost: `bg-white text-ink-soft border border-line hover:border-brand-600 hover:text-brand-600 ${LIFT}`,
-  white: `bg-white text-brand-600 shadow-soft ${LIFT}`,
+  primary:
+    "border border-brand-600 bg-brand-600 text-white hover:border-brand-700 hover:bg-brand-700",
+  outline:
+    "border border-line-strong bg-white text-muted hover:border-brand-600 hover:text-brand-600",
+  ghost:
+    "border border-line bg-white text-ink-soft hover:border-brand-600 hover:text-brand-600",
+  // 어두운 밴드 위 — 흰 면이 곧 행동이다.
+  white:
+    "border border-white bg-white text-brand-700 hover:border-brand-light hover:bg-brand-light",
 };
 
 const SIZE: Record<ButtonSize, string> = {
-  sm: "min-h-[var(--ui-h-sm)] px-4 text-sm",
+  sm: "min-h-[var(--ui-h-sm)] px-5 text-sm",
   md: "min-h-[var(--ui-h-md)] px-6 text-[15px]",
   lg: "min-h-14 px-8 text-base",
 };
@@ -27,7 +31,10 @@ export function buttonClass(
   className?: string,
 ) {
   return cn(
-    "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] [font-weight:var(--ui-w-strong)] tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 focus-visible:ring-offset-2",
+    "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] [font-weight:var(--ui-w-strong)] tracking-[-0.025em] cursor-pointer whitespace-nowrap",
+    "transition-[background-color,border-color,color] duration-[var(--motion-fast)] ease-[var(--motion-ease)]",
+    "disabled:opacity-50 disabled:pointer-events-none",
+    "focus-visible:outline-3 focus-visible:outline-brand-600/45 focus-visible:outline-offset-2",
     VARIANT[variant],
     SIZE[size],
     className,

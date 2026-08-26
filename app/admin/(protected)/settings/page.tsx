@@ -79,6 +79,16 @@ export default async function SettingsPage() {
             >
               <Input name="tutorReportNo" defaultValue={content.settings.tutorReportNo ?? ""} />
             </Field>
+            <Field
+              label="통신판매업신고번호"
+              hint="입력 시에만 푸터에 노출되며 공정위 사업자정보확인 링크가 함께 붙습니다"
+            >
+              <Input
+                name="commerceNo"
+                defaultValue={content.settings.commerceNo ?? ""}
+                placeholder="제2026-경기수원-00000호"
+              />
+            </Field>
             <Field label="Google Analytics ID">
               <Input
                 name="gaId"

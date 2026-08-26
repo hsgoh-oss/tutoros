@@ -1,69 +1,168 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   AXIOM MATH LAB — 디자인 토큰 단일 출처
+   ----------------------------------------------------------------------------
+   정본: axiom-platform/app/base.css. 색·타이포·간격·리듬의 유일한 정의부다.
+   공개 사이트와 관리자가 모두 이 토큰을 소비한다.
+
+   대비는 흰 배경(#fff) 기준 WCAG 상대휘도로 검증된 값이다. 손계산하지 않는다 —
+   gray400(--color-hairline)과 light는 밝은 배경 텍스트에 쓰지 않는다.
+   ========================================================================== */
+
 @theme {
   --font-sans: var(--font-pretendard), "Pretendard", -apple-system,
     BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI",
     sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
-  /* AXIOM 브랜드 팔레트 (v46 계승 · 커스텀 스케일) */
-  --color-brand-50: #eef3fe;
-  --color-brand-100: #dce7fd;
-  --color-brand-200: #bccffb;
+  /* ── 승인 팔레트 ───────────────────────────────────────────────────────
+     blue #2353ef  5.91:1 AA — 행동·현재 상태 전용. 장식 금지
+     dark #123d9a  9.72:1 AAA — 마감 CTA 밴드·호버
+     light #a9e2ff 1.40:1 — 어두운 면 위 액센트·포커스 링. 흰 배경 텍스트 금지 */
+  --color-brand-50: #eef3ff; /* surface-accent */
+  --color-brand-100: #d9e3f6; /* line-accent */
+  --color-brand-200: #b9c9ff;
   --color-brand-300: #93aef7;
-  --color-brand-400: #6489f1;
-  --color-brand-500: #3d68ea;
-  --color-brand-600: #2b5ce6;
-  --color-brand-700: #1c42bf;
-  --color-brand-800: #1a3a9e;
-  --color-brand-900: #182f78;
+  --color-brand-400: #5b83f4;
+  --color-brand-500: #3566f1;
+  --color-brand-600: #2353ef; /* = blue */
+  --color-brand-700: #123d9a; /* = dark */
+  --color-brand-800: #10357f;
+  --color-brand-900: #0e2a63;
+  --color-brand-light: #a9e2ff;
 
-  --color-ink: #0b1220;
-  --color-ink-soft: #1d2939;
-  --color-muted: #667085;
-  --color-line: #e6ebf3;
-  --color-soft: #f6f8fc;
+  /* ── 텍스트 — 밝은 배경 기준 대비 실측치를 이름에 담는다 ───────────── */
+  --color-ink: #111828; /* gray900 17.72:1 AAA — 제목·기본 잉크 */
+  --color-ink-soft: #384152; /* gray700 10.26:1 AAA — 레이블·강조 본문 */
+  --color-muted: #4c5564; /* gray600  7.52:1 AAA — 본문 기본색 */
+  --color-faint: #6b7380; /* gray500  4.78:1 AA  — 보조 텍스트 하한선 */
+  --color-hairline: #9ca2ae; /* gray400  2.56:1 — 경계·도형 전용. 텍스트 금지 */
 
-  --radius-card: 28px;
-  --radius-panel: 18px;
-  /* 버튼·칩처럼 손으로 누르는 것과 입력칸의 반경 — 공개 사이트는 알약, 관리자는 각지게 쓴다. */
-  --radius-control: 9999px;
-  --radius-field: 18px;
+  /* ── 표면·경계 ───────────────────────────────────────────────────────── */
+  --color-line: #e6e7eb; /* gray200 기본 규칙선 */
+  --color-line-strong: #d1d4db; /* gray300 강한 경계·입력 테두리 */
+  --color-soft: #f9fafc; /* gray50  가라앉은 면·섹션 교차 */
 
-  --shadow-soft: 0 22px 70px rgba(13, 29, 61, 0.11);
-  --shadow-card: 0 8px 22px rgba(13, 29, 61, 0.05);
-  --shadow-lift: 0 14px 30px rgba(45, 93, 244, 0.26);
+  /* ── 어두운 면 — 히어로·마감 밴드가 흰 배경을 뒤집을 때 ───────────── */
+  --color-ink-950: #080b14;
+  --color-ink-900: #0e1830;
+  --color-ink-navy: #102044;
+
+  /* ── 외부 브랜드 — 카카오가 정한 색이다. 다른 곳에 쓰지 않는다 ─────── */
+  --color-kakao: #fee500;
+  --color-kakao-line: #d6c600;
+  --color-kakao-ink: #3a1d1d;
+
+  /* ── 반경 — 절제한다. 큰 라운드는 정보를 카드로 묶어 위계를 지운다 ─── */
+  --radius-sm: 6px;
+  --radius-card: 14px;
+  --radius-panel: 10px;
+  --radius-control: 10px;
+  --radius-field: 10px;
+  --radius-pill: 999px;
+
+  /*
+   * 그림자는 쓰지 않는다.
+   *
+   * 층은 그림자가 아니라 1px 규칙선과 가라앉은 면(--color-soft)으로 만든다.
+   * 토큰 이름은 호출부가 많아 남기되 값은 비운다 — Tailwind가 shadow-* 유틸리티에
+   * 테마 값을 인라인하므로, 여기서 비워야 실제로 사라진다.
+   */
+  --shadow-card: 0 0 #0000;
+  --shadow-soft: 0 0 #0000;
+  --shadow-lift: 0 0 #0000;
+  /* 화면 위로 떠오르는 것(모달·라이트박스)에만 남는 유일한 그림자 */
+  --shadow-overlay: 0 12px 32px rgb(17 24 40 / 12%);
 }
 
 /*
  * 표면 변수 — 같은 컴포넌트를 두 얼굴로 쓰기 위한 것이다.
  *
- * 공개 사이트는 사람을 설득하는 랜딩이라 넉넉한 반경·그림자·굵은 글씨가 맞다.
- * 관리자는 하루 종일 들여다보는 도구다. 같은 언어를 그대로 쓰면 데이터 세 줄짜리 표가
- * 200px짜리 둥근 카드에 떠 있고, 저장 버튼에 파란 glow가 붙는다 — 도구가 아니라 광고처럼 보인다.
- *
- * 그래서 프리미티브(Card·Button·Badge·Table·Field)는 값을 직접 쓰지 않고 이 변수만 읽는다.
- * .admin-surface 안에서 변수를 바꾸면 파일을 건드리지 않고 표면 전체가 도구 쪽으로 넘어간다.
+ * 기본값(:root)이 곧 공개 사이트의 언어이고, .admin-surface 가 그것을 도구 쪽으로
+ * 한 단계 더 조인다. 프리미티브(Card·Button·Badge·Table·Field)는 값을 직접 쓰지 않고
+ * 이 변수만 읽는다.
  */
 :root {
-  --ui-lift: -2px;          /* hover 시 떠오르는 정도 */
-  --ui-w-strong: 800;       /* 버튼·강조 */
-  --ui-w-label: 700;        /* 라벨·표 머리 */
-  --ui-h-sm: 3rem;          /* 컨트롤 높이 */
-  --ui-h-md: 3rem;
-  --ui-card-p: 1.5rem;      /* 카드 안쪽 여백 */
-  --ui-row-y: 0.75rem;      /* 표 행 상하 여백 */
+  --ui-lift: 0px; /* 떠오르지 않는다 — 정본은 hover transform 을 쓰지 않는다 */
+  --ui-w-strong: 800; /* 버튼·강조. 정본의 최대 굵기는 800이다 */
+  --ui-w-label: 700;
+  --ui-h-sm: 2.75rem; /* 44px — 최소 터치 타깃 */
+  --ui-h-md: 3rem; /* 48px — 정본 .btn min-height */
+  --ui-card-p: 1.5rem;
+  --ui-row-y: 0.75rem;
+
+  /* ── 리듬·폭 — 헤더·본문·푸터가 같은 세로 기준선을 공유한다 ────────── */
+  --section-y: 88px;
+  --gutter: 32px;
+  --measure: 1216px; /* 기본 콘텐츠 폭 */
+  --measure-doc: 68ch; /* 약관·칼럼 본문 */
+  --tap: 44px;
+
+  /* ── 간격 4px 그리드 ─────────────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ── 타이포 — display / title / body / label 4단. 굵기는 400·700·800 ─── */
+  --font-display-1: 800 clamp(2rem, 6.4vw, 3.5rem) / 1.04 var(--font-sans);
+  --font-display-2: 800 clamp(1.75rem, 4.4vw, 2.5rem) / 1.08 var(--font-sans);
+  --font-title-1: 800 clamp(1.375rem, 3vw, 1.875rem) / 1.2 var(--font-sans);
+  --font-title-2: 800 1.25rem/1.3 var(--font-sans);
+  --font-title-3: 800 1.0625rem/1.45 var(--font-sans);
+  --font-body-lg: 400 1.03rem/1.85 var(--font-sans);
+  --font-body: 400 0.9375rem/1.8 var(--font-sans);
+  --font-label: 800 0.72rem/1.2 var(--font-mono);
+
+  --tracking-display: -0.05em;
+  --tracking-title: -0.04em;
+  --tracking-body: -0.015em;
+  --tracking-label: 0.18em;
+
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --section-y: 72px;
+    --gutter: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --section-y: 56px;
+    --gutter: 16px;
+  }
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
-    scroll-padding-top: 90px;
+    scroll-padding-top: 88px;
   }
 
   body {
     @apply bg-white text-ink antialiased;
+    /* 한국어는 어절 단위로 끊어야 읽힌다 */
     word-break: keep-all;
+    overflow-wrap: break-word;
     text-rendering: optimizeLegibility;
+  }
+
+  /* 숫자는 전부 세로 정렬한다 — 가격·점수·날짜·등급이 흔들리면 신뢰가 깎인다 */
+  :where(table, dd, dt, time, output) {
+    font-variant-numeric: tabular-nums;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -80,35 +179,322 @@
   }
 }
 
+/* ============================================================================
+   구조 primitive — 증명 조판
+   ----------------------------------------------------------------------------
+   증명은 번호가 매겨진 진술, 근거 열, 진술과 근거를 가르는 규칙선으로 구성된다.
+   그 구조를 그대로 정보 구조로 옮긴다. 콘텐츠를 둥근 카드로 감싸지 않고,
+   경계가 뚜렷한 객체에만 카드를 쓴다.
+   ========================================================================== */
+
+.axm-measure {
+  width: min(var(--measure), 100% - var(--gutter) * 2);
+  margin-inline: auto;
+}
+
+.axm-measure-doc {
+  width: min(var(--measure-doc), 100% - var(--gutter) * 2);
+  margin-inline: auto;
+}
+
+/* 섹션 아이브로우 — 번호 + 영문 레이블이 스캔 앵커가 된다 */
+.axm-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font: var(--font-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-brand-600);
+}
+
+.axm-eyebrow > b {
+  font-weight: 800;
+  color: var(--color-faint);
+  letter-spacing: 0.16em;
+}
+
 /*
- * 관리자 표면 — 마케팅 언어를 도구 언어로 바꾼다.
- *
- * 바꾸는 것은 넷뿐이다: 반경을 줄이고, 그림자를 걷고, 글씨 굵기를 낮추고, 밀도를 올린다.
- * 색·간격 체계·컴포넌트 구조는 그대로 둔다 — 다시 칠하는 게 아니라 톤을 낮추는 작업이다.
- *
- * 그림자만 변수로 못 끈다: Tailwind가 shadow-* 유틸리티에 테마 값을 그대로 박아 넣어서,
- * --shadow-lift를 다시 정의해도 이미 인라인된 값이 남는다. 그래서 아래에서 직접 지운다.
+ * 한글 라벨 — 아이브로우와 같은 자리에 오지만 자간을 벌리지 않는다.
+ * --font-label 은 mono + 0.18em 자간이라 라틴 대문자에만 맞는다. 한글에 그대로 쓰면
+ * "참고 자료"가 "참 고  자 료"처럼 낱자로 흩어져 단어로 안 읽힌다.
  */
+.axm-label {
+  margin: 0 0 var(--space-3);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--color-brand-600);
+}
+
+/* 진술 → 근거 목록 */
+.axm-statements {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-line);
+  counter-reset: axm-step;
+}
+
+.axm-statements > li,
+.axm-statements > article {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 4fr) minmax(0, 7fr);
+  gap: var(--space-6);
+  align-items: start;
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.axm-statements > li::before,
+.axm-statements > article::before {
+  content: counter(axm-step, decimal-leading-zero);
+  counter-increment: axm-step;
+  font: var(--font-label);
+  letter-spacing: 0.1em;
+  color: var(--color-faint);
+  font-variant-numeric: tabular-nums;
+  padding-top: 4px;
+}
+
+.axm-statements h3 {
+  margin: 0;
+  font: var(--font-title-3);
+  letter-spacing: -0.028em;
+  color: var(--color-ink);
+}
+
+.axm-statements p {
+  margin: 0;
+  color: var(--color-muted);
+  font: var(--font-body);
+}
+
+@media (max-width: 900px) {
+  .axm-statements > li,
+  .axm-statements > article {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-5) 0;
+  }
+
+  .axm-statements p {
+    grid-column: 2;
+  }
+}
+
+/* ── 섹션 조판 ─────────────────────────────────────────────────────────── */
+
+.axm-section {
+  padding: var(--section-y) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.axm-section-sunken {
+  background: var(--color-soft);
+}
+
+.axm-section-title {
+  margin: 0;
+  font: var(--font-title-1);
+  letter-spacing: var(--tracking-title);
+  color: var(--color-ink);
+}
+
+.axm-section-lead {
+  max-width: 60ch;
+  margin: 0 0 var(--space-6);
+  color: var(--color-muted);
+  font: var(--font-body);
+}
+
+/* 페이지 도입부 — 장식 히어로 대신 제목과 다음 행동을 바로 보여 준다 */
+.axm-page-hero {
+  padding: var(--space-16) 0 var(--space-12);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-soft);
+}
+
+.axm-page-hero h1 {
+  margin: 0;
+  font: var(--font-display-2);
+  letter-spacing: var(--tracking-display);
+  color: var(--color-ink);
+}
+
+.axm-page-hero p {
+  max-width: 62ch;
+  margin: var(--space-4) 0 0;
+  color: var(--color-muted);
+  font: var(--font-body-lg);
+  letter-spacing: var(--tracking-body);
+}
+
+/* ── 본문 바로가기 ─────────────────────────────────────────────────────── */
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: 0;
+  z-index: 120;
+  padding: 12px 18px;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  background: var(--color-brand-600);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  transform: translateY(-100%);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* 모바일 메뉴가 열려 있는 동안 배경 스크롤을 잠근다 */
+body.axm-menu-open {
+  overflow: hidden;
+}
+
+/* ============================================================================
+   상담 절차
+   ----------------------------------------------------------------------------
+   /apply 는 개인정보 수집 폼이라 noindex 다. 통합으로 색인에서 빠지는 상담 절차
+   설명을 홈 05 블록과 /classes 하단에 요약으로 남겨 색인 경로를 유지한다.
+   ========================================================================== */
+
+.consult-process-note {
+  max-width: 62ch;
+  margin: var(--space-4) 0 0;
+  color: var(--color-muted);
+  font-size: 14.5px;
+  line-height: 1.85;
+}
+
+.consult-process-note b {
+  color: var(--color-ink);
+  font-weight: 800;
+}
+
+/* 요약 — 카드가 아니라 규칙선으로 구획한다 */
+.consult-summary {
+  margin: var(--space-8) 0 0;
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-line);
+}
+
+.consult-summary-title {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.consult-summary-steps {
+  counter-reset: consult-step;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-line);
+}
+
+.consult-summary-steps > li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 2px var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.consult-summary-steps > li::before {
+  counter-increment: consult-step;
+  content: counter(consult-step, decimal-leading-zero);
+  grid-row: span 2;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.9;
+  letter-spacing: 0.1em;
+  color: var(--color-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.consult-summary-steps b {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.consult-summary-steps span {
+  color: var(--color-muted);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+.consult-summary-note {
+  max-width: 60ch;
+  margin: var(--space-4) 0 0;
+  color: var(--color-muted);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+
+@media (max-width: 480px) {
+  .consult-summary-steps > li {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+}
+
+/*
+ * 어두운 밴드 안의 상담 절차 요약 — 대비를 뒤집는다.
+ * brand-light 는 brand-700(#123d9a) 위에서 6.95:1 로 AA 를 넘긴다.
+ * 흰 배경에서 텍스트로 쓰지 못하는 것과 별개다.
+ */
+.on-dark .consult-summary,
+.on-dark .consult-summary-steps,
+.on-dark .consult-summary-steps > li {
+  border-color: rgb(255 255 255 / 22%);
+}
+
+.on-dark .consult-summary-steps span,
+.on-dark .consult-summary-note {
+  color: rgb(255 255 255 / 82%);
+}
+
+.on-dark .consult-summary-steps > li::before {
+  color: var(--color-brand-light);
+}
+
+.on-dark .axm-eyebrow {
+  color: var(--color-brand-light);
+}
+
+/*
+ * 50% 는 brand-700 위에서 3.62:1 이라 11.5px 800 에 필요한 4.5:1 에 미달한다(실측).
+ * 같은 밴드의 본문이 82% 를 쓰므로 그 값에 맞춘다 — 번호가 본문보다 옅을 이유는 없다.
+ */
+.on-dark .axm-eyebrow > b {
+  color: rgb(255 255 255 / 82%);
+}
+
+/* ============================================================================
+   관리자 표면 — 마케팅 언어를 도구 언어로 바꾼다.
+
+   기본값이 이미 절제돼 있으므로 여기서 바꾸는 것은 밀도뿐이다: 반경을 한 단계 더
+   줄이고, 글씨 굵기를 낮추고, 행 높이를 조인다. 색·간격 체계·컴포넌트 구조는 그대로 둔다.
+   ========================================================================== */
 .admin-surface {
   --radius-card: 10px;
   --radius-panel: 8px;
   --radius-control: 7px;
   --radius-field: 7px;
 
-  --ui-lift: 0px;
   --ui-w-strong: 600;
   --ui-w-label: 500;
   --ui-h-sm: 2.25rem;
   --ui-h-md: 2.5rem;
   --ui-card-p: 1.125rem;
   --ui-row-y: 0.625rem;
-}
-
-/*
- * 그림자 제거 — 관리자에서는 표면을 띄우지 않고 1px 선으로만 구분한다.
- * 유틸리티 클래스를 직접 겨냥하는 이유는 위 주석 참고(테마 값이 인라인되어 변수로는 못 끈다).
- * Tailwind 유틸리티는 @layer 안에 있고 이 규칙은 레이어 밖이라 특이도와 무관하게 이긴다.
- */
-.admin-surface :is(.shadow-card, .shadow-soft, .shadow-lift) {
-  box-shadow: none;
 }
