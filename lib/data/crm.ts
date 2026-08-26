@@ -2,6 +2,7 @@
 // DB 미연결 시 전부 빈 배열/null 반환. lesson_materials는 타입 미정의라 이 파일에서 자체 정의한다.
 
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
+import { kstMonthStartUtc } from "@/lib/kst";
 import type {
   ClassType,
   Consent,
@@ -29,24 +30,10 @@ export { hasDb };
 
 /* ---------- 포맷 헬퍼 ---------- */
 
-export function formatKDate(iso: string | null | undefined): string {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "-";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}.${m}.${day}`;
-}
-
-export function formatKDateTime(iso: string | null | undefined): string {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "-";
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${formatKDate(iso)} ${h}:${min}`;
-}
+// 날짜·시각 표기는 lib/kst.ts가 유일한 기준이다 — 서버가 UTC라 Date의 "로컬" API를 쓰면
+// 화면이 9시간 빨라진다(같은 회차가 화면 19:01 / 내보낸 캘린더 04:01로 갈렸던 원인).
+// 기존 호출부를 그대로 두려고 여기서 다시 내보낸다.
+export { formatKDate, formatKDateTime } from "@/lib/kst";
 
 export function formatWon(amount: number | null | undefined): string {
   return `${(amount ?? 0).toLocaleString("ko-KR")}원`;
@@ -551,12 +538,9 @@ export async function getPaymentSummary(
   const db = createServiceClient();
   if (!db) return { paidThisMonth: 0, overdueTotal: 0, pendingTotal: 0 };
 
-  // 당월 경계는 KST(UTC+9) 기준으로 잡는다. 서버는 UTC라 now.getMonth()·bare date로 비교하면
-  // KST 월초 0~9시에 완납된 건이 전월로 새거나 누락된다. KST 그 달 1일 00:00의 UTC instant로 비교.
-  const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
-  const monthStart = new Date(
-    Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), 1) - 9 * 3600 * 1000,
-  ).toISOString();
+  // 당월 경계는 KST 기준으로 잡는다. 서버는 UTC라 now.getMonth()·bare date로 비교하면
+  // KST 월초 0~9시에 완납된 건이 전월로 새거나 누락된다.
+  const monthStart = kstMonthStartUtc();
 
   const [paidRes, overdueRes, pendingRes] = await Promise.all([
     db

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
+import { toKstDateTimeLocal } from "@/lib/kst";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
   formatKDateTime,
@@ -50,14 +51,8 @@ import {
 //    반영하지 않는다는 사실을 화면에 적는다(검수 10).
 //  · 결과는 덮어쓰지 않는다 — 이력 전체를 시간순으로 남기고 최신 결정만 '현재 결과'로 표시한다.
 
-/** datetime-local 기본값(YYYY-MM-DDTHH:mm) — 로컬 시각 표기. schedules 입력과 같은 규약. */
-function toDateTimeLocal(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+/** datetime-local 기본값(YYYY-MM-DDTHH:mm) — KST 벽시계. schedules 입력과 같은 규약. */
+const toDateTimeLocal = toKstDateTimeLocal;
 
 export default async function TrialDetailPage({
   params,

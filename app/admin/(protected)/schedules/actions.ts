@@ -6,6 +6,7 @@ import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { nextSessionNumber } from "@/lib/data/crm";
 import { hasActiveBookingRestriction } from "@/lib/data/packages";
 import { logActivity } from "@/lib/data/activity";
+import { kstDateOnly, parseKstWallClock } from "@/lib/kst";
 import { sendNotification } from "@/lib/notify/send";
 import type { ClassType, ScheduleItem } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
@@ -18,15 +19,6 @@ const VALID_STATUSES: ScheduleItem["status"][] = ["planned", "done", "canceled",
 
 function revalidateSchedules() {
   revalidatePath("/admin/schedules");
-}
-
-/** scheduled_at(ISO)에서 KST(UTC+9) 기준 날짜(YYYY-MM-DD)만 추출 — 서버 TZ와 무관하게 일관. */
-function kstDateOnly(iso: string): string {
-  const kst = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
-  const y = kst.getUTCFullYear();
-  const m = String(kst.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(kst.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 /**
@@ -104,8 +96,9 @@ export async function createSchedule(formData: FormData): Promise<CrmActionResul
     };
   }
 
-  const scheduledAt = new Date(scheduledAtRaw);
-  if (Number.isNaN(scheduledAt.getTime())) {
+  // 운영자가 친 "19:01"은 KST 19:01이다 — 서버가 UTC라 new Date()로 파싱하면 9시간 늦게 저장된다.
+  const scheduledAt = parseKstWallClock(scheduledAtRaw);
+  if (!scheduledAt) {
     return { ok: false, error: "올바르지 않은 일시입니다." };
   }
 

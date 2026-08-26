@@ -2,8 +2,13 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import type { ScheduleItem } from "@/lib/types";
 import type { ScheduleListItem } from "@/lib/data/crm";
+import { kstDateOnly, kstTime, kstTodayDateOnly } from "@/lib/kst";
 
-// 월간 달력(서버 컴포넌트) — 한 달치 일정을 7열 그리드로 렌더. 날짜 그룹핑은 로컬 기준(주간 뷰와 동일).
+// 월간 달력(서버 컴포넌트) — 한 달치 일정을 7열 그리드로 렌더.
+//
+// 날짜 그룹핑은 **KST 기준**이다(주간 뷰와 동일). month를 Date가 아니라 "YYYY-MM" 문자열로 받는
+// 이유도 같다 — Date로 넘기면 서버(UTC)에서 로컬 조각을 읽게 되어 KST 00~09시 회차가 전날 칸에
+// 떨어진다. 달력 격자는 시간대가 없는 순수 달력이므로 조각 계산은 UTC API로만 한다.
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -15,36 +20,28 @@ const STATUS_CHIP: Record<ScheduleItem["status"], string> = {
   conflict: "bg-orange-100 text-orange-800 ring-1 ring-orange-300",
 };
 
-function dateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${h}:${min}`;
-}
+const formatTime = kstTime;
 
 export function ScheduleCalendar({
   schedules,
   month,
 }: {
   schedules: ScheduleListItem[];
-  month: Date;
+  /** "YYYY-MM" (KST) */
+  month: string;
 }) {
-  const year = month.getFullYear();
-  const monthIdx = month.getMonth();
-  const firstWeekday = new Date(year, monthIdx, 1).getDay(); // 0=일 ... 6=토
-  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+  const [yRaw, mRaw] = month.split("-");
+  const year = Number(yRaw);
+  const monthIdx = Number(mRaw) - 1;
+  const firstWeekday = new Date(Date.UTC(year, monthIdx, 1)).getUTCDay(); // 0=일 ... 6=토
+  const daysInMonth = new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate();
 
-  // 로컬 날짜별 그룹핑. listSchedules가 scheduled_at 오름차순이라 각 배열은 시간순이 유지된다.
+  // KST 날짜별 그룹핑. listSchedules가 scheduled_at 오름차순이라 각 배열은 시간순이 유지된다.
   const byDate = new Map<string, ScheduleListItem[]>();
   for (const s of schedules) {
-    const key = dateKey(new Date(s.scheduledAt));
+    const key = kstDateOnly(s.scheduledAt);
     const arr = byDate.get(key);
     if (arr) arr.push(s);
     else byDate.set(key, [s]);
@@ -56,7 +53,7 @@ export function ScheduleCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const todayKey = dateKey(new Date());
+  const todayKey = kstTodayDateOnly();
 
   return (
     <div className="overflow-x-auto rounded-card border border-line">
@@ -88,7 +85,7 @@ export function ScheduleCalendar({
                 />
               );
             }
-            const key = dateKey(new Date(year, monthIdx, day));
+            const key = `${year}-${pad2(monthIdx + 1)}-${pad2(day)}`;
             const items = byDate.get(key) ?? [];
             const isToday = key === todayKey;
             const weekday = i % 7;

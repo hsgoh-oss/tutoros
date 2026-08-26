@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { Dday } from "@/lib/types";
+import { kstDayStartUtc, kstTodayDateOnly } from "@/lib/kst";
 
-// 날짜 계산은 클라이언트에서(KST 가정) — 서버/클라 시각차로 인한 하이드레이션 불일치 회피.
+// 계산은 마운트 후 클라이언트에서 한다 — 서버/클라 시각차로 인한 하이드레이션 불일치 회피.
+// 기준은 보는 사람의 로컬이 아니라 **KST**다: 한국 시험의 D-day는 접속 지역과 무관하게 같아야 하고,
+// 관리자 화면(서버 렌더)과도 같은 값이 나와야 한다.
 
 function daysUntil(dateStr: string): number {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const target = new Date(y, m - 1, d);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = kstDayStartUtc(dateStr);
+  const today = kstDayStartUtc(kstTodayDateOnly());
+  if (!target || !today) return 0;
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 

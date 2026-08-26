@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
+import { parseKstWallClock } from "@/lib/kst";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { formatKDateTime, getConsultation, getPayment } from "@/lib/data/crm";
 import { getTrialSession } from "@/lib/data/intake";
@@ -56,11 +57,9 @@ function revalidateTrials(id?: string) {
   if (id) revalidatePath(`/admin/trials/${id}`);
 }
 
-/** datetime-local 입력(로컬 시각) 파싱 — schedules/actions.ts createSchedule과 같은 규약. */
+/** datetime-local 입력(KST 벽시계) 파싱 — schedules/actions.ts createSchedule과 같은 규약. */
 function parseDateTime(raw: string): Date | null {
-  if (!raw) return null;
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return parseKstWallClock(raw);
 }
 
 type Db = NonNullable<ReturnType<typeof createServiceClient>>;

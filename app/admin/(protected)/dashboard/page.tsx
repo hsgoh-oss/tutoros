@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import {
+  kstDayRangeUtc,
+  kstDayStartUtc,
+  kstTodayDateOnly,
+  kstWeekRangeUtc,
+} from "@/lib/kst";
+import {
   formatKDate,
   formatKDateTime,
   formatWon,
@@ -39,32 +45,18 @@ import { scheduleStatusLabel, scheduleStatusTone } from "../schedules/constants"
 
 type BadgeTone = "brand" | "soft" | "success" | "warning" | "danger";
 
-// 이번 주 월요일 00:00 ~ 다음 주 월요일 00:00 (schedules 모듈의 주간 계산과 동일 기준).
-function currentWeekRange(): { from: string; to: string } {
-  const now = new Date();
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const day = monday.getDay(); // 0=일 ... 6=토
-  monday.setDate(monday.getDate() + (day === 0 ? -6 : 1 - day));
-  const nextMonday = new Date(monday);
-  nextMonday.setDate(monday.getDate() + 7);
-  return { from: monday.toISOString(), to: nextMonday.toISOString() };
-}
+// 이번 주 월요일 00:00 ~ 다음 주 월요일 00:00 (KST 기준 — lib/kst.ts 규약).
+// 서버가 UTC라 로컬 Date 산술로 잡으면 KST 00~09시에 주·일 경계가 하루 앞으로 밀려
+// 아침 수업이 "오늘 수업"에서 통째로 빠진다.
+const currentWeekRange = kstWeekRangeUtc;
+const todayRange = kstDayRangeUtc;
 
-// 오늘 00:00 ~ 내일 00:00 (currentWeekRange와 동일한 로컬 기준).
-function todayRange(): { from: string; to: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(start);
-  tomorrow.setDate(start.getDate() + 1);
-  return { from: start.toISOString(), to: tomorrow.toISOString() };
-}
-
-// examDate("YYYY-MM-DD") 기준 남은 일수 — 로컬 자정 기준 계산.
+// examDate("YYYY-MM-DD") 기준 남은 일수 — KST 자정 기준(시험은 한국 시험이다).
+// 로컬(=UTC) 자정으로 세면 KST 00~09시에 하루 더 많게 나와, 같은 시각 공개 배너와 D-day가 갈렸다.
 function daysUntil(dateStr: string): number {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const target = new Date(y, (m ?? 1) - 1, d ?? 1);
+  const start = kstDayStartUtc(kstTodayDateOnly());
+  const target = kstDayStartUtc(dateStr);
+  if (!start || !target) return 0;
   return Math.round((target.getTime() - start.getTime()) / 86_400_000);
 }
 

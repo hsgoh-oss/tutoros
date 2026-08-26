@@ -8,6 +8,7 @@ import {
   SESSION_MAX_AGE_S,
   createSession,
   issueOtp,
+  noteOtpDecoyRequest,
   verifyOtp,
 } from "@/lib/auth/session";
 import { logActivity } from "@/lib/data/activity";
@@ -70,7 +71,14 @@ async function authorizeAdmin(email: string): Promise<AuthorizedAdmin | null> {
 export async function requestLoginOtp(email: string): Promise<LoginActionResult> {
   const admin = await authorizeAdmin(email);
   if (!admin) {
-    return { ok: false, error: "등록된 관리자 이메일이 아닙니다." };
+    // 계정 존재를 노출하지 않는다 — 미등록 주소도 발급 성공과 **같은 화면·같은 응답**으로
+    // 수렴시킨다(코드 입력 단계 + 60초 재발송 타이머). 예전에는 "등록된 관리자 이메일이
+    // 아닙니다."로 답해, 주소를 넣어보는 것만으로 운영자 계정을 확인할 수 있었다.
+    // 같은 레포의 포털 링크(/p/link)·신청서(/f)는 이미 이 규율을 지키고 있다.
+    //
+    // 발급·발송은 하지 않지만 rate limit은 똑같이 먹는다(무제한 탐색 차단).
+    noteOtpDecoyRequest(email);
+    return { ok: true };
   }
   const result = await issueOtp(admin.tenantId, admin.email);
   if (!result.ok) return { ok: false, error: result.error };
@@ -82,11 +90,13 @@ export async function verifyLoginOtp(
   code: string,
 ): Promise<LoginActionResult> {
   const admin = await authorizeAdmin(email);
-  if (!admin) {
-    return { ok: false, error: "등록된 관리자 이메일이 아닙니다." };
-  }
   if (!/^\d{6}$/.test(code.trim())) {
     return { ok: false, error: "6자리 인증번호를 입력해 주세요." };
+  }
+  if (!admin) {
+    // 요청 단계와 같은 이유로 사유를 구분하지 않는다 — 등록 주소에 틀린 코드를 넣었을 때와
+    // 똑같은 문구로 수렴시킨다(형식 검사는 위에서 먼저 하므로 순서도 동일하다).
+    return { ok: false, error: "인증번호가 올바르지 않습니다." };
   }
 
   const result = await verifyOtp(admin.tenantId, admin.email, code.trim());

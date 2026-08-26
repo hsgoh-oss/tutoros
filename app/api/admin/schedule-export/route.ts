@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/server";
 import { logActivity } from "@/lib/data/activity";
+import { kstStamp } from "@/lib/kst";
 
 // 학생 일정 내보내기 (L-09) — 정본: docs/flow-canon/01_atlas_02_portal_lessons.md.
 //
@@ -61,14 +62,8 @@ function csvCell(v: string): string {
   return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-/** KST 벽시계 "YYYY-MM-DD HH:MM". toLocaleString의 "2026. 8. 27. PM 5:00:00"은 표에서 정렬되지 않는다. */
-function kstStamp(iso: string): string {
-  const k = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
-  const p2 = (n: number) => String(n).padStart(2, "0");
-  return `${k.getUTCFullYear()}-${p2(k.getUTCMonth() + 1)}-${p2(k.getUTCDate())} ${p2(
-    k.getUTCHours(),
-  )}:${p2(k.getUTCMinutes())}`;
-}
+// KST 벽시계 "YYYY-MM-DD HH:MM"은 lib/kst.ts가 담당한다 — 표시 규약은 한 곳에만 둔다.
+// (toLocaleString의 "2026. 8. 27. PM 5:00:00"은 표에서 정렬되지 않는다.)
 
 export async function GET(request: Request) {
   const session = await getAdminSession();

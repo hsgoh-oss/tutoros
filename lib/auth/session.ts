@@ -284,6 +284,16 @@ function devOtpVisible(): boolean {
   return process.env.AUTH_DEV_MODE === "true";
 }
 
+/**
+ * 미등록 이메일에 대한 "발급한 척" — 계정 존재를 노출하지 않기 위한 것이다(P-02와 같은 규율).
+ *
+ * 아무것도 발급·발송하지 않지만 rate limit 슬롯은 똑같이 먹는다. 그래야 미등록 주소로
+ * 무제한 탐색하며 등록 주소와 응답 차이를 재는 경로가 생기지 않는다.
+ */
+export function noteOtpDecoyRequest(email: string): void {
+  otpRateLimited(email.trim().toLowerCase(), Date.now());
+}
+
 export async function issueOtp(tenantId: string, email: string): Promise<OtpResult> {
   const now = Date.now();
   if (otpRateLimited(email, now)) {

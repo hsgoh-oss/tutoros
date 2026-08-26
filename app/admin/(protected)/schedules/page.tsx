@@ -11,68 +11,48 @@ import { InlineSelect } from "@/components/admin/crm/inline-select";
 import { ActionButton } from "@/components/admin/crm/action-button";
 import { ScheduleCalendar } from "@/components/admin/schedule-calendar";
 import {
+  addKstDays,
+  addKstMonths,
+  kstDayStartUtc,
+  kstMondayOf,
+  kstTodayDateOnly,
+} from "@/lib/kst";
+import {
   MANUAL_SCHEDULE_STATUS_OPTIONS,
   classTypeLabel,
   scheduleStatusTone,
 } from "./constants";
 import { deleteSchedule, sendMakeupNotice, updateScheduleStatus } from "./actions";
 
-// week 파라미터("YYYY-MM-DD")를 new Date()로 파싱하면 UTC 자정이 되어 저장 기준(로컬 시간 해석)과
-// 어긋난다. 연/월/일을 직접 파싱해 로컬 Date로만 다뤄 저장·조회 기준을 통일한다.
-function parseDateOnly(value: string | undefined): Date | null {
-  if (!value) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-  const [, y, m, d] = match;
-  return new Date(Number(y), Number(m) - 1, Number(d));
+// 주·월 네비게이션은 **KST 달력 문자열**("YYYY-MM-DD" / "YYYY-MM")로만 다룬다.
+// Date 객체로 다루면 서버(UTC)에서 로컬 조각을 읽게 되어 KST 00~09시 회차가 이전 주·월로 새어
+// 나간다. 조회 구간만 마지막에 KST 자정 → UTC instant로 옮긴다(lib/kst.ts).
+
+function parseDateOnly(value: string | undefined): string | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  return value;
 }
 
-function toDateOnly(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+function parseMonth(value: string | undefined): string | null {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
+  return value;
 }
 
-function mondayOf(date: Date): Date {
-  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = monday.getDay(); // 0=일 ... 6=토
-  const diff = day === 0 ? -6 : 1 - day;
-  monday.setDate(monday.getDate() + diff);
-  return monday;
+function monthOf(dateOnly: string): string {
+  return dateOnly.slice(0, 7);
 }
 
-function addDays(date: Date, days: number): Date {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
+function formatKMonth(monthOnly: string): string {
+  const [y, m] = monthOnly.split("-");
+  return `${Number(y)}년 ${Number(m)}월`;
 }
 
-// month 파라미터는 "YYYY-MM". week와 같은 이유로 연/월을 직접 파싱해 로컬 Date로 다룬다.
-function parseMonth(value: string | undefined): Date | null {
-  if (!value) return null;
-  const match = /^(\d{4})-(\d{2})$/.exec(value);
-  if (!match) return null;
-  const [, y, m] = match;
-  return new Date(Number(y), Number(m) - 1, 1);
-}
-
-function firstDayOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date: Date, months: number): Date {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
-}
-
-function toMonthOnly(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
-}
-
-function formatKMonth(date: Date): string {
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+/** KST 달력 문자열 구간 → 조회용 UTC ISO 구간. */
+function rangeUtc(fromDateOnly: string, toDateOnly: string): { from: string; to: string } {
+  return {
+    from: kstDayStartUtc(fromDateOnly)!.toISOString(),
+    to: kstDayStartUtc(toDateOnly)!.toISOString(),
+  };
 }
 
 export default async function SchedulesPage({
@@ -130,16 +110,16 @@ export default async function SchedulesPage({
   );
 
   if (view === "month") {
-    const monthStart = parseMonth(monthParam) ?? firstDayOfMonth(new Date());
-    const nextMonthStart = addMonths(monthStart, 1);
-    const prevMonthStart = addMonths(monthStart, -1);
-    const thisMonthStart = firstDayOfMonth(new Date());
+    const monthStart = parseMonth(monthParam) ?? monthOf(kstTodayDateOnly());
+    const nextMonthStart = addKstMonths(monthStart, 1);
+    const prevMonthStart = addKstMonths(monthStart, -1);
+    const thisMonthStart = monthOf(kstTodayDateOnly());
 
     const schedules = session
-      ? await listSchedules(session.tenantId, {
-          from: monthStart.toISOString(),
-          to: nextMonthStart.toISOString(),
-        })
+      ? await listSchedules(
+          session.tenantId,
+          rangeUtc(`${monthStart}-01`, `${nextMonthStart}-01`),
+        )
       : [];
 
     return (
@@ -151,19 +131,19 @@ export default async function SchedulesPage({
             {viewToggle}
             <span className="mx-1 h-5 w-px bg-line" />
             <Link
-              href={`/admin/schedules?view=month&month=${toMonthOnly(prevMonthStart)}`}
+              href={`/admin/schedules?view=month&month=${prevMonthStart}`}
               className={buttonClass("ghost", "sm")}
             >
               이전 달
             </Link>
             <Link
-              href={`/admin/schedules?view=month&month=${toMonthOnly(thisMonthStart)}`}
+              href={`/admin/schedules?view=month&month=${thisMonthStart}`}
               className={buttonClass("ghost", "sm")}
             >
               이번 달
             </Link>
             <Link
-              href={`/admin/schedules?view=month&month=${toMonthOnly(nextMonthStart)}`}
+              href={`/admin/schedules?view=month&month=${nextMonthStart}`}
               className={buttonClass("ghost", "sm")}
             >
               다음 달
@@ -178,17 +158,14 @@ export default async function SchedulesPage({
   }
 
   // 주간 뷰 (기본)
-  const monday = mondayOf(parseDateOnly(week) ?? new Date());
-  const sunday = addDays(monday, 6);
-  const nextMonday = addDays(monday, 7);
-  const prevMonday = addDays(monday, -7);
-  const thisMonday = mondayOf(new Date());
+  const monday = kstMondayOf(parseDateOnly(week) ?? kstTodayDateOnly());
+  const sunday = addKstDays(monday, 6);
+  const nextMonday = addKstDays(monday, 7);
+  const prevMonday = addKstDays(monday, -7);
+  const thisMonday = kstMondayOf(kstTodayDateOnly());
 
   const schedules = session
-    ? await listSchedules(session.tenantId, {
-        from: monday.toISOString(),
-        to: nextMonday.toISOString(),
-      })
+    ? await listSchedules(session.tenantId, rangeUtc(monday, nextMonday))
     : [];
 
   return (
@@ -200,26 +177,26 @@ export default async function SchedulesPage({
           {viewToggle}
           <span className="mx-1 h-5 w-px bg-line" />
           <Link
-            href={`/admin/schedules?week=${toDateOnly(prevMonday)}`}
+            href={`/admin/schedules?week=${prevMonday}`}
             className={buttonClass("ghost", "sm")}
           >
             이전 주
           </Link>
           <Link
-            href={`/admin/schedules?week=${toDateOnly(thisMonday)}`}
+            href={`/admin/schedules?week=${thisMonday}`}
             className={buttonClass("ghost", "sm")}
           >
             이번 주
           </Link>
           <Link
-            href={`/admin/schedules?week=${toDateOnly(nextMonday)}`}
+            href={`/admin/schedules?week=${nextMonday}`}
             className={buttonClass("ghost", "sm")}
           >
             다음 주
           </Link>
         </div>
         <p className="text-sm font-bold text-ink-soft">
-          {formatKDate(monday.toISOString())} ~ {formatKDate(sunday.toISOString())}
+          {formatKDate(monday)} ~ {formatKDate(sunday)}
         </p>
       </Card>
 

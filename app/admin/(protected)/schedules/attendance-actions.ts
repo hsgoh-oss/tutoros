@@ -11,6 +11,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
+import { parseKstWallClock } from "@/lib/kst";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { logActivity, runCritical } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
@@ -73,8 +74,9 @@ export async function settleAttendance(
   const parseStamp = (key: string): string | null => {
     const raw = String(form.get(key) ?? "").trim();
     if (!raw) return null;
-    const d = new Date(raw);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    // 운영자가 친 벽시계는 KST다(lib/kst.ts 규약).
+    const d = parseKstWallClock(raw);
+    return d ? d.toISOString() : null;
   };
   const actualStartedAt = attendance === "late" ? parseStamp("actualStartedAt") : null;
   const actualEndedAt = attendance === "early_leave" ? parseStamp("actualEndedAt") : null;
@@ -232,8 +234,8 @@ export async function createMakeup(
 
   const at = String(form.get("scheduledAt") ?? "").trim();
   if (!at) return { ok: false, error: "보강 일시를 입력해 주세요." };
-  const parsed = new Date(at);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseKstWallClock(at);
+  if (!parsed) {
     return { ok: false, error: "보강 일시가 올바르지 않습니다." };
   }
   const durationMin = Number(form.get("durationMin") ?? 60);
