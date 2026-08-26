@@ -6,7 +6,7 @@ import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { nextSessionNumber } from "@/lib/data/crm";
 import { hasActiveBookingRestriction } from "@/lib/data/packages";
 import { logActivity } from "@/lib/data/activity";
-import { kstDateOnly, parseKstWallClock } from "@/lib/kst";
+import { formatKDateTime, kstDateOnly, parseKstWallClock } from "@/lib/kst";
 import { sendNotification } from "@/lib/notify/send";
 import type { ClassType, ScheduleItem } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
@@ -74,6 +74,51 @@ async function linkLessonForSchedule(
   }
 }
 
+/**
+ * 같은 학생의 살아 있는 회차와 겹치는지 확인한다(L-01 "겹치는 후보는 확정하지 않는다").
+ *
+ * 묶음 회차 생성(generate_package_sessions)은 겹치는 후보를 conflict로 남기는데, 손으로 만드는
+ * 이 경로에는 검사가 없어 같은 학생·같은 시각에 회차가 조용히 두 개 생겼다(실검증에서 확인).
+ * 잔액은 계약에 귀속된 쪽만 차감해 안전하지만, 학부모 캘린더·알림에 중복 회차가 나간다.
+ *
+ * 다른 학생끼리의 시간 충돌은 막지 않는다 — 정본은 충돌을 금지하지 않고(시범 T-02도 목록만
+ * 돌려준다) 운영자가 판단할 몫이다. 여기서 막는 건 "한 학생이 같은 시각에 두 번"뿐이다.
+ *
+ * ends_at이 있는 회차는 구간으로, 없는 회차는 시각으로 본다 — 손으로 만든 회차엔 길이가 없다.
+ */
+async function findStudentOverlap(
+  db: NonNullable<ReturnType<typeof createServiceClient>>,
+  tenantId: string,
+  studentId: string,
+  at: Date,
+): Promise<string | null> {
+  // 가장 긴 수업을 넘겨 잡아 후보를 좁힌 뒤, 겹침 판정은 아래에서 정확히 한다.
+  const WINDOW_MS = 12 * 60 * 60 * 1000;
+  const { data, error } = await db
+    .from("schedules")
+    .select("scheduled_at, ends_at")
+    .eq("tenant_id", tenantId)
+    .eq("student_id", studentId)
+    .in("status", ["planned", "makeup"])
+    .gte("scheduled_at", new Date(at.getTime() - WINDOW_MS).toISOString())
+    .lte("scheduled_at", new Date(at.getTime() + WINDOW_MS).toISOString());
+  if (error) {
+    // 검사에 실패했다고 등록을 막지는 않는다 — 중복은 되돌릴 수 있고 등록 불가는 되돌릴 수 없다.
+    console.error("[schedules] overlap scan failed", error);
+    return null;
+  }
+
+  const t = at.getTime();
+  for (const row of (data ?? []) as { scheduled_at: string; ends_at: string | null }[]) {
+    const start = new Date(row.scheduled_at).getTime();
+    const end = row.ends_at ? new Date(row.ends_at).getTime() : start;
+    if (t === start || (t > start && t < end)) {
+      return formatKDateTime(row.scheduled_at);
+    }
+  }
+  return null;
+}
+
 export async function createSchedule(formData: FormData): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
@@ -107,6 +152,14 @@ export async function createSchedule(formData: FormData): Promise<CrmActionResul
     : "inperson";
 
   const db = createServiceClient()!;
+
+  const overlap = await findStudentOverlap(db, session.tenantId, studentId, scheduledAt);
+  if (overlap) {
+    return {
+      ok: false,
+      error: `이 학생은 ${overlap} 회차와 시간이 겹칩니다. 기존 회차를 취소·보강으로 정리하거나 다른 시각을 골라 주세요.`,
+    };
+  }
   const { data, error } = await db
     .from("schedules")
     .insert({
