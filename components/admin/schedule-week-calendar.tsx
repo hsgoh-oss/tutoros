@@ -145,7 +145,11 @@ export function ScheduleWeekCalendar({
   const todayKey = kstTodayDateOnly();
 
   return (
-    <div className="overflow-x-auto rounded-card border border-line">
+    <div className="overflow-x-auto rounded-card border border-line [-webkit-overflow-scrolling:touch]">
+      {/* 좁은 화면에서는 7일 격자가 화면보다 넓다 — 옆으로 밀 수 있다는 것을 첫 줄에서 말한다. */}
+      <p className="m-0 border-b border-line bg-soft px-3 py-1.5 text-[11px] font-bold text-muted md:hidden">
+        주간표는 옆으로 밀어 볼 수 있습니다 · 아래 목록에서도 회차를 관리할 수 있습니다
+      </p>
       <div className="min-w-[760px]">
         {/* 요일 머리 — 시간 눈금 폭(56px)만큼 왼쪽을 비워 본문 열과 정확히 맞춘다. */}
         <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-line bg-soft">

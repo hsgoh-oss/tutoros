@@ -63,8 +63,10 @@ export default async function ReportDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight">
-            {reportTypeLabel(report.type)} 리포트
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-semibold tracking-tight">
+              {reportTypeLabel(report.type)} 리포트
+            </h1>
             <Badge tone={reportStatusTone(report.status)}>{reportStatusLabel(report.status)}</Badge>
             {/* 전달 상태 뱃지 — 업무 상태와 분리 표시. 미발송(none)은 헤더에서 생략(초안·내부용 소음 방지). */}
             {report.deliveryStatus !== "none" && (
@@ -81,7 +83,7 @@ export default async function ReportDetailPage({
                 최신본 보기 →
               </Link>
             )}
-          </h1>
+          </div>
           <p className="mt-1 text-sm text-muted">
             {student?.name ?? "학생 미연결"} · {reportAudienceLabel(report.audience)} ·{" "}
             {report.depth === "deep" ? "심화" : "기본"} · {formatKDate(report.createdAt)} 생성

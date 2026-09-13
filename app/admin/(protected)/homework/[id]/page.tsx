@@ -106,15 +106,15 @@ export default async function HomeworkDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight">
-            {assignment.title}
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-semibold tracking-tight">{assignment.title}</h1>
             <Badge tone={homeworkStatusTone(assignment.status)}>
               {homeworkStatusLabel(assignment.status)}
             </Badge>
             {unreviewedCount > 0 && (
               <Badge tone="warning">미검토 제출 {unreviewedCount}건</Badge>
             )}
-          </h1>
+          </div>
           <p className="mt-1 text-sm text-muted">
             {assignment.studentName ?? "학생 미연결"} · 기한 {formatKDate(assignment.dueDate)} ·{" "}
             {formatKDate(assignment.createdAt)} 생성

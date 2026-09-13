@@ -339,9 +339,11 @@ export async function requestRevision(formData: FormData): Promise<ReviewLinkRes
   // 작성자 정보 — 후기 행에 없으면(옛 대필 등록분) 원 초대에서 되찾는다. 둘 다 없으면 보낼 곳이 없다.
   let authorName = review.authorName;
   let authorPhone = review.authorPhone;
+  // 초대의 학생 이름은 작성 화면의 관계 확인 문장("OO 학생의 보호자로서")에 쓰인다 — 원 초대의 실명을
+  // 이어받는다. 후기 행에는 마스킹 이름만 있어서, 원 초대가 없을 때만 그것으로 대신한다.
   let studentName = review.publicName ?? "";
   let authorRole = review.reviewerType;
-  if ((!authorName || !authorPhone) && review.invitationId) {
+  if (review.invitationId) {
     const prev = await getReviewInvitation(session.tenantId, review.invitationId);
     if (prev) {
       authorName = authorName ?? prev.authorName;

@@ -985,6 +985,7 @@ export async function listStudentNotifications(
       is_ad: boolean;
       retry_count: number;
       sent_at: string | null;
+      created_at: string;
     };
     return {
       id: row.id,
@@ -997,6 +998,7 @@ export async function listStudentNotifications(
       isAd: row.is_ad,
       retryCount: row.retry_count,
       sentAt: row.sent_at,
+      createdAt: row.created_at,
     };
   });
 }

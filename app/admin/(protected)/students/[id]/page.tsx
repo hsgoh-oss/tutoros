@@ -35,6 +35,7 @@ import { listReviewInvitations } from "@/lib/data/reviews";
 
 import { classTypeLabel, studentStatusLabel, studentStatusTone } from "../constants";
 import { consentItemLabel } from "../../consultations/constants";
+import { notifyTypeLabel } from "@/lib/notify/templates";
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
   draft: "작성 중",
@@ -161,12 +162,12 @@ export default async function StudentDetailPage({
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight">
-            {student.name}
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold tracking-tight">{student.name}</h1>
             <Badge tone={studentStatusTone(student.status)}>
               {studentStatusLabel(student.status)}
             </Badge>
-          </h1>
+          </div>
           <p className="mt-1 text-sm text-muted">
             {classTypeLabel(student.classType)}
             {student.subjectType && ` · ${student.subjectType}`} ·{" "}
@@ -417,9 +418,9 @@ export default async function StudentDetailPage({
                     className="flex items-center justify-between border-b border-line pb-3 last:border-0 last:pb-0"
                   >
                     <div>
-                      <p className="text-sm font-bold">{n.type}</p>
+                      <p className="text-sm font-bold">{notifyTypeLabel(n.type)}</p>
                       <p className="mt-0.5 text-xs text-muted">
-                        {formatKDate(n.sentAt)}
+                        {n.sentAt ? formatKDate(n.sentAt) : `${formatKDate(n.createdAt)} 생성`}
                       </p>
                     </div>
                     <Badge tone={notifyStatusTone(n.status)}>

@@ -116,6 +116,23 @@ function workSourceHref(item: WorkItem): string | null {
     case "cron":
     case "automation_run":
       return "/admin/schedules";
+    // 후기·사례 제출(00025) — 검토 화면으로 바로.
+    case "review":
+      return item.sourceId ? `/admin/reviews/${item.sourceId}` : "/admin/reviews";
+    case "review_invitation":
+      return "/admin/reviews";
+    // 후기 요청 후보(크론) — source_id가 학생이다.
+    case "review_request":
+      return item.sourceId ? `/admin/students/${item.sourceId}` : "/admin/students";
+    case "homework_assignment":
+      return item.sourceId ? `/admin/homework/${item.sourceId}` : "/admin/homework";
+    case "homework_question":
+      return "/admin/homework";
+    // 신청폼 제출 — 폼 id로 상담을 특정하는 조회가 없어 목록으로 보낸다(제출 순 정렬).
+    case "intake_form":
+      return "/admin/consultations";
+    case "backup_restore":
+      return "/admin/activity";
     default:
       return null;
   }
@@ -160,7 +177,11 @@ export default async function DashboardPage() {
       listPaymentsDueSoon(session.tenantId, 3),
       listTenantDdays(session.tenantId),
       getRecruitStatus(session.tenantId),
-      listActivity(session.tenantId, 8),
+      // 관리자 로그인 기록은 변경이 아니다 — 대시보드의 '최근 변경'에서는 걸러 실제 변경만 8건 보여 준다
+      // (전체 이력은 /admin/activity). 넉넉히 읽어 거른 뒤 자른다.
+      listActivity(session.tenantId, 30).then((rows) =>
+        rows.filter((a) => a.action !== "admin_login").slice(0, 8),
+      ),
       listOpenWorkItems(session.tenantId),
     ]);
   }
@@ -205,9 +226,17 @@ export default async function DashboardPage() {
                       {w.status === "in_progress" && (
                         <Badge tone="soft">진행 중</Badge>
                       )}
-                      <p className="truncate text-sm font-bold text-ink">
-                        {w.title}
-                      </p>
+                      {/* 제목 자체를 원본으로 가는 링크로 — 작은 '원본 보기'만 두면 눌러야 할 곳을 찾게 된다. */}
+                      {href ? (
+                        <Link
+                          href={href}
+                          className="truncate text-sm font-bold text-ink hover:text-brand-700 hover:underline"
+                        >
+                          {w.title}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-sm font-bold text-ink">{w.title}</p>
+                      )}
                     </div>
                     <p className="mt-1 text-xs text-muted">
                       다음 행동: {w.nextAction}

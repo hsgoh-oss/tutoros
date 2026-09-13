@@ -462,6 +462,8 @@ export interface NotificationLog {
   isAd: boolean;
   retryCount: number;
   sentAt: string | null;
+  /** 큐 적재 시각 — 대기·실패 건은 sentAt이 없어 이 값으로 "언제 생긴 알림인지"를 보여 준다. */
+  createdAt: string;
 }
 
 /* ---------- 과제·질의응답 (H-01~H-07 · 00015) ---------- */
