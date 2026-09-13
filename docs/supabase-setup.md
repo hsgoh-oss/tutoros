@@ -43,6 +43,7 @@ pnpm dev
    select count(*) from students; -- 0이어야 정상
    ```
 7. 알림/결제/AI는 각 키(`SOLAPI_*`, `TOSS_SECRET_KEY`, `ANTHROPIC_API_KEY`) 입력 후 활성화 — 키 없인 화면·로그만 동작(안전 폴백)
+8. 웹 푸시(00026)는 VAPID 키 셋(`NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`·`WEB_PUSH_PRIVATE_KEY`·`WEB_PUSH_SUBJECT`)이 있어야 켜진다 — `node -e "console.log(require('web-push').generateVAPIDKeys())"`로 한 번 만들고, 이후 바꾸지 않는다(바꾸면 기존 구독 전부 무효). 키가 없으면 켜기 버튼이 "설정되지 않음"으로 닫힌다.
 
 ## 운영 전환 시 추가 작업 (수동 1회)
 

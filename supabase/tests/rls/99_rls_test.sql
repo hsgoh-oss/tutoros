@@ -59,7 +59,8 @@ declare
     'homework_assignments','homework_submissions','homework_questions',
     'trial_sessions','trial_results','enrollments','contracts','waitlist_offers',
     'lesson_packages','session_ledger','attendance_contacts','attendance_corrections',
-    'booking_restrictions','retention_records','review_invitations'
+    'booking_restrictions','retention_records','review_invitations',
+    'push_subscriptions','push_deliveries'
   ];
 begin
   foreach t in array tables loop

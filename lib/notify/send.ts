@@ -8,7 +8,8 @@ import {
   type DispatchRequest,
   type NotifyRequest,
 } from "./solapi";
-import { getNotifyTemplateId } from "./templates";
+import { getNotifyTemplateId, NOTIFY_TYPE_LABEL, type NotifyType } from "./templates";
+import { pushToPhone } from "@/lib/push/send";
 
 // 알림 발송 진입점 — 모든 모듈이 이 함수만 호출한다. 전 이력 로그 / 알림톡→SMS 폴백 / 야간(21~08) 광고성 대기.
 // Solapi 미설정 시 queued로 적재만. 발송 직전 queued→sending 클레임으로 이중 발송을 막는다(N-02).
@@ -33,6 +34,33 @@ const MAX_RETRY = 3;
 export type SendNotifyRequest = NotifyRequest & { reportId?: string };
 /** 큐 재발송 요청 — DispatchRequest + 리포트 역참조. */
 export type SendDispatchRequest = DispatchRequest & { reportId?: string };
+
+/**
+ * 웹 푸시로도 같이 띄우는 종류(00026) — 포털 가입자의 기기에 "최소한의 확인 알림"(약관 제12조).
+ * 링크가 본문에 실리는 초대·신청서·후기 작성 종류는 뺀다(푸시는 잠금화면에 그대로 뜬다).
+ * 광고성(re_enrollment)은 별도 동의 채널이라 뺀다. 운영자 내부 알림도 뺀다(운영자 푸시는 pushToAdmins가 따로).
+ */
+const PUSH_MIRROR_TYPES = new Set<NotifyType>([
+  "consult_confirmed",
+  "trial_scheduled",
+  "trial_confirmed",
+  "lesson_reminder",
+  "lesson_report",
+  "weekly_report",
+  "monthly_report",
+  "exam_report",
+  "payment_request",
+  "payment_d3",
+  "payment_paid",
+  "payment_overdue",
+  "schedule_changed",
+  "homework_assigned",
+  "enrollment_activated",
+  "waitlist_offer",
+  "custom_message",
+  "review_published",
+  "review_rejected",
+]);
 
 const NIGHT_START_HOUR = 21; // 야간 발송 금지 21:00~08:00 (Asia/Seoul)
 const NIGHT_END_HOUR = 8;
@@ -107,6 +135,16 @@ export async function sendNotification(
   if (insertError || !row) {
     console.error("[notify] log insert failed", insertError);
     return { ok: false, channel, queued: false, error: "알림 로그 적재 실패" };
+  }
+
+  // 포털 기기 푸시 — 알림톡·문자와 다른 층이다. 여기서 실패해도 문자로 대체하지 않고,
+  // 문자가 큐에 대기해도 푸시는 지금 나간다(둘은 서로의 결과에 영향을 주지 않는다).
+  if (!req.isAd && PUSH_MIRROR_TYPES.has(req.type)) {
+    await pushToPhone(req.tenantId, req.phone, req.type, {
+      title: NOTIFY_TYPE_LABEL[req.type],
+      body: req.message.slice(0, 200),
+      url: req.type.startsWith("payment_") ? "/p?view=payer" : "/p",
+    });
   }
 
   if (!canSendNow) {

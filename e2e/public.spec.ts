@@ -96,6 +96,16 @@ test.describe("공개 사이트", () => {
     ).toBeVisible();
   });
 
+  test("PWA: 매니페스트·서비스 워커가 서빙된다", async ({ request }) => {
+    const manifest = await request.get("/manifest.webmanifest");
+    expect(manifest.status()).toBe(200);
+    expect(await manifest.json()).toMatchObject({ display: "standalone" });
+    const sw = await request.get("/sw.js");
+    expect(sw.status()).toBe(200);
+    expect(sw.headers()["cache-control"]).toContain("no-cache");
+    expect(await sw.text()).toContain("addEventListener(\"push\"");
+  });
+
   test("옛 경로: /consult·/refund-policy 영구 리다이렉트", async ({ page }) => {
     for (const [from, to] of [
       ["/consult", "/apply"],

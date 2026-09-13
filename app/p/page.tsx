@@ -14,6 +14,7 @@ import { StudentView } from "./student-view";
 import { GuardianView } from "./guardian-view";
 import { PayerView } from "./payer-view";
 import { ContractorView } from "./contractor-view";
+import { PortalPushCard } from "./push-card";
 
 // 역할별 포털 홈 (P-02 로그인 → 역할별 포털 · P-03~P-05 역할 뷰).
 //
@@ -133,6 +134,9 @@ export default async function PortalRolePage({
           </form>
         </div>
       </header>
+
+      {/* 기기 알림(00026) — 역할·학생과 무관한 "이 사람의 기기" 설정이라 역할 뷰 밖에 둔다. */}
+      <PortalPushCard />
 
       <RoleSwitcher roles={roles} current={view} />
       <StudentSwitcher

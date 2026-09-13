@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveTenant } from "@/lib/tenant";
 import { createWorkItem } from "@/lib/data/work";
+import { pushToAdmins } from "@/lib/push/send";
 import { getFormByTokenHash } from "@/lib/data/intake";
 import { hashIntakeToken } from "@/lib/intake/token";
 import {
@@ -139,6 +140,12 @@ export async function submitIntakeForm(
     nextAction: isTrial
       ? "제출 내용을 확인하고 시범 회차를 제안하세요. 일정 합의와 (유료면) 결제 확인 전에는 확정이 아닙니다."
       : "제출 내용과 관계·수업 조건을 확인하고 등록 준비를 진행하세요. 계약·결제·일정·정원 네 조건이 모두 서야 활성화됩니다.",
+  });
+
+  await pushToAdmins(tenant.id, "intake_form_submitted", {
+    title: `${isTrial ? "시범" : "정규"} 신청서 제출`,
+    body: `${parsed.data.studentName} (${parsed.data.grade}, ${parsed.data.subject})`,
+    url: "/admin/consultations",
   });
 
   return { ok: true, already: false };

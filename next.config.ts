@@ -18,7 +18,17 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "12mb" },
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // 서비스 워커는 갱신이 즉시 반영돼야 한다 — 브라우저·CDN 캐시를 막는다.
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+    ];
   },
   // 옛 경로 → 정본 경로. 상담 링크는 대부분 문자·카카오로 이미 나가 있어서
   // 경로를 바꾸면 그 링크들이 전부 404가 된다. 쿼리(mode·hours·freq)는 자동 보존된다.

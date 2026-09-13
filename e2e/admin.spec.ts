@@ -71,6 +71,12 @@ test.describe("관리자", () => {
     ).toBeVisible();
   });
 
+  test("설정: 수업료·브라우저 푸시 카드가 있다", async ({ page }) => {
+    await page.goto("/admin/settings");
+    await expect(page.getByRole("heading", { name: "수업료" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "브라우저 푸시 알림" })).toBeVisible();
+  });
+
   test("개인정보 보존: 한계를 화면이 먼저 밝힌다", async ({ page }) => {
     await page.goto("/admin/privacy");
     await expect(

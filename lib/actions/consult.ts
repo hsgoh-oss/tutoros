@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { resolveTenant } from "@/lib/tenant";
 import { getSiteContent } from "@/lib/data/content";
 import { sendNotification } from "@/lib/notify/send";
+import { pushToAdmins } from "@/lib/push/send";
 import {
   consultFormSchema,
   isMinorBirthYear,
@@ -177,6 +178,13 @@ export async function submitConsult(
   } catch (notifyError) {
     console.error("[consult] 관리자 접수 알림 발송 실패", notifyError);
   }
+
+  // ③ 운영자 기기 푸시(00026) — 알림톡·문자와 별개의 층. 실패해도 접수는 성공이다.
+  await pushToAdmins(tenant.id, "consult_received", {
+    title: isWaitlistIntake ? "새 대기 신청" : "새 상담 신청",
+    body: `${data.name}님 · ${data.subject ?? "과목 미정"}${data.classType ? ` · ${data.classType === "video" ? "화상" : "대면"}` : ""}`,
+    url: "/admin/consultations",
+  });
 
   return { ok: true };
 }

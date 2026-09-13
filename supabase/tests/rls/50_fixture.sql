@@ -50,6 +50,13 @@ begin
   insert into public.review_invitations (tenant_id, student_name, author_role, author_name, author_phone, token_hash)
     values (t2, 'T2 전용 학생', 'parent', 'T2 전용 보호자', '010-0000-0002', 'fixture-token-hash-t2');
 
+  -- 00026 웹 푸시 — 교차 노출 스캔 대상.
+  insert into public.push_subscriptions (tenant_id, audience, admin_email, endpoint, p256dh, auth)
+    values (t2, 'admin', 't2-admin@example.com', 'https://push.example.test/t2-fixture-endpoint',
+            'BFixtureP256dhKeyFixtureP256dhKeyFixtureP256dh', 'fixtureAuthSecret16');
+  insert into public.push_deliveries (tenant_id, audience, kind, title, status)
+    values (t2, 'admin', 'test', 'T2 전용 푸시 기록', 'sent');
+
   -- 00025: published에는 마스킹·최소정보 확인 시각이 필수(reviews_published_needs_masking).
   insert into public.reviews (tenant_id, reviewer_type, content, status, approved_at,
                               masking_confirmed_at, masking_confirmed_by, published_at)

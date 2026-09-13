@@ -14,6 +14,14 @@ import { getSiteContent } from "@/lib/data/content";
 import { getBackup, recordBackup } from "@/lib/data/backup";
 import { logActivity, runCritical } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
+import { isPushConfigured } from "@/lib/push/config";
+import { pushToAdmins } from "@/lib/push/send";
+import {
+  isEndpointSubscribed,
+  parseSubscriptionInput,
+  removePushSubscription,
+  upsertPushSubscription,
+} from "@/lib/push/subscriptions";
 import type { SiteSettings } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -351,4 +359,91 @@ export async function replaceOperator(
   const store = await cookies();
   store.delete(SESSION_COOKIE);
   return { ok: true, reauth: true };
+}
+
+/* ---------- 브라우저 푸시 알림(00026) — 운영자 본인 기기 ---------- */
+
+export async function saveAdminPushSubscription(
+  subscription: unknown,
+  userAgent: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+  const input = parseSubscriptionInput(subscription);
+  if (!input) return { ok: false, error: "구독 정보가 올바르지 않습니다." };
+  const saved = await upsertPushSubscription(
+    session.tenantId,
+    { audience: "admin", adminEmail: session.email },
+    input,
+    typeof userAgent === "string" ? userAgent : null,
+  );
+  if (!saved.ok) return { ok: false, error: saved.error };
+  await logActivity(session.tenantId, session.email, "create", "push_subscription", saved.id, "운영자 기기 알림 켜기");
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+export async function removeAdminPushSubscription(
+  endpoint: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+  if (typeof endpoint !== "string" || !endpoint) return { ok: false, error: "잘못된 요청입니다." };
+  const removed = await removePushSubscription(
+    session.tenantId,
+    { audience: "admin", adminEmail: session.email },
+    endpoint,
+  );
+  if (!removed) return { ok: false, error: "알림을 끄지 못했습니다." };
+  await logActivity(session.tenantId, session.email, "delete", "push_subscription", null, "운영자 기기 알림 끄기");
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+export async function isAdminPushSubscribed(endpoint: string): Promise<boolean> {
+  const session = await getAdminSession();
+  if (!session || !hasDb() || typeof endpoint !== "string") return false;
+  return isEndpointSubscribed(
+    session.tenantId,
+    { audience: "admin", adminEmail: session.email },
+    endpoint,
+  );
+}
+
+/** 기기 목록에서 특정 구독 행을 지운다(다른 기기에서 켠 것도 여기서 끌 수 있다 — 본인 것만). */
+export async function removeAdminPushDevice(id: string): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+  const db = createServiceClient()!;
+  const { error } = await db
+    .from("push_subscriptions")
+    .delete()
+    .eq("tenant_id", session.tenantId)
+    .eq("audience", "admin")
+    .eq("admin_email", session.email)
+    .eq("id", id);
+  if (error) {
+    console.error("[settings] push device remove failed", error);
+    return { ok: false, error: "기기를 해제하지 못했습니다." };
+  }
+  await logActivity(session.tenantId, session.email, "delete", "push_subscription", id, "운영자 기기 알림 해제(목록)");
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+/** 테스트 발송 — 내 기기 전부로. 결과는 push_deliveries에 남는다. */
+export async function sendAdminTestPush(): Promise<{ ok: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+  if (!isPushConfigured()) return { ok: false, error: "푸시 키가 설정되지 않았습니다." };
+  await pushToAdmins(session.tenantId, "test", {
+    title: "TUTOR OS 테스트 알림",
+    body: "이 기기에서 운영자 알림을 받을 수 있습니다.",
+    url: "/admin/settings",
+  });
+  return { ok: true };
 }

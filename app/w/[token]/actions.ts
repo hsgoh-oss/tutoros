@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveTenant } from "@/lib/tenant";
 import { createWorkItem } from "@/lib/data/work";
+import { pushToAdmins } from "@/lib/push/send";
 import { getInvitationByTokenHash, REVIEW_KIND_LABEL } from "@/lib/data/reviews";
 import { hashReviewToken } from "@/lib/review/token";
 import { maskName } from "@/lib/review/masking";
@@ -351,6 +352,12 @@ export async function submitReviewForm(
     sourceId: reviewId,
     priority: "privacy",
     nextAction: "검토 시작 → 승인 / 작성자에게 수정 요청 / 반려",
+  });
+
+  await pushToAdmins(tenant.id, "review_submitted", {
+    title: existing ? "후기·사례 재제출" : "후기·사례 제출",
+    body: `${REVIEW_KIND_LABEL[values.kind]} — ${maskName(invitation.studentName)} (${AUTHOR_ROLE_LABEL[invitation.authorRole]})`,
+    url: `/admin/reviews/${reviewId}`,
   });
 
   return { ok: true, already: false };

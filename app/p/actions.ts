@@ -6,6 +6,13 @@ import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getPortalSession } from "@/lib/portal/auth";
 import { logActivity } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
+import { pushToAdmins } from "@/lib/push/send";
+import {
+  isEndpointSubscribed,
+  parseSubscriptionInput,
+  removePushSubscription,
+  upsertPushSubscription,
+} from "@/lib/push/subscriptions";
 import { kstToday } from "@/components/portal/format";
 
 // 포털 서버 액션 — 과제 제출·철회·질의응답 (H-02·H-04, docs/flow-canon/01_atlas_03_learning.md).
@@ -298,6 +305,11 @@ export async function submitHomework(
     assignment.id,
     `과제 제출 ${attemptNo}회차: ${assignment.title}${late ? " (기한 경과)" : ""}`,
   );
+  await pushToAdmins(student.tenantId, "homework_submitted", {
+    title: "과제 제출",
+    body: `${student.name} — ${assignment.title} (${attemptNo}회차${late ? " · 기한 경과" : ""})`,
+    url: `/admin/homework/${assignment.id}`,
+  });
 
   revalidateActorPortal();
   return { ok: true };
@@ -490,6 +502,11 @@ export async function askQuestion(
     questionId,
     `학생 질문 접수 (${originLabel})`,
   );
+  await pushToAdmins(student.tenantId, "question_asked", {
+    title: "학생 질문",
+    body: `${student.name} — ${question.slice(0, 80)}`,
+    url: "/admin/homework",
+  });
 
   revalidateActorPortal();
   return { ok: true };
@@ -538,4 +555,69 @@ export async function getSubmissionFileUrl(
     return { ok: false, error: "파일 열람 링크 발급에 실패했습니다. 잠시 후 다시 시도해 주세요." };
   }
   return { ok: true, url: data.signedUrl };
+}
+
+/* ---------- 웹 푸시 구독(00026) — 포털 사용자 본인 기기 ---------- */
+//
+// 구독은 세션의 연락처(contactId) 이름으로만 저장·삭제한다. 학생·보호자·납부자 역할 구분 없이
+// "이 사람의 기기"다 — 어떤 안내를 받을지는 발송 쪽(lib/notify/send.ts)이 수신 번호로 정한다.
+// 회수된 관계만 남은 사람은 발송 대상에서 빠진다(lib/push/send.ts pushToPhone).
+
+export async function savePortalPushSubscription(
+  subscription: unknown,
+  userAgent: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await getPortalSession();
+  if (!session) return { ok: false, error: ACCESS_ERROR };
+  const input = parseSubscriptionInput(subscription);
+  if (!input) return { ok: false, error: "구독 정보가 올바르지 않습니다." };
+  const saved = await upsertPushSubscription(
+    session.tenantId,
+    { audience: "portal", contactId: session.contactId },
+    input,
+    typeof userAgent === "string" ? userAgent : null,
+  );
+  if (!saved.ok) return { ok: false, error: saved.error };
+  await logActivity(
+    session.tenantId,
+    `portal-contact:${session.contactId}`,
+    "create",
+    "push_subscription",
+    saved.id,
+    "포털 기기 알림 켜기",
+  );
+  return { ok: true };
+}
+
+export async function removePortalPushSubscription(
+  endpoint: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await getPortalSession();
+  if (!session) return { ok: false, error: ACCESS_ERROR };
+  if (typeof endpoint !== "string" || !endpoint) return { ok: false, error: "잘못된 요청입니다." };
+  const removed = await removePushSubscription(
+    session.tenantId,
+    { audience: "portal", contactId: session.contactId },
+    endpoint,
+  );
+  if (!removed) return { ok: false, error: "알림을 끄지 못했습니다." };
+  await logActivity(
+    session.tenantId,
+    `portal-contact:${session.contactId}`,
+    "delete",
+    "push_subscription",
+    null,
+    "포털 기기 알림 끄기",
+  );
+  return { ok: true };
+}
+
+export async function isPortalPushSubscribed(endpoint: string): Promise<boolean> {
+  const session = await getPortalSession();
+  if (!session || typeof endpoint !== "string") return false;
+  return isEndpointSubscribed(
+    session.tenantId,
+    { audience: "portal", contactId: session.contactId },
+    endpoint,
+  );
 }

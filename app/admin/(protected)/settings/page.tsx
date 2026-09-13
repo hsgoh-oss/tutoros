@@ -10,6 +10,7 @@ import { DbBanner } from "@/components/admin/crm/db-banner";
 import { BackupPanel } from "@/components/admin/backup-panel";
 import { updateRates, updateSiteInfo, restoreSetting } from "./actions";
 import { SecurityCard } from "./security-card";
+import { AdminPushCard } from "./push-card";
 
 export default async function SettingsPage() {
   const session = await getAdminSession();
@@ -154,6 +155,9 @@ export default async function SettingsPage() {
         </SubmitForm>
         <BackupPanel entries={rateEntries} restoreAction={restoreSetting} />
       </Card>
+
+      {/* 브라우저 푸시(00026) — 운영자 기기 알림. 키 미설정이면 카드가 그 사실을 보여 준다. */}
+      <AdminPushCard tenantId={session.tenantId} email={session.email} />
 
       {/* 관리자 보안 — 전 세션 로그아웃·운영자 이메일 교체 (P-10). DB 미연결이면 동작하지 않는다(액션이 안내). */}
       <Card className="mt-8 max-w-3xl">
