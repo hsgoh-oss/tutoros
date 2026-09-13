@@ -100,7 +100,7 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
 
         {/* ── 문의 — 외부 채널을 글자로 ───────────────────────────── */}
         <nav aria-label="문의" className="flex flex-col">
-          <p className="axm-label m-0 mb-2 text-white/70">문의</p>
+          <p className="axm-label axm-label-dark m-0 mb-2">문의</p>
           <ul className="m-0 list-none p-0">
             {contactLinks.map((item) => (
               <li key={item.label}>
@@ -127,7 +127,7 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
 
         {/* ── 약관·정책 ────────────────────────────────────────────── */}
         <nav aria-label="약관 및 정책" className="flex flex-col">
-          <p className="axm-label m-0 mb-2 text-white/70">약관·정책</p>
+          <p className="axm-label axm-label-dark m-0 mb-2">약관·정책</p>
           <ul className="m-0 list-none p-0">
             <li>
               <Link href="/terms" className={linkClass}>

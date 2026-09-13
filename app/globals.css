@@ -229,6 +229,11 @@
   color: var(--color-brand-600);
 }
 
+/* 어두운 면(푸터·밴드) 위의 라벨 — 브랜드 파랑은 어두운 바탕에서 2.99:1이라 글자로 못 쓴다. */
+.axm-label-dark {
+  color: rgb(255 255 255 / 0.72);
+}
+
 /* 진술 → 근거 목록 */
 .axm-statements {
   margin: 0;
