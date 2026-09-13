@@ -10,6 +10,7 @@ import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
+import { recruitMessage } from "@/components/public/recruit-banner";
 import { ActionButton } from "@/components/admin/crm/action-button";
 import type { RecruitState, RecruitStatus, WaitlistOfferStatus } from "@/lib/types";
 import {
@@ -228,10 +229,12 @@ export default async function RecruitPage() {
 
           {/* 비워 두는 것이 기본이다. 손으로 쓴 문구는 매달 손으로 고쳐야 하고, 그래서 늦는다
               (실제로 8월 말까지 "7월 … 모집 중"이 홈 최상단에 떠 있었다).
+              자동 문구의 인원은 모집 인원이 아니라 위에서 산정한 **남은 자리**를 쓴다 —
+              그래야 이 화면의 "남은 자리"와 홈 최상단 배너의 숫자가 어긋나지 않는다.
               생성 규칙은 components/public/recruit-banner.tsx 의 recruitMessage. */}
           <Field
             label="안내 문구"
-            hint="비워 두면 상태와 정원으로 이번 달 문구를 자동 생성합니다(예: 2026년 8월 신규 수강생 2명 모집 중). 직접 쓰면 그 문구가 우선합니다."
+            hint="비워 두면 이번 달 문구를 자동 생성합니다 — 인원은 모집 인원이 아니라 위의 '남은 자리'를 씁니다. 직접 쓰면 그 문구가 우선합니다."
             className="mt-5"
           >
             <Textarea
@@ -265,6 +268,22 @@ export default async function RecruitPage() {
               공개 사이트에 모집 배너 노출
             </span>
           </label>
+
+          {/* 저장 전에 홈 최상단에 실제로 뭐가 걸릴지 보여 준다 — 자동 문구는 남은 자리를 쓰므로
+              모집 인원만 보고 쓰면 예상과 다른 숫자가 나간다. */}
+          <div className="mt-5 rounded-panel border border-line bg-soft px-4 py-3">
+            <p className="text-xs font-bold text-muted">공개 배너 문구 (현재 저장값 기준)</p>
+            <p className="mt-1 text-sm font-bold text-ink">
+              {recruit
+                ? recruitMessage(recruit, remaining)
+                : "모집 상태가 아직 저장되지 않았습니다."}
+            </p>
+            {recruit && !recruit.isBannerVisible && (
+              <p className="mt-1 text-xs text-muted">
+                지금은 배너 노출이 꺼져 있어 공개 사이트에 표시되지 않습니다.
+              </p>
+            )}
+          </div>
 
           <p className="mt-4 text-xs text-muted">
             &lsquo;마감&rsquo;은 공개 상담 접수를 막고, &lsquo;대기 접수&rsquo;는 접수를 계속 받되 대기

@@ -30,25 +30,39 @@ const CTA_LABEL: Record<RecruitStatus["status"], string> = {
  * 홈 최상단에 떠 있었다). 기준 달은 KST로 잡는다 — 서버가 UTC라 로컬 Date를 쓰면
  * 매달 1일 오전 9시까지 지난달이 나온다.
  *
+ * 문구에 들어가는 인원은 **남은 자리**다(모집 인원이 아니다). 모집 인원은 총정원이라
+ * 등록이 차도 숫자가 그대로 남아, 관리자 화면의 "남은 자리 0"과 홈 최상단의 "2명 모집 중"이
+ * 동시에 떠 있는 상태가 된다. 밖에 대고 말할 수 있는 수는 지금 받을 수 있는 수뿐이다
+ * (남은 자리 = 모집 인원 − 활성·준비 등록 − 살아 있는 자리 제안, lib/data/intake.ts).
+ *
+ * 남은 자리가 0이어도 상태를 마음대로 '마감'으로 바꾸지 않는다 — 접수 상태는 운영자가 정한다
+ * (O-04 「정원 도달이 모집 상태를 자동으로 바꾸지 않는다」). 숫자만 사실대로 적는다.
+ *
  * 운영자가 관리자에서 문구를 직접 쓰면 그쪽이 이긴다. 비워 두면 이 함수가 맡는다.
  */
-export function recruitMessage(recruit: RecruitStatus, today = kstTodayDateOnly()) {
+export function recruitMessage(
+  recruit: RecruitStatus,
+  /** 남은 자리. 정원 미설정이면 null — 그때는 숫자 없이 문구만 낸다. */
+  remainingSeats: number | null = null,
+  today = kstTodayDateOnly(),
+) {
   const custom = recruit.message?.trim();
   if (custom) return custom;
 
   const [year, month] = today.split("-");
   const period = `${Number(year)}년 ${Number(month)}월`;
-  const seats = recruit.seatCount;
 
   switch (recruit.status) {
     case "open":
-      return seats && seats > 0
-        ? `${period} 신규 수강생 ${seats}명 모집 중`
-        : `${period} 신규 수강생 모집 중`;
+      if (remainingSeats === null) return `${period} 신규 수강생 모집 중`;
+      return remainingSeats > 0
+        ? `${period} 신규 수강생 ${remainingSeats}명 모집 중`
+        : `${period} 신규 수강생 모집 중 — 현재 남은 자리 없음`;
     case "closing":
-      return seats && seats > 0
-        ? `${period} 신규 수강생 ${seats}명 — 마감 임박`
-        : `${period} 신규 수강생 모집 — 마감 임박`;
+      if (remainingSeats === null) return `${period} 신규 수강생 모집 — 마감 임박`;
+      return remainingSeats > 0
+        ? `${period} 신규 수강생 ${remainingSeats}명 — 마감 임박`
+        : `${period} 신규 수강생 모집 — 현재 남은 자리 없음`;
     case "waitlist":
       return `${period} 신규 수강생 모집 마감 — 대기 접수 중`;
     case "closed":
@@ -56,7 +70,14 @@ export function recruitMessage(recruit: RecruitStatus, today = kstTodayDateOnly(
   }
 }
 
-export function RecruitBanner({ recruit }: { recruit: RecruitStatus }) {
+export function RecruitBanner({
+  recruit,
+  remainingSeats = null,
+}: {
+  recruit: RecruitStatus;
+  /** 남은 자리(getSeatAvailability). 정원 미설정이면 null. */
+  remainingSeats?: number | null;
+}) {
   if (!recruit.isBannerVisible) return null;
   const style = STATE_STYLE[recruit.status];
 
@@ -69,7 +90,7 @@ export function RecruitBanner({ recruit }: { recruit: RecruitStatus }) {
       )}
     >
       <span className="axm-measure flex min-h-11 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 py-2.5 text-center text-[13.5px] font-extrabold tracking-[-0.01em]">
-        <span>{recruitMessage(recruit)}</span>
+        <span>{recruitMessage(recruit, remainingSeats)}</span>
         <span className={cn("whitespace-nowrap", style.cta)}>
           {CTA_LABEL[recruit.status]} <span aria-hidden="true">→</span>
         </span>

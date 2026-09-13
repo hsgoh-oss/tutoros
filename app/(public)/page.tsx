@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { resolveTenant } from "@/lib/tenant";
 import { getSiteContent } from "@/lib/data/content";
+import { getSeatAvailability } from "@/lib/data/intake";
 import { Container, textLinkClass } from "@/components/public/section";
 import { ConsultProcessSummary } from "@/components/public/consult/consult-process";
 import { RecruitBanner } from "@/components/public/recruit-banner";
@@ -85,6 +86,10 @@ const evidenceLinks = [
 export default async function HomePage() {
   const tenant = await resolveTenant();
   const content = await getSiteContent(tenant.id);
+  // 모집 배너에 적는 수는 총정원이 아니라 지금 받을 수 있는 자리 수다(recruit-banner.tsx 참조).
+  // 이 홈 화면이 배너를 쓰는 유일한 곳이라, 산정도 여기서만 한다 — getSiteContent에 넣으면
+  // 배너가 없는 공개 페이지까지 정원 질의 3개를 매번 짊어진다.
+  const { remainingSeats } = await getSeatAvailability(tenant.id);
 
   // 검색·AI 답변에서 "어떤 사업체인지"를 읽을 수 있게 하는 최소 구조화 데이터.
   // 후기 평점은 실제 등록된 후기가 있을 때만 싣는다 — 없는 평점을 지어내지 않는다.
@@ -149,7 +154,7 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
 
-      <RecruitBanner recruit={content.recruit} />
+      <RecruitBanner recruit={content.recruit} remainingSeats={remainingSeats} />
       <DdayBanner ddays={content.ddays} />
 
       {/*
