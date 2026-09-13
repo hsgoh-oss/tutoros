@@ -127,7 +127,7 @@ export default async function TrialDetailPage({
             {trial.formId && " · 신청폼 제출본 연결됨"}
           </p>
         </div>
-        <Link href="/admin/trials" className="text-sm font-bold text-muted hover:text-ink">
+        <Link href="/admin/trials" className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink">
           ← 목록으로
         </Link>
       </div>

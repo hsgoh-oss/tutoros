@@ -19,10 +19,13 @@ export default async function AdminProtectedLayout({
   return (
     <div className="min-h-screen bg-soft">
       <AdminModuleBar brandName={tenant.brandName} email={session.email} />
-      <div className="flex">
+      {/* 모바일은 세로(하위 메뉴 줄 → 본문), 데스크톱은 가로(사이드바 | 본문).
+          flex 한 줄로 두면 모바일의 가로 메뉴 줄이 사이드바 자리(형제 flex 항목)에 들어가
+          본문을 화면 밖으로 밀어낸다 — 실제로 학생 관리가 빈 화면으로 보였다. */}
+      <div className="flex flex-col md:flex-row">
         <AdminSidebar />
         <div className="min-w-0 flex-1">
-          <main className="mx-auto w-full max-w-7xl px-5 py-8 md:px-10">
+          <main className="mx-auto w-full max-w-7xl px-4 py-6 md:px-10 md:py-8">
             {children}
           </main>
         </div>

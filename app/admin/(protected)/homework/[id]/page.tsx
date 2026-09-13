@@ -121,7 +121,7 @@ export default async function HomeworkDetailPage({
             {assignment.assignedAt && ` · ${formatKDate(assignment.assignedAt)} 배부`}
           </p>
         </div>
-        <Link href="/admin/homework" className="text-sm font-bold text-muted hover:text-ink">
+        <Link href="/admin/homework" className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink">
           ← 목록으로
         </Link>
       </div>

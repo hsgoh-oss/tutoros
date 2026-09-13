@@ -273,14 +273,14 @@ export function ConsultForm({
               <span
                 aria-hidden="true"
                 className={cn(
-                  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px]",
+                  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px]",
                   step.done ? "bg-brand-600 text-white" : "bg-soft text-ink-soft",
                 )}
               >
                 {step.done ? "✓" : index + 1}
               </span>
               {step.label}
-              {step.optional && <span className="font-bold text-faint">선택</span>}
+              {step.optional && <span className="font-bold text-muted">선택</span>}
             </li>
           );
         })}
@@ -363,7 +363,7 @@ export function ConsultForm({
                     <span className="text-sm font-extrabold tracking-[-0.02em]">
                       {choice.label}
                     </span>
-                    <span className="text-[11px] font-bold text-faint">{choice.hint}</span>
+                    <span className="text-xs font-bold text-muted">{choice.hint}</span>
                   </label>
                 );
               })}

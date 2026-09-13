@@ -506,3 +506,12 @@ html.axm-menu-open body {
   --ui-card-p: 1.125rem;
   --ui-row-y: 0.625rem;
 }
+
+/* 터치 화면의 관리자 — 36px 조작부는 손가락에 작다. 44px(칩·작은 버튼)·48px(입력·주 버튼)로 올린다. */
+@media (max-width: 767px) {
+  .admin-surface {
+    --ui-h-sm: 2.75rem;
+    --ui-h-md: 3rem;
+    --ui-card-p: 1rem;
+  }
+}

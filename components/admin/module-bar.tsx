@@ -39,7 +39,7 @@ export function AdminModuleBar({
           <form action="/api/auth/logout" method="post">
             <button
               type="submit"
-              className="min-h-8 text-xs font-medium text-muted transition-colors hover:text-ink"
+              className="-mr-2 inline-flex min-h-11 items-center px-2 text-xs font-medium text-muted transition-colors hover:text-ink"
             >
               로그아웃
             </button>

@@ -114,7 +114,7 @@ export function ConsentFields<T extends ConsentValues>({
               <label className="flex min-h-12 cursor-pointer items-start gap-3 py-2">
                 <input
                   type="checkbox"
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-line text-brand-600 focus:ring-brand-200"
+                  className="mt-0.5 h-5 w-5 shrink-0 rounded border-line text-brand-600 focus:ring-brand-200"
                   {...register(item.key as Path<T>)}
                   aria-invalid={error ? true : undefined}
                   aria-describedby={error ? errorId : undefined}
@@ -123,7 +123,7 @@ export function ConsentFields<T extends ConsentValues>({
                   <span className="flex flex-wrap items-center gap-2">
                     <span
                       className={cn(
-                        "inline-flex rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[11px] font-extrabold tracking-tight",
+                        "inline-flex rounded-[var(--radius-sm)] px-1.5 py-0.5 text-xs font-extrabold tracking-tight",
                         item.required
                           ? "bg-brand-50 text-brand-700"
                           : "bg-soft text-muted",
@@ -138,7 +138,7 @@ export function ConsentFields<T extends ConsentValues>({
                       <Link
                         href={item.href}
                         target="_blank"
-                        className="text-xs font-bold text-brand-600 underline underline-offset-2"
+                        className="inline-flex min-h-9 items-center px-1 text-xs font-bold text-brand-600 underline underline-offset-2"
                       >
                         내용 보기
                       </Link>

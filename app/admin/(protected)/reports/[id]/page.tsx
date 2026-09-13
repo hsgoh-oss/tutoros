@@ -88,7 +88,7 @@ export default async function ReportDetailPage({
             {report.modelUsed && ` · ${report.modelUsed}`}
           </p>
         </div>
-        <Link href="/admin/reports" className="text-sm font-bold text-muted hover:text-ink">
+        <Link href="/admin/reports" className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink">
           ← 목록으로
         </Link>
       </div>

@@ -51,7 +51,8 @@ export function ActionButton({
       // 특히 '삭제'가 늘 빨갛게 켜져 있으면 경보로서의 힘을 잃는다.
       // 평소엔 가라앉히고 커서를 올렸을 때만 성격을 드러낸다.
       className={cn(
-        "text-xs font-medium underline-offset-2 transition-colors hover:underline disabled:opacity-50",
+        // 모바일(터치)에서는 44px 높이·좌우 여백을 줘 손가락으로 누를 수 있게 한다. 데스크톱은 글자 크기 그대로.
+        "text-xs font-medium underline-offset-2 transition-colors hover:underline disabled:opacity-50 max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:px-1.5",
         tone === "danger"
           ? "text-muted hover:text-rose-600"
           : "text-ink-soft hover:text-brand-700",

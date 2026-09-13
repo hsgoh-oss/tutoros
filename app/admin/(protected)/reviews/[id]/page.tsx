@@ -62,7 +62,7 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
           {review.isMinor && <Badge tone="warning">미성년 — 법정대리인 동의 필요</Badge>}
           {review.isPinned && <Badge tone="brand">고정</Badge>}
         </div>
-        <Link href="/admin/reviews" className="text-sm font-bold text-muted hover:text-ink">
+        <Link href="/admin/reviews" className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink">
           ← 목록으로
         </Link>
       </div>

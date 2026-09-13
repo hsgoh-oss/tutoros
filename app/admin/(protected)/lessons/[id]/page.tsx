@@ -33,7 +33,7 @@ export default async function LessonDetailPage({
         </div>
         <Link
           href="/admin/lessons"
-          className="text-sm font-bold text-muted hover:text-ink"
+          className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink"
         >
           ← 목록으로
         </Link>

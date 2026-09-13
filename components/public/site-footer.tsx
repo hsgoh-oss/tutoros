@@ -32,11 +32,9 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
       <div className="axm-measure grid gap-10 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-12">
         {/* ── 브랜드 · 법정 고지 ─────────────────────────────────── */}
         <div className="flex flex-col gap-5">
-          <Link
-            href="/"
-            className="inline-flex w-fit flex-col gap-2.5 py-1"
-            aria-label={`${settings.brandName} 메인으로 이동`}
-          >
+          {/* 접근 이름은 로고 alt + 슬로건 텍스트 그대로 — aria-label을 따로 두면 보이는 글자와
+              어긋나 "label-content-name-mismatch"가 된다. */}
+          <Link href="/" className="inline-flex w-fit flex-col gap-2.5 py-1">
             <Image
               src="/img/logo/footer-logo.png"
               alt={settings.brandName}
@@ -49,7 +47,7 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
             </span>
           </Link>
 
-          <div className="space-y-0.5 text-[13.5px] leading-[1.9] text-white/65">
+          <div className="space-y-0.5 text-[13.5px] leading-[1.9] text-white/75">
             <p className="m-0">
               상호: {settings.bizName} <span aria-hidden="true">|</span> 대표자:{" "}
               {settings.ceoName} <span aria-hidden="true">|</span> 사업자등록번호:{" "}
@@ -62,7 +60,7 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
                   href={ftcLookupUrl(settings.bizNo)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline underline-offset-2 hover:text-white"
+                  className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-white"
                 >
                   사업자정보 확인
                 </a>
@@ -78,7 +76,7 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
                   전화:{" "}
                   <a
                     href={`tel:${settings.phone.replace(/\D/g, "")}`}
-                    className="hover:text-white"
+                    className="inline-flex min-h-11 items-center hover:text-white"
                   >
                     {settings.phone}
                   </a>{" "}
@@ -86,20 +84,23 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
                 </>
               )}
               이메일:{" "}
-              <a href={`mailto:${settings.email}`} className="hover:text-white">
+              <a
+                href={`mailto:${settings.email}`}
+                className="inline-flex min-h-11 items-center hover:text-white"
+              >
                 {settings.email}
               </a>
             </p>
           </div>
 
-          <p className="m-0 text-xs text-white/45">
+          <p className="m-0 text-xs text-white/60">
             © 2026 {settings.brandName}. All rights reserved.
           </p>
         </div>
 
         {/* ── 문의 — 외부 채널을 글자로 ───────────────────────────── */}
         <nav aria-label="문의" className="flex flex-col">
-          <p className="axm-label m-0 mb-2 text-white/50">문의</p>
+          <p className="axm-label m-0 mb-2 text-white/70">문의</p>
           <ul className="m-0 list-none p-0">
             {contactLinks.map((item) => (
               <li key={item.label}>
@@ -126,7 +127,7 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
 
         {/* ── 약관·정책 ────────────────────────────────────────────── */}
         <nav aria-label="약관 및 정책" className="flex flex-col">
-          <p className="axm-label m-0 mb-2 text-white/50">약관·정책</p>
+          <p className="axm-label m-0 mb-2 text-white/70">약관·정책</p>
           <ul className="m-0 list-none p-0">
             <li>
               <Link href="/terms" className={linkClass}>

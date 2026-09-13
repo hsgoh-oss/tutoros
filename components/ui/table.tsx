@@ -8,7 +8,7 @@ export function TableWrap({
   return (
     <div
       className={cn(
-        "overflow-x-auto rounded-panel border border-line bg-white",
+        "overflow-x-auto rounded-panel border border-line bg-white max-md:-mx-4 max-md:rounded-none max-md:border-x-0 [-webkit-overflow-scrolling:touch]",
         className,
       )}
       {...props}

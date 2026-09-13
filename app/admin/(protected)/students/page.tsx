@@ -68,7 +68,7 @@ export default async function StudentsPage({
             name="q"
             defaultValue={q ?? ""}
             placeholder="이름 검색"
-            className="!h-[var(--ui-h-sm)] w-48 text-sm"
+            className="!h-[var(--ui-h-sm)] w-40 md:w-48 md:text-sm"
           />
           <button type="submit" className={buttonClass("ghost", "sm")}>
             검색

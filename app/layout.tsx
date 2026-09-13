@@ -63,6 +63,8 @@ export const viewport: Viewport = {
   themeColor: "#2353ef",
   width: "device-width",
   initialScale: 1,
+  // 하단 고정 바·푸터가 env(safe-area-inset-bottom)을 쓴다 — cover가 아니면 그 값이 0이다.
+  viewportFit: "cover",
   // 확대는 막지 않는다(접근성). 설치 앱에서도 같은 뷰포트를 쓴다.
 };
 

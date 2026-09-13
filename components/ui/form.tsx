@@ -9,8 +9,9 @@ import type {
 
 // 입력칸의 공통 겉모습. 높이는 여기에 두지 않는다 — 한 줄짜리(input·select)와 여러 줄(textarea)이
 // 서로 다르기 때문이다.
+// 모바일은 16px — iOS Safari는 16px 미만 입력에 포커스하면 화면을 자동 확대해 폼이 튄다.
 const control =
-  "w-full rounded-[var(--radius-field)] border border-line bg-white px-3.5 text-[15px] text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-soft";
+  "w-full rounded-[var(--radius-field)] border border-line bg-white px-3.5 text-base text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-soft md:text-[15px]";
 
 // 한 줄 입력은 버튼과 같은 높이 토큰을 쓴다. 예전엔 padding으로 높이가 정해져 입력 45px·버튼 40px로
 // 5px씩 어긋났고, 나란히 놓인 폼에서 눈에 띄게 삐뚤어 보였다.
