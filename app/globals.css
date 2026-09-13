@@ -362,13 +362,16 @@
    body에 overflow:hidden만 두면 iOS Safari가 무시해 메뉴 뒤 본문이 함께 스크롤됐다.
    html·body 둘 다 잠그고(터치 스크롤 차단은 touch-action), 메뉴 패널 자체를 고정 오버레이
    스크롤 컨테이너로 만들어(site-header.tsx) 손가락이 패널 안에서만 움직이게 한다. */
-html.axm-menu-open,
-html.axm-menu-open body {
+html.axm-menu-open {
   overflow: hidden;
   overscroll-behavior: none;
 }
+/* body에는 overflow를 걸지 않는다 — html이 hidden이면 body의 overflow가 뷰포트로 전파되지 않고
+   body 자체가 스크롤 컨테이너가 되어, sticky 헤더가 body의 흐름상 위치(문서 맨 위)로 되돌아간다.
+   스크롤한 뒤 메뉴를 열면 헤더(닫기 버튼)가 화면 밖으로 사라지던 원인(운영 라이브 검증에서 발견). */
 html.axm-menu-open body {
   touch-action: none;
+  overscroll-behavior: none;
 }
 
 /* ============================================================================
