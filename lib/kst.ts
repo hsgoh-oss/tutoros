@@ -66,6 +66,18 @@ export function kstTime(iso: string | Date | null | undefined): string {
   return `${pad2(p.h)}:${pad2(p.min)}`;
 }
 
+/**
+ * KST 자정으로부터 지난 분(0~1439). 주간 캘린더가 회차를 세로 어디에 놓을지 정할 때 쓴다.
+ * 파싱 불가면 null — 호출부가 그 회차를 격자 밖(목록)으로 돌린다.
+ *
+ * 여기 있는 이유는 다른 함수들과 같다: `getHours()`는 서버(UTC)에서 KST와 9시간 어긋난다.
+ */
+export function kstMinuteOfDay(iso: string | Date | null | undefined): number | null {
+  const p = kstParts(iso);
+  if (!p) return null;
+  return p.h * 60 + p.min;
+}
+
 /** 표(CSV) 정렬용 "YYYY-MM-DD HH:MM" (KST). */
 export function kstStamp(iso: string | Date | null | undefined): string {
   const p = kstParts(iso);

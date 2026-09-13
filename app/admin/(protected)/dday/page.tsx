@@ -10,6 +10,11 @@ import { EmptyState } from "@/components/admin/crm/empty-state";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { InlineSelect } from "@/components/admin/crm/inline-select";
 import { ActionButton } from "@/components/admin/crm/action-button";
+import { DdayCalendar, ddayLabel } from "@/components/admin/dday-calendar";
+import { buttonClass } from "@/components/ui/button";
+import { Toolbar } from "@/components/admin/crm/toolbar";
+import { addKstMonths, kstTodayDateOnly } from "@/lib/kst";
+import Link from "next/link";
 import type { Dday } from "@/lib/types";
 import {
   createDday,
@@ -51,22 +56,65 @@ const VISIBILITY_OPTIONS = [
   { value: "false", label: "숨김" },
 ];
 
-export default async function DdayPage() {
+/** 달 이동 파라미터 검증 — "YYYY-MM"만 받는다(그 외는 이번 달). */
+function parseMonth(value: string | undefined): string | null {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
+  return value;
+}
+
+function formatKMonth(monthOnly: string): string {
+  const [y, m] = monthOnly.split("-");
+  return `${Number(y)}년 ${Number(m)}월`;
+}
+
+export default async function DdayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const { month: monthParam } = await searchParams;
   const session = await getAdminSession();
   const connected = hasDb();
   const ddays = session ? await listTenantDdays(session.tenantId) : [];
   const backups = session ? await listBackups(session.tenantId, "ddays") : [];
 
+  const thisMonth = kstTodayDateOnly().slice(0, 7);
+  const month = parseMonth(monthParam) ?? thisMonth;
+  const prevMonth = addKstMonths(month, -1);
+  const nextMonth = addKstMonths(month, 1);
+
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-semibold tracking-tight">D-day 관리</h1>
+        <h1 className="text-xl font-semibold tracking-tight">입시 일정</h1>
+        <p className="mt-1 text-sm text-muted">
+          수능·모의고사·내신 등 시험일을 달력으로 관리합니다. 노출로 둔 일정은 공개 사이트의
+          D-day 배너에도 표시됩니다.
+        </p>
       </div>
 
       {!connected && <DbBanner />}
 
-      <Card className="mb-6">
-        <h2 className="mb-4 text-sm font-semibold tracking-tight">D-day 추가</h2>
+      {/* ① 입시 일정 캘린더 — 이 화면의 본체. 아래 목록은 추가·수정·순서·노출을 맡는다. */}
+      <Toolbar className="justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/admin/dday?month=${prevMonth}`} className={buttonClass("ghost", "sm")}>
+            이전 달
+          </Link>
+          <Link href={`/admin/dday?month=${thisMonth}`} className={buttonClass("ghost", "sm")}>
+            이번 달
+          </Link>
+          <Link href={`/admin/dday?month=${nextMonth}`} className={buttonClass("ghost", "sm")}>
+            다음 달
+          </Link>
+        </div>
+        <p className="text-sm font-bold text-ink-soft">{formatKMonth(month)}</p>
+      </Toolbar>
+
+      <DdayCalendar ddays={ddays} month={month} basePath="/admin/dday" />
+
+      <Card className="mt-8 mb-6">
+        <h2 className="mb-4 text-sm font-semibold tracking-tight">입시 일정 추가</h2>
         <SubmitForm action={createDday} submitLabel="추가">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="이름" required>
@@ -83,10 +131,14 @@ export default async function DdayPage() {
         </SubmitForm>
       </Card>
 
+      <h2 className="mt-8 mb-3 text-sm font-semibold tracking-tight">
+        등록된 일정 · 노출 설정
+      </h2>
+
       {ddays.length === 0 ? (
         <EmptyState
-          title="등록된 D-day가 없습니다"
-          description="위 폼으로 D-day를 추가할 수 있습니다."
+          title="등록된 입시 일정이 없습니다"
+          description="위 폼으로 시험일을 추가하면 캘린더와 공개 D-day 배너에 반영됩니다."
         />
       ) : (
         <div className="space-y-4">
@@ -96,7 +148,8 @@ export default async function DdayPage() {
                 <div>
                   <p className="font-bold text-ink">{d.name}</p>
                   <p className="mt-0.5 text-sm text-muted">
-                    {formatKDate(d.examDate)}
+                    {formatKDate(d.examDate)}{" "}
+                    <span className="font-bold text-brand-700">{ddayLabel(d.examDate)}</span>
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -128,7 +181,7 @@ export default async function DdayPage() {
                     id={d.id}
                     label="삭제"
                     tone="danger"
-                    confirmText="이 D-day를 삭제하시겠습니까?"
+                    confirmText="이 입시 일정을 삭제하시겠습니까?"
                   />
                 </div>
               </div>
@@ -175,7 +228,7 @@ export default async function DdayPage() {
                   id={b.id}
                   label="이 시점으로 복원"
                   tone="danger"
-                  confirmText="현재 D-day 목록을 이 백업 시점으로 되돌립니다. 계속할까요?"
+                  confirmText="현재 입시 일정 목록을 이 백업 시점으로 되돌립니다. 계속할까요?"
                 />
               </li>
             ))}

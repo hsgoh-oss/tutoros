@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/admin/crm/empty-state";
 import { InlineSelect } from "@/components/admin/crm/inline-select";
 import { ActionButton } from "@/components/admin/crm/action-button";
 import { ScheduleCalendar } from "@/components/admin/schedule-calendar";
+import { ScheduleWeekCalendar } from "@/components/admin/schedule-week-calendar";
 import {
   addKstDays,
   addKstMonths,
@@ -88,7 +89,7 @@ export default async function SchedulesPage({
     <>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">일정 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">수업 캘린더</h1>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/admin/schedules/export" className={buttonClass("outline", "sm")}>
@@ -195,9 +196,15 @@ export default async function SchedulesPage({
         </p>
       </Toolbar>
 
+      {/* 주간은 격자가 먼저다 — 빈 시간·연달아 붙은 회차는 표로는 보이지 않는다.
+          아래 목록은 격자가 못 하는 일(상태 변경·발송 확인·삭제)을 그대로 맡는다. */}
+      <ScheduleWeekCalendar schedules={schedules} monday={monday} />
+
+      <h2 className="mt-8 mb-3 text-sm font-semibold tracking-tight">이번 주 회차 목록</h2>
+
       {schedules.length === 0 ? (
         <EmptyState
-          title="등록된 일정이 없습니다"
+          title="이 주에 등록된 일정이 없습니다"
           description="신규 등록 버튼으로 수업 일정을 추가할 수 있습니다."
           action={
             <Link href="/admin/schedules/new" className={buttonClass("outline", "sm")}>
