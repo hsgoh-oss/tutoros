@@ -166,6 +166,23 @@ export const NavIcon = {
       <path d="M20.5 3.5l-6.7 17.2-3.8-7.2-7.2-3.8z" />
     </Svg>
   ),
+  // 변경 이력 — 시간을 되감는 시계. 목록 아이콘과 겹치지 않게 화살표를 반시계로 뒀다.
+  activity: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
+      <path d="M3 4v4h4" />
+      <path d="M12 7.5V12l3 1.8" />
+    </Svg>
+  ),
+  // 개인정보 보존 — 잠긴 서류철. 보관(상자)과 잠금(자물쇠)이 함께 읽혀야 해서 둘을 겹쳤다.
+  privacy: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M4 8.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5" />
+      <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h15A1.5 1.5 0 0 1 21 5.5v3H3z" />
+      <path d="M10 12.5v-1a2 2 0 1 1 4 0v1" />
+      <rect x="9" y="12.5" width="6" height="5" rx="1.2" />
+    </Svg>
+  ),
 } as const;
 
 export type NavIconName = keyof typeof NavIcon;

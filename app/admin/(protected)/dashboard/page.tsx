@@ -110,7 +110,9 @@ function workSourceHref(item: WorkItem): string | null {
       return item.sourceId ? `/admin/reports/${item.sourceId}` : "/admin/reports";
     case "notification":
     case "notify_queue":
-      return "/admin/messages";
+      // 발송 현황의 '실패' 필터로 바로 보낸다 — 업무 카드가 올라오는 이유가 실패이고,
+      // 전체 목록으로 보내면 운영자가 다시 필터를 눌러야 한다.
+      return "/admin/messages?status=failed";
     case "cron":
     case "automation_run":
       return "/admin/schedules";
@@ -278,7 +280,7 @@ export default async function DashboardPage() {
               href="/admin/schedules"
               className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
             >
-              일정 관리
+              수업 캘린더
             </Link>
           </div>
           {todaySchedules.length === 0 ? (
