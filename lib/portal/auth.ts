@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "crypto";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveTenant } from "@/lib/tenant";
 
@@ -44,11 +44,86 @@ export const PORTAL_COOKIE_OPTIONS = {
   maxAge: PORTAL_SESSION_MAX_AGE_S,
 } as const;
 
+/**
+ * 포털 신원의 정규화 규칙 — 사람을 가르는 유일한 키다.
+ *
+ * "010-1234-5678"과 "01012345678"이 서로 다른 사람이 되면 같은 사람이 contact 두 개로 갈라지고,
+ * 회수(검수 21)도 반쪽만 걸린다. DB에도 같은 규칙의 CHECK(^[0-9]{9,12}$)가 있다.
+ * 국가번호 표기(+82 10…)는 선행 82를 0으로 되돌려 국내 표기 하나로 수렴시킨다.
+ *
+ * 신원 규칙이므로 초대를 발급하는 쪽(운영자)과 링크 재발송을 요청하는 쪽(공개 화면)이
+ * 반드시 같은 함수를 써야 한다 — 한쪽만 바뀌면 "등록된 번호인데 못 찾는" 상태가 된다.
+ */
+export function normalizePortalPhone(raw: string): string {
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("82") && digits.length >= 11) {
+    digits = `0${digits.slice(2)}`;
+  }
+  return digits;
+}
+
+/**
+ * 포털 링크의 호스트 — 지금 이 요청이 온 호스트를 그대로 쓴다.
+ *
+ * 고정 상수(NEXT_PUBLIC_SITE_URL)를 쓰면 1호 테넌트가 아닌 곳에서 발급한 링크가 전부 남의
+ * 도메인을 가리키고, 수락 라우트는 호스트로 테넌트를 판정하므로(위 issuePortalSessionFromLink)
+ * "사용할 수 없는 링크"로 끝난다 — 발급과 수락이 같은 호스트를 보게 여기서 맞춘다.
+ * 로컬 개발에서도 자동으로 localhost 링크가 나온다.
+ */
+export async function portalOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-tenant-host") ?? h.get("host") ?? "";
+  if (!host) return process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
+  const forwarded = h.get("x-forwarded-proto");
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const proto = forwarded ?? (isLocal ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
 /** 초대 링크 경로 규약 — 발송 호출부(알림 템플릿)와 수락 라우트가 같은 형태를 쓰도록 여기서 정한다. */
 export function portalLinkPath(rawToken: string): string {
   // 수락 라우트는 app/p/link/[token]/route.ts — 기존 /portal/[token](단일 토큰 뷰어)과
   // 경로가 갈라져야 병행 운영이 가능하다(이행 정책: 구 링크 자동 은퇴 없음).
   return `/p/link/${rawToken}`;
+}
+
+/**
+ * 포털 홈 주소 — 알림에 싣는 링크다.
+ *
+ * 토큰이 박힌 주소를 문자로 보내지 않는다. 옛 방식(`/portal/{학생토큰}`)은 링크 자체가
+ * 만료 없는 로그인 자격이라, 그 문자를 잘못 받은 사람·기기 백업·통신사 로그가 전부 열쇠였다.
+ * 지금은 주소가 누구에게나 같고(/p), 실제 진입은 그 사람의 포털 세션이 판정한다.
+ * 세션이 없으면 /p가 "링크 다시 받기"를 안내한다(lib/actions/portal-link.ts).
+ */
+export async function portalHomeUrl(): Promise<string> {
+  return `${await portalOrigin()}/p`;
+}
+
+/**
+ * 이 학생을 볼 수 있는 사람이 하나라도 있는지 — 알림을 보내기 전의 게이트.
+ *
+ * 옛 게이트는 "학생에게 portal_token이 있나"였는데, 그 토큰은 학생 행이 생길 때 자동으로
+ * 붙었으므로 사실상 늘 참이었다. 즉 아무도 연결되지 않은 학생에게도 "포털에서 확인하세요"가
+ * 나갔다. 지금 물어야 할 것은 **읽을 사람이 있느냐**다.
+ */
+export async function hasActivePortalRelation(
+  tenantId: string,
+  studentId: string,
+): Promise<boolean> {
+  const db = createServiceClient();
+  if (!db) return false;
+  const { data, error } = await db
+    .from("portal_relations")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("student_id", studentId)
+    .eq("status", "active")
+    .limit(1);
+  if (error) {
+    console.error("[portal] active 관계 확인 실패", error);
+    return false; // fail-closed — 모르는 상태에서 "볼 사람이 있다"고 가정하지 않는다.
+  }
+  return Boolean(data && data.length > 0);
 }
 
 /** 세션이 이 역할로 이 학생에 접근할 수 있는지. 관계는 역할별로 독립이다(검수 16). */
@@ -500,6 +575,38 @@ export async function rotateAccessLink(
     };
   }
   return { ok: true, token };
+}
+
+/**
+ * 원문 토큰 하나를 회수한다 — **전달에 실패한 초대 링크를 죽이는 용도**다.
+ *
+ * 왜 필요한가: 초대 링크는 만료가 없고 회수로만 무효가 된다. 그런데 발송이 끝내 실패하면
+ * 그 링크는 (ⓐ 정작 본인에게는 닿지 않은 채로) (ⓑ notifications.message에 원문으로 남아)
+ * 살아 있게 된다. 알림 이력을 볼 수 있는 사람이 곧 그 학부모로 로그인할 수 있다는 뜻이다.
+ * 전달되지 않은 자격은 되살릴 이유가 없으므로 소진 시점에 끊는다(재초대는 운영자가 다시 낸다).
+ *
+ * 관계는 건드리지 않는다 — 권한을 뺏는 것이 아니라 배달 사고가 난 열쇠 한 개를 버리는 일이다.
+ */
+export async function revokeAccessLinkByToken(
+  tenantId: string,
+  rawToken: string,
+  reason: string,
+): Promise<boolean> {
+  if (!rawToken) return false;
+  const db = createServiceClient();
+  if (!db) return false;
+  const { data, error } = await db
+    .from("portal_access_links")
+    .update({ revoked_at: new Date().toISOString(), revoked_reason: reason })
+    .eq("tenant_id", tenantId)
+    .eq("token_hash", hashLinkToken(rawToken))
+    .is("revoked_at", null)
+    .select("id");
+  if (error) {
+    console.error("[portal] 전달 실패 링크 회수 실패", error);
+    return false;
+  }
+  return Boolean(data && data.length > 0);
 }
 
 /* ---------- 관계 회수 ---------- */

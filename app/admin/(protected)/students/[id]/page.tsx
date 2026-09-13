@@ -15,11 +15,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Field, Textarea } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
-import { PortalLinkCard } from "@/components/admin/portal-link";
 import {
   invitePortalRelation,
   reEnrollStudent,
-  regeneratePortalToken,
   resendPortalInvite,
   revokePortalRelation,
   updateStudent,
@@ -30,7 +28,6 @@ import {
 } from "../portal-relations-card";
 import { StudentFormFields } from "../student-form-fields";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
 import { classTypeLabel, studentStatusLabel, studentStatusTone } from "../constants";
 import { consentItemLabel } from "../../consultations/constants";
 
@@ -453,7 +450,7 @@ export default async function StudentDetailPage({
           </Card>
 
           {/* P-01 역할별 초대 — 학생·보호자·납부자·계약자를 각각 초대하고 권한을 따로 회수한다.
-              아래 리포트 링크(portal_token)와 병행 운영이며, 자동 은퇴는 하지 않는다(운영자 판단). */}
+              포털 진입 경로는 이제 이것 하나다(옛 학생당 단일 토큰 링크는 00024로 은퇴). */}
           <Card>
             {student.status === "ended" ? (
               <>
@@ -477,39 +474,6 @@ export default async function StudentDetailPage({
             )}
           </Card>
 
-          <Card>
-            <h2 className="mb-2 text-sm font-semibold text-ink-soft">
-              학생·학부모 리포트 링크
-            </h2>
-            <p className="mb-3 text-xs leading-relaxed text-muted">
-              승인된 리포트를 학생·학부모가 이 링크로 조회합니다(읽기 전용).
-              링크가 있으면 누구나 열람하니 공유에 주의하세요.
-            </p>
-            {/* 이 링크는 학생 하나당 하나뿐이라 받는 사람을 구분하지 못한다(학생·보호자가 같은
-                링크를 쓴다). 역할별 초대는 사람마다 링크가 갈라져 회수도 사람 단위로 된다.
-                기능은 그대로 두고 안내만 덧붙인다 — 전환 시점은 운영자가 정한다. */}
-            <p className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-xs leading-relaxed text-brand-700">
-              위의 <strong className="font-semibold">포털 관계</strong>에서 역할별 초대로
-              전환을 권장합니다. 역할별 초대는 받는 사람마다 링크가 달라 권한을 따로 회수할
-              수 있습니다. 이 링크는 그대로 계속 쓸 수 있습니다.
-            </p>
-            {student.status === "ended" ? (
-              /* E-04 — 종료 학생은 포털 접근이 회수된다(getStudentByPortalToken의 ended 차단).
-                 무효인 링크를 노출해 공유 사고를 만들지 않도록 안내로 대체한다. */
-              <p className="rounded-lg bg-soft px-3 py-2 text-xs leading-relaxed text-muted">
-                등록 종료로 포털 접근이 회수되었습니다. 기존 링크는 열리지 않으며,
-                재등록 확인 절차를 거쳐 활성화되면 다시 사용할 수 있습니다.
-              </p>
-            ) : student.portalToken ? (
-              <PortalLinkCard
-                url={`${SITE_URL}/portal/${student.portalToken}`}
-                studentId={student.id}
-                regenerate={regeneratePortalToken}
-              />
-            ) : (
-              <p className="text-xs text-muted">DB 연결 후 자동 발급됩니다.</p>
-            )}
-          </Card>
         </div>
       </div>
     </div>

@@ -1,8 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
-
-import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
@@ -14,6 +11,8 @@ import { renderTemplate } from "@/lib/notify/templates";
 import {
   PORTAL_ROLE_LABEL,
   isPortalRole,
+  normalizePortalPhone,
+  portalOrigin,
   revokeRelation,
   rotateAccessLink,
   portalLinkPath,
@@ -218,7 +217,7 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
   // E-04 등록 종료 — 「계약·등록 종료 → 포털 관계·접근 회수」(01_atlas_04 §17).
   // ended 전환은 개인정보 접근이 걸린 종료 사건이므로 요약·사유를 구분해 감사에 남기고,
   // 커밋 후 포털 접근 종료 안내를 발송한다(아래). 접근 회수 자체는
-  // getStudentByPortalToken(lib/data/crm.ts)의 ended 차단이 즉시 수행한다.
+  // getPortalSession(lib/portal/auth.ts)의 ended 차단이 다음 요청부터 즉시 수행한다.
   const isEnding = existing.status !== "ended" && parsed.status === "ended";
 
   const result = await runCritical(
@@ -458,45 +457,6 @@ export async function reEnrollStudent(formData: FormData): Promise<CrmActionResu
   return result;
 }
 
-/** 리포트 포털 링크 재발급 — 기존 토큰을 새 값으로 회전(이전 링크 즉시 무효화). */
-export async function regeneratePortalToken(id: string): Promise<CrmActionResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, error: "인증이 필요합니다." };
-  if (!hasDb()) return { ok: false, error: DB_ERROR };
-  if (!id) return { ok: false, error: "잘못된 요청입니다." };
-
-  const db = createServiceClient()!;
-  // 토큰 회전은 접근 권한 전환(permission) — 감사 선기록 없이는 실행하지 않는다. 토큰 값은 기록 금지.
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "update",
-      targetType: "student",
-      targetId: id,
-      summary: "포털 링크 재발급",
-      category: "permission",
-      reason: "기존 포털 링크 무효화 후 새 토큰 발급",
-    },
-    async () => {
-      const { error } = await db
-        .from("students")
-        .update({ portal_token: randomBytes(16).toString("hex") })
-        .eq("tenant_id", session.tenantId)
-        .eq("id", id);
-      if (error) {
-        console.error("[students] portal token regenerate failed", error);
-        return { ok: false, error: "링크 재발급 중 오류가 발생했습니다." };
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  revalidatePath(`/admin/students/${id}`);
-  return result;
-}
-
 export interface BulkStudentRow {
   name: string;
   parentPhone: string;
@@ -564,32 +524,14 @@ export async function bulkCreateStudents(
         · 03_scenarios_133.md 검수 16(역할 조합 독립)·20(재발급 시 이전 초대 무효)
         · 21(관계 종료 = 세션·초대·공유경로 전부 닫힘)·124(기존 대상 재사용)·125(반쪽 수락 금지)
 
-   이 블록은 기존 함수를 건드리지 않는다. students.portal_token 기반 리포트 링크
-   (regeneratePortalToken · /portal/[token])는 그대로 병행 운영하고, 자동 은퇴도 하지 않는다
-   — 전환 시점은 운영자 판단이다(열린 결정 #1).
+   포털 인증 경로는 이제 이것 하나다. 학생당 단일 토큰(students.portal_token · /portal/[token])은
+   2026-09-10에 은퇴시켰다(00024) — 만료·세션·회수가 없고 학생과 보호자가 같은 링크를 쓰던 방식이라
+   "누가 열었는지"도, "이 사람만 끊기"도 성립하지 않았다.
 
    상태 전환의 실체는 전부 lib/portal/auth.ts(rotateAccessLink · revokeRelation)에 있다.
    여기서는 ① 운영자 인증·테넌트 스코프 ② 입력 정규화 ③ 감사(runCritical permission)
    ④ 초대 전달(sendNotification)만 담당한다 — 한 사건 한 기록 원칙에 따라 감사는 이 층에서만 남긴다.
    ================================================================== */
-
-/**
- * 초대 링크의 호스트 — 지금 운영자가 쓰고 있는 요청 호스트를 그대로 쓴다.
- *
- * 고정 상수(NEXT_PUBLIC_SITE_URL)를 쓰면 1호 테넌트가 아닌 운영자가 발급한 링크가 전부
- * 남의 도메인을 가리키고, 수락 라우트는 호스트로 테넌트를 판정하므로(lib/portal/auth.ts)
- * "사용할 수 없는 링크"로 끝난다 — 발급과 수락이 같은 호스트를 보게 여기서 맞춘다.
- * 로컬 개발에서도 자동으로 localhost 링크가 나온다.
- */
-async function portalOrigin(): Promise<string> {
-  const h = await headers();
-  const host = h.get("x-tenant-host") ?? h.get("host") ?? "";
-  if (!host) return process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
-  const forwarded = h.get("x-forwarded-proto");
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-  const proto = forwarded ?? (isLocal ? "http" : "https");
-  return `${proto}://${host}`;
-}
 
 /** 관계당 초대 발급·재발급 결과 — 링크는 발급 순간에만 원문으로 존재한다(DB엔 해시만). */
 export interface PortalInviteResult extends CrmActionResult {
@@ -610,24 +552,6 @@ export interface PortalInviteResult extends CrmActionResult {
 type PortalInviteMutation =
   | { ok: true; link: string; warnings?: string[]; error?: undefined }
   | { ok: false; error: string; link?: undefined; warnings?: undefined };
-
-/**
- * 전화번호 정규화 — 숫자만 남긴다.
- *
- * 결제선생 연동에서 얻은 교훈: 같은 사람의 번호가 '010-1234-5678'·'010 1234 5678'·
- * '+82 10-1234-5678'로 제각각 들어오면 대사(對査)가 사람 단위로 모이지 않아 중복 주체가 생긴다.
- * portal_contacts는 (tenant_id, phone) 유니크로 사람을 식별하므로(검수 124), 정규화가 무너지면
- * 같은 사람이 서로 다른 contact 두 개로 갈라지고 회수(검수 21)도 반쪽만 걸린다.
- * 그래서 저장 직전 한 곳에서만 정규화하고, DB에도 같은 규칙의 CHECK(^[0-9]{9,12}$)를 둔다.
- * 국가번호 표기(+82 10…)는 선행 82를 0으로 되돌려 국내 표기 하나로 수렴시킨다.
- */
-function normalizePortalPhone(raw: string): string {
-  let digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("82") && digits.length >= 11) {
-    digits = `0${digits.slice(2)}`;
-  }
-  return digits;
-}
 
 /**
  * 초대 링크 전체 주소.

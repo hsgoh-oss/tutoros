@@ -21,16 +21,14 @@ import {
 // (app/p/page.tsx의 역할 분기는 view === "student"일 때 payer-view를 아예 실행하지 않는다.)
 // 이 파일에 payments·청구·수납·환불을 다루는 코드를 추가하지 말 것 — 추가하는 순간 검수 17이 깨진다.
 //
-// 제출·질문 액션은 세션 경로다: 카드에 넘기는 token은 빈 문자열이고, 서버 액션
-// (app/portal/[token]/actions.ts resolvePortalActor)이 token이 비면 포털 세션 쿠키로
-// 행위 주체를 해석한다. 즉 이 화면은 기존 단일 토큰 링크를 알지도, 노출하지도 않는다
-// — 관계가 회수되면 세션이 무효가 되어 제출·질문도 함께 닫힌다(검수 21).
+// 제출·질문 액션은 포털 세션으로만 주체를 해석한다(app/p/actions.ts resolvePortalActor).
+// 이 화면은 어떤 링크·토큰도 알지도, 노출하지도 않는다 — 관계가 회수되면 세션이 무효가 되어
+// 제출·질문도 함께 닫힌다(검수 21).
 //
 // 한 사람(contact)이 학생 역할 관계를 둘 이상 가져도(예: 형제가 같은 번호로 각각 학생 초대를
 // 받은 경우) 이 화면이 보고 있는 studentId를 액션에 함께 보내 대상을 특정한다(검수 16).
 // 액션은 그 id가 세션의 active 관계에 있을 때만 통과시킨다 — 없으면 fail-closed로 거부.
 
-const SESSION_ACTION_TOKEN = ""; // 빈 토큰 = 세션 경로(위 주석 참조)
 
 export async function StudentView({
   session,
@@ -81,7 +79,7 @@ export async function StudentView({
             {reports.map((r) => (
               <ReportCard key={r.id} report={r} studentName={studentName}>
                 {/* 질문은 원 기록(이 리포트)과 연결되어 접수된다(검수 29). */}
-                <QuestionForm token={SESSION_ACTION_TOKEN} studentId={studentId} reportId={r.id} />
+                <QuestionForm studentId={studentId} reportId={r.id} />
               </ReportCard>
             ))}
           </div>
@@ -98,7 +96,6 @@ export async function StudentView({
             {assignments.map((h) => (
               <HomeworkCard
                 key={h.id}
-                token={SESSION_ACTION_TOKEN}
                 studentId={studentId}
                 homework={h}
                 overdue={Boolean(h.dueDate && h.dueDate < today)}

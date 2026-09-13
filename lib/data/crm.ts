@@ -72,7 +72,6 @@ interface StudentRow {
   subject_type: string | null;
   status: Student["status"];
   notion_page_id: string | null;
-  portal_token: string | null;
   created_at: string;
 }
 
@@ -88,7 +87,6 @@ function mapStudent(row: StudentRow): Student {
     subjectType: row.subject_type,
     status: row.status,
     notionPageId: row.notion_page_id,
-    portalToken: row.portal_token,
     createdAt: row.created_at,
   };
 }
@@ -130,41 +128,11 @@ export async function getStudent(
   return data ? mapStudent(data as StudentRow) : null;
 }
 
-/* ---------- 학생/학부모 리포트 포털 (Notion 대체) ---------- */
-
-export interface PortalStudent {
-  id: string;
-  tenantId: string;
-  name: string;
-}
-
-/** 포털 토큰으로 학생을 조회한다(코드 없는 비공개 링크 방식). */
-export async function getStudentByPortalToken(
-  token: string,
-): Promise<PortalStudent | null> {
-  const db = createServiceClient();
-  if (!db) return null;
-  // tenant-scope-ok: portal_token은 추측 불가한 단일 학생 식별자(플랫폼 경로 — 열람 링크에 테넌트 컨텍스트 없음).
-  // 조회된 tenant_id를 이후 리포트 조회 스코프에 사용한다.
-  const { data } = await db
-    .from("students")
-    .select("id, tenant_id, name, status")
-    .eq("portal_token", token)
-    .maybeSingle();
-  if (!data) return null;
-  const row = data as {
-    id: string;
-    tenant_id: string;
-    name: string;
-    status: Student["status"];
-  };
-  // E-04 등록 종료 — 「계약·등록 종료 → 포털 관계·접근 회수」(01_atlas_04 §17).
-  // 종료(ended) 학생은 토큰이 유효해도 포털을 열지 않는다: 리포트 열람·과제 제출·질문 등
-  // 토큰 기반 경로 전체가 이 함수를 지나므로, 여기 한 곳이 접근 회수 지점이다.
-  // 재등록(E-05 — 새 등록 절차)으로 다시 활성되기 전까지 기존 링크는 무효로 취급한다.
-  if (row.status === "ended") return null;
-  return { id: row.id, tenantId: row.tenant_id, name: row.name };
-}
+/* ---------- 학생/학부모 리포트 포털 ----------
+   학생당 단일 토큰(portal_token)으로 조회하던 getStudentByPortalToken은 2026-09-10에 없앴다.
+   그 링크는 만료도 세션도 회수도 없었고, 학생과 보호자가 같은 링크를 써서 "누가 열었는지"가
+   구분되지 않았다. 지금 포털 주체 해석은 포털 세션 한 곳이다(lib/portal/auth.ts
+   getPortalSession) — 종료(ended) 학생 차단도 그쪽이 이어받았다(E-04). */
 
 export interface PortalReport {
   id: string;

@@ -9,6 +9,7 @@ import {
   RoleSwitcher,
   StudentSwitcher,
 } from "@/components/portal/role-switcher";
+import { PortalLinkRequestForm } from "@/components/portal/link-request-form";
 import { StudentView } from "./student-view";
 import { GuardianView } from "./guardian-view";
 import { PayerView } from "./payer-view";
@@ -48,6 +49,10 @@ function one(value: string | string[] | undefined): string | undefined {
 /**
  * 비로그인 안내 — 쿠키 없음·만료·회수·관계 종료·무효 링크가 전부 여기로 온다.
  * 문구는 고정 문자열이다: URL로 넘어온 코드(e)로 분기만 하고 URL의 텍스트를 그리지 않는다.
+ *
+ * 여기에 링크 재발송 폼을 둔다. 공개 헤더의 '포털'이 이 화면으로 오는데, 안내만 있고
+ * 할 수 있는 일이 없으면 링크를 잃은 사람에게는 막다른 길이다 — 그 연락이 전부 운영자 일이 된다.
+ * 폼은 새 인증 수단이 아니라 "같은 링크를 다시 보내는" 경로다(lib/actions/portal-link.ts).
  */
 function SignedOutNotice({ reason }: { reason: string | undefined }) {
   const message =
@@ -63,6 +68,9 @@ function SignedOutNotice({ reason }: { reason: string | undefined }) {
           학습 포털
         </p>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">{message}</p>
+
+        <PortalLinkRequestForm />
+
         <p className="mt-6 text-xs font-bold tracking-tight text-muted">
           TUTOR OS
         </p>

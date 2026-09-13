@@ -16,6 +16,7 @@ import {
 import { sendNotification } from "@/lib/notify/send";
 import { renderTemplate, type NotifyType } from "@/lib/notify/templates";
 import { runCritical } from "@/lib/data/activity";
+import { hasActivePortalRelation, portalHomeUrl } from "@/lib/portal/auth";
 import { createWorkItem } from "@/lib/data/work";
 import type {
   GradeRecord,
@@ -29,7 +30,6 @@ import { AI_REPORT_DISCLAIMER, REPORT_NOTIFY_TYPE } from "./constants";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
 // 학생 상세의 포털 링크 카드와 같은 값을 써야 문자로 간 링크와 관리자가 복사한 링크가 일치한다.
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
 const REPORT_TYPES: ReportType[] = ["lesson", "weekly", "monthly", "exam", "consult_brief"];
 const REPORT_AUDIENCES: ReportAudience[] = ["parent", "student", "internal"];
 
@@ -239,7 +239,10 @@ export async function createReport(
   const context = pseudonymize(buildStudentContext(student, lessons, grades), student.name);
   const prompt = buildPrompt(type, audience, depth, context);
 
-  const generated = await generateReport(type, depth, prompt);
+  const generated = await generateReport(type, depth, prompt, session.tenantId, {
+    type: "student",
+    id: studentId,
+  });
   if (!generated.ok || !generated.content) {
     return { ok: false, error: generated.error ?? "리포트 생성에 실패했습니다." };
   }
@@ -454,10 +457,16 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
     return { ok: false, error: `발송 전 확인이 필요합니다 — ${reasons}` };
   }
 
-  if (!student.portalToken) {
+  // 읽을 사람이 있어야 보낸다.
+  //
+  // 예전 게이트는 "학생에게 portal_token이 있나"였는데 그 토큰은 학생 행과 함께 자동 생성돼
+  // 사실상 늘 참이었다 — 아무도 연결되지 않은 학생에게도 "포털에서 확인하세요"가 나갔다.
+  // 이제는 그 학생에 연결된 active 포털 관계가 있는지를 묻는다(P-01).
+  if (!(await hasActivePortalRelation(session.tenantId, student.id))) {
     return {
       ok: false,
-      error: "열람 링크가 없습니다. 학생 상세에서 리포트 링크를 재발급해 주세요.",
+      error:
+        "이 학생에 연결된 포털 이용자가 없습니다. 학생 상세의 '포털 관계'에서 학부모·학생을 먼저 초대해 주세요.",
     };
   }
 
@@ -465,7 +474,7 @@ export async function sendReport(id: string): Promise<CrmActionResult> {
   // 카카오 알림톡은 사전 심사 고정 템플릿이라 가변 장문을 실을 수도 없다.
   // 고정 문구 + 열람 링크만 보내고 본문은 포털에서 읽게 한다(기획 7-10 · 알림 12종 ⑤⑥).
   const { settings } = await getSiteContent(session.tenantId);
-  const portalUrl = `${SITE_URL}/portal/${student.portalToken}`;
+  const portalUrl = await portalHomeUrl();
   const message = `[${settings.brandName}] ${renderTemplate(notifyType, {
     name: student.name,
   })}\n${portalUrl}`;

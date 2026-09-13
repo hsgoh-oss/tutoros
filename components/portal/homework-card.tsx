@@ -10,7 +10,7 @@ import {
   getSubmissionFileUrl,
   submitHomework,
   withdrawSubmission,
-} from "@/app/portal/[token]/actions";
+} from "@/app/p/actions";
 import { QuestionForm } from "./question-form";
 import { formatDate, formatDateTime } from "./format";
 
@@ -28,12 +28,10 @@ const RESULT_LABEL: Record<string, string> = {
 };
 
 function FileLink({
-  token,
   studentId,
   submissionId,
   fileName,
 }: {
-  token: string;
   /** 세션 경로 대상 학생(검수 16 — 학생 역할이 둘 이상인 사람). */
   studentId?: string;
   submissionId: string;
@@ -49,7 +47,7 @@ function FileLink({
         // 팝업 차단 회피 — 클릭 제스처 안에서 창을 먼저 열고, 발급된 서명 URL로 이동시킨다.
         const popup = window.open("about:blank", "_blank");
         try {
-          const result = await getSubmissionFileUrl(token, submissionId, studentId);
+          const result = await getSubmissionFileUrl(submissionId, studentId);
           if (result.ok) {
             if (popup) popup.location.href = result.url;
             else window.location.href = result.url;
@@ -72,13 +70,11 @@ function FileLink({
 }
 
 function SubmissionItem({
-  token,
   studentId,
   submission,
   isLatest,
   canWithdraw,
 }: {
-  token: string;
   /** 세션 경로 대상 학생(검수 16 — 학생 역할이 둘 이상인 사람). */
   studentId?: string;
   submission: PortalHomeworkSubmission;
@@ -124,7 +120,6 @@ function SubmissionItem({
       {submission.fileName && (
         <div className="mt-2">
           <FileLink
-            token={token}
             studentId={studentId}
             submissionId={submission.id}
             fileName={submission.fileName}
@@ -175,7 +170,7 @@ function SubmissionItem({
               }
               setPending(true);
               try {
-                const result = await withdrawSubmission(token, submission.id, studentId);
+                const result = await withdrawSubmission(submission.id, studentId);
                 if (result.ok) router.refresh();
                 else window.alert(result.error ?? "철회하지 못했습니다.");
               } catch {
@@ -195,12 +190,10 @@ function SubmissionItem({
 }
 
 export function HomeworkCard({
-  token,
   studentId,
   homework,
   overdue,
 }: {
-  token: string;
   /** 세션 경로 대상 학생(검수 16 — 학생 역할이 둘 이상인 사람). */
   studentId?: string;
   homework: PortalHomework;
@@ -225,7 +218,6 @@ export function HomeworkCard({
     const form = formRef.current;
     if (!form) return;
     const fd = new FormData(form);
-    fd.set("token", token);
     fd.set("assignmentId", homework.id);
     if (skipFile) {
       // 파일 업로드 실패 후 "텍스트만 제출" 선택 — 입력한 텍스트는 그대로 살린다(검수 26 정신).
@@ -316,7 +308,6 @@ export function HomeworkCard({
             {homework.submissions.map((s) => (
               <SubmissionItem
                 key={s.id}
-                token={token}
             studentId={studentId}
                 submission={s}
                 isLatest={latest?.id === s.id}
@@ -391,7 +382,7 @@ export function HomeworkCard({
         </form>
       )}
 
-      <QuestionForm token={token} studentId={studentId} assignmentId={homework.id} />
+      <QuestionForm studentId={studentId} assignmentId={homework.id} />
     </article>
   );
 }

@@ -10,6 +10,7 @@ import {
   updateDraft,
 } from "@/lib/data/homework";
 import { logActivity, runCritical } from "@/lib/data/activity";
+import { portalHomeUrl } from "@/lib/portal/auth";
 import { getSiteContent } from "@/lib/data/content";
 import { sendNotification } from "@/lib/notify/send";
 import { renderTemplate } from "@/lib/notify/templates";
@@ -26,7 +27,6 @@ import { isReviewResult, reviewResultLabel } from "./constants";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
 // 학생 상세 포털 링크 카드·reports/actions.ts sendReport와 같은 값 — 알림에 실은 링크가 일치해야 한다.
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://axiommathlab.kr";
 
 function revalidateHomework(id?: string) {
   revalidatePath("/admin/homework");
@@ -205,10 +205,11 @@ export async function assignAssignment(id: string): Promise<CrmActionResult> {
   // 학부모 알림 — 업무(배부)와 전달(알림)을 분리한다: 알림 실패가 배부를 되돌리지 않는다.
   // 실패·야간 대기 건은 notifications 큐(failed→재시도 크론→소진 시 오늘 업무)로 수렴한다.
   const { settings } = await getSiteContent(session.tenantId);
-  const portalUrl = student.portalToken ? `${SITE_URL}/portal/${student.portalToken}` : null;
+  // 링크는 포털 홈 하나다 — 토큰이 박힌 주소를 문자로 보내지 않는다(lib/portal/auth.ts).
+  const portalUrl = await portalHomeUrl();
   const message = `[${settings.brandName}] ${renderTemplate("homework_assigned", {
     name: student.name,
-  })}${portalUrl ? `\n${portalUrl}` : ""}`;
+  })}\n${portalUrl}`;
   const sent = await sendNotification({
     tenantId: session.tenantId,
     studentId: student.id,

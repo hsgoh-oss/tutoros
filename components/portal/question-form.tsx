@@ -2,18 +2,16 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { askQuestion } from "@/app/portal/[token]/actions";
+import { askQuestion } from "@/app/p/actions";
 
 // 질문 남기기 폼 — 과제 카드·리포트 카드에 접혀 있다가 펼쳐진다.
 // 질문은 반드시 원 기록(assignmentId 또는 reportId)과 연결되어 접수된다(검수 29).
 // 접수 후 답변은 선생님 승인(게시)된 것만 포털에 나타난다(검수 28) — 안내 문구로 알려준다.
 export function QuestionForm({
-  token,
   studentId,
   assignmentId,
   reportId,
 }: {
-  token: string;
   /** 세션 경로에서 대상 학생을 특정한다(한 사람이 학생 역할을 둘 이상 가질 때 — 검수 16). */
   studentId?: string;
   assignmentId?: string;
@@ -30,7 +28,6 @@ export function QuestionForm({
     const form = formRef.current;
     if (!form) return;
     const fd = new FormData(form);
-    fd.set("token", token);
     if (studentId) fd.set("studentId", studentId);
     if (assignmentId) fd.set("assignmentId", assignmentId);
     if (reportId) fd.set("reportId", reportId);

@@ -150,7 +150,6 @@ export interface Student {
   subjectType: string | null;
   status: "trial" | "active" | "paused" | "ended";
   notionPageId: string | null;
-  portalToken: string | null; // 네이티브 학생/학부모 리포트 포털 링크 토큰
   createdAt: string;
 }
 
