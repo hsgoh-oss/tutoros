@@ -85,6 +85,45 @@ export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
     "{name}님, 정규 수업 등록이 완료되었습니다. 학습 포털 초대가 곧 전달됩니다.",
 };
 
+/**
+ * 발송 현황 화면용 한글 이름. 운영자는 'payment_d3'가 아니라 '결제 예정 D-3'을 찾는다.
+ *
+ * 라벨은 여기에 둔다 — NotifyType의 단일 진실 원천이 이 파일이라, 타입을 추가하면
+ * Record<NotifyType, string>이 컴파일 단계에서 라벨 누락을 잡는다.
+ * DB의 type은 CHECK가 없어 미등록 문자열이 올 수 있으므로, 조회는 notifyTypeLabel로 한다.
+ */
+export const NOTIFY_TYPE_LABEL: Record<NotifyType, string> = {
+  consult_received: "상담 접수 확인",
+  consult_confirmed: "상담 일정 확정",
+  consult_admin_alert: "상담 접수 알림(관리자)",
+  trial_scheduled: "시범수업 예약 안내",
+  lesson_reminder: "수업 전날 리마인더",
+  lesson_report: "수업 리포트",
+  payment_request: "청구서 발행",
+  payment_d3: "결제 예정 D-3",
+  payment_paid: "완납 확인",
+  payment_overdue: "미납 안내",
+  schedule_changed: "일정 변경·보강 안내",
+  weekly_report: "주간 리포트",
+  monthly_report: "월간 리포트",
+  exam_report: "시험 분석 리포트",
+  review_request: "후기 요청",
+  re_enrollment: "재등록 안내(광고)",
+  custom_message: "개별 메시지",
+  schedule_unresolved: "미처리 일정 알림(내부)",
+  homework_assigned: "과제 배부",
+  portal_invite: "포털 초대 링크",
+  intake_form_sent: "신청서 작성 링크",
+  trial_confirmed: "시범수업 확정",
+  waitlist_offer: "대기 자리 제안",
+  enrollment_activated: "정규 등록 완료",
+};
+
+/** DB의 type 문자열 → 한글 이름. 미등록 키는 원문을 그대로 보여 준다(숨기지 않는다). */
+export function notifyTypeLabel(value: string): string {
+  return isNotifyType(value) ? NOTIFY_TYPE_LABEL[value] : value;
+}
+
 /** DB 문자열이 알려진 알림 종류인지 판별. notifications.type엔 CHECK가 없어, flush 경로는 이 가드를 반드시 통과시킨다. */
 export function isNotifyType(value: string): value is NotifyType {
   return Object.hasOwn(NOTIFY_TEMPLATES, value);
