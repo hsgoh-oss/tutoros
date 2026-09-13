@@ -25,6 +25,7 @@ import {
 } from "../constants";
 import {
   cancelCashReceiptAction,
+  syncCashReceiptAction,
   deletePayment,
   destroyPayssamBillAction,
   markPaid,
@@ -320,7 +321,18 @@ export default async function PaymentDetailPage({
                   {/* 현금영수증 — 완납 건 증빙(검수 45 수렴 대상). 발급됨이면 승인번호+취소, 아니면 발급 폼. */}
                   {statusEx === "paid" && (
                     <div className="border-t border-line pt-4">
-                      <h3 className="mb-3 text-sm font-semibold text-ink-soft">현금영수증</h3>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold text-ink-soft">현금영수증</h3>
+                        {/* 청구서 '동기화'와 같은 역할 — 결제선생에서 직접 발급·취소한 건이나
+                            결과 불명으로 끝난 건이 있으면 우리 기록이 사실과 어긋난다.
+                            환불 경로가 이 기록으로 "먼저 취소해야 하나"를 판단한다(검수 45). */}
+                        <ActionButton
+                          action={syncCashReceiptAction}
+                          id={payment.id}
+                          label="결제선생과 대조"
+                          pendingLabel="대조 중..."
+                        />
+                      </div>
                       {ps.cash_receipt_state === "issued" ? (
                         <div className="space-y-3">
                           <dl className="grid grid-cols-2 gap-4 text-sm">

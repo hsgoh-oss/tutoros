@@ -39,6 +39,8 @@ export function ActionButton({
         const result = await action(id);
         setPending(false);
         if (result.ok) {
+          // 성공이지만 알려야 하는 결과 — 화면이 조용히 바뀌면 이유가 남지 않는다.
+          if (result.warning) window.alert(result.warning);
           if (redirectTo) router.push(redirectTo);
           router.refresh();
         } else {

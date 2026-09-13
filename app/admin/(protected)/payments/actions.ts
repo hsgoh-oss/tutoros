@@ -5,6 +5,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { resolveTenant } from "@/lib/tenant";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { formatKDate, formatWon } from "@/lib/data/crm";
+import { parseKstWallClock } from "@/lib/kst";
 import { getSiteContent } from "@/lib/data/content";
 import { runCritical } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
@@ -17,10 +18,11 @@ import {
   generateBillId,
   issueCashReceipt,
   readBill,
+  readCashReceipt,
   resendBill,
   sendBill,
 } from "@/lib/payssam/client";
-import type { PayssamCashTrader } from "@/lib/payssam/types";
+import type { CashReceiptHistoryItem, PayssamCashTrader } from "@/lib/payssam/types";
 import type { PaymentMethod } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -38,6 +40,18 @@ interface PaymentWithStudentRow {
 function revalidatePayment(id: string) {
   revalidatePath("/admin/payments");
   revalidatePath(`/admin/payments/${id}`);
+}
+
+/**
+ * 결제선생 승인 일시("YYYYMMDDhhmmss") → KST 벽시계 문자열("YYYY-MM-DDTHH:MM:SS").
+ *
+ * 응답에 시간대 표기가 없다 — 국내 결제 사업자의 시각이므로 KST 벽시계로 읽고,
+ * UTC instant로 옮기는 일은 lib/kst.ts의 parseKstWallClock에 맡긴다(저장은 늘 UTC).
+ * 형식이 다르면 빈 문자열을 돌려 파서가 null을 내게 한다 — 추측해서 시각을 만들지 않는다.
+ */
+function formatApprDt(raw: string): string {
+  if (!/^\d{14}$/.test(raw)) return "";
+  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}T${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`;
 }
 
 /** date-only 문자열(YYYY-MM-DD)에 일수를 더한다 — UTC 자정 고정으로 타임존 드리프트 방지. */
@@ -1301,6 +1315,130 @@ export async function cancelCashReceiptAction(id: string): Promise<CrmActionResu
         return { ok: false, error: "취소는 됐지만 저장에 실패했습니다. 새로고침 후 상태를 확인해 주세요." };
       }
       return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
+
+  revalidatePayment(id);
+  return result;
+}
+
+/**
+ * ⑥-c 현금영수증 대조 — POST /cash-receipt/read.
+ *
+ * 왜 필요한가: 발급·취소는 우리가 요청한 결과만 기록한다. 결제선생 관리자 화면에서 직접
+ * 발급하거나 취소한 건, 통신 오류로 결과를 못 받은 건(결과 불명)은 우리 기록과 어긋난 채로
+ * 남는다. 환불 경로가 "현금영수증이 발급돼 있으면 먼저 취소"를 우리 기록으로 판단하므로
+ * (검수 45), 기록이 틀리면 그 판단도 함께 틀린다 — 청구서 '동기화'와 같은 이유의 버튼이다.
+ *
+ * 대조만 하고 발급·취소를 새로 실행하지는 않는다. 어긋남을 발견하면 우리 기록을 결제선생
+ * 사실에 맞추고, 그 사실을 원장(payssam_events)에 남긴다. 증빙 상태가 곧 금전 판단의 입력이라
+ * 금전 전환(money)으로 감사한다.
+ */
+export async function syncCashReceiptAction(id: string): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+
+  const db = createServiceClient()!;
+  const payment = await fetchPayssamPayment(db, session.tenantId, id);
+  if (!payment) return { ok: false, error: "청구 정보를 찾을 수 없습니다." };
+  if (!payment.bill_id) return { ok: false, error: "결제선생 청구서가 없는 건입니다." };
+  const billId = payment.bill_id;
+
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "payssam_cash_receipt_sync",
+      targetType: "payment",
+      targetId: id,
+      summary: `현금영수증 대조: ${formatWon(payment.amount)}`,
+      category: "money",
+      before: {
+        cash_receipt_state: payment.cash_receipt_state,
+        cash_receipt_appr_num: payment.cash_receipt_appr_num,
+      },
+    },
+    async (): Promise<CrmActionResult> => {
+      const read = await readCashReceipt(billId, payment.amount);
+      if (!read.ok) {
+        if (read.code === "NETWORK") {
+          return {
+            ok: false,
+            error: "결제선생 조회에 실패했습니다(통신 오류). 잠시 후 다시 시도해 주세요.",
+          };
+        }
+        return { ok: false, error: `결제선생 조회 거절: ${read.error}` };
+      }
+
+      // 이력에서 "지금 상태"를 정하는 것은 가장 최근 승인 건이다. apprDt는 YYYYMMDDhhmmss라
+      // 문자열 비교가 곧 시각 비교다. 시각이 없는 항목은 순서를 신뢰할 수 없으므로 뒤로 민다.
+      const history = (read.data.info ?? []) as CashReceiptHistoryItem[];
+      const latest = history.reduce<CashReceiptHistoryItem | null>((best, item) => {
+        if (!best) return item;
+        return (item.apprDt ?? "") >= (best.apprDt ?? "") ? item : best;
+      }, null);
+
+      // 결제선생이 말하는 사실 — 승인(F)이면 발급됨, 취소(C)면 취소됨, 이력이 없으면 발급 없음.
+      const remoteState: "issued" | "canceled" | null =
+        latest?.apprState === "F" ? "issued" : latest?.apprState === "C" ? "canceled" : null;
+      const localState = payment.cash_receipt_state ?? null;
+
+      await recordPayssamEvent(db, {
+        tenantId: session.tenantId,
+        paymentId: id,
+        billId,
+        payload: { ...read.data, apiKey: "[redacted]" }, // 원문 보존, 파트너 비밀키만 마스킹
+        outcome: remoteState === localState ? "duplicate" : "mismatch",
+        note:
+          remoteState === localState
+            ? `현금영수증 대조 일치 (${localState ?? "발급 없음"})`
+            : `현금영수증 상태 불일치 — 내부 ${localState ?? "발급 없음"} vs 결제선생 ${remoteState ?? "발급 없음"}`,
+      });
+
+      if (remoteState === localState) {
+        return { ok: true };
+      }
+
+      // 어긋났다 — 사실(결제선생)에 맞춘다. 승인번호·발급 구분도 함께 가져와야 이후 취소 요청을
+      // 만들 수 있다(취소는 trader가 없으면 요청 자체를 만들지 못한다).
+      const trader =
+        latest?.trader === "0" || latest?.trader === "1" ? latest.trader : payment.cash_receipt_trader;
+      const patch: Record<string, unknown> = { cash_receipt_state: remoteState };
+      if (remoteState === "issued") {
+        patch.cash_receipt_appr_num = latest?.apprNum ?? payment.cash_receipt_appr_num;
+        patch.cash_receipt_trader = trader;
+        // 승인 일시(YYYYMMDDhhmmss)는 시간대 표기가 없다 — KST 벽시계로 읽어 UTC로 옮긴다
+        // (lib/kst.ts 규약: 입력은 KST 벽시계).
+        const issuedAt = latest?.apprDt ? parseKstWallClock(formatApprDt(latest.apprDt)) : null;
+        if (issuedAt) patch.cash_receipt_issued_at = issuedAt.toISOString();
+      }
+
+      const { error } = await db
+        .from("payments")
+        .update(patch)
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[payssam] cash receipt sync save failed", error);
+        return { ok: false, error: "대조 결과 저장에 실패했습니다. 다시 시도해 주세요." };
+      }
+
+      await createPayssamWorkItem(
+        session.tenantId,
+        "payssam_mismatch",
+        id,
+        "현금영수증 상태 불일치 — 내부 기록을 결제선생 기준으로 맞춤",
+        `billId=${billId} · 내부 ${localState ?? "발급 없음"} → 결제선생 ${remoteState ?? "발급 없음"}`,
+        "결제선생에서 직접 처리한 발급·취소가 있었는지 확인하고, 환불·증빙 정합을 다시 볼 것",
+      );
+
+      return {
+        ok: true,
+        // 성공이지만 사람이 알아야 하는 사실이다 — 조용히 덮으면 "왜 바뀌었지"가 남는다.
+        warning: `내부 기록이 결제선생과 달라 맞췄습니다: ${localState ?? "발급 없음"} → ${remoteState ?? "발급 없음"}. 오늘 업무에 확인 항목을 남겼습니다.`,
+      };
     },
   );
   if (!result.ok) return result;
