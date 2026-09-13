@@ -293,7 +293,10 @@ export async function generateLessonReport(
       category: "grade",
     },
     async () => {
-      const parentGenerated = await generateReport("lesson", "basic", parentPrompt);
+      const parentGenerated = await generateReport("lesson", "basic", parentPrompt, session.tenantId, {
+        type: "student",
+        id: lesson.studentId,
+      });
       if (!parentGenerated.ok || !parentGenerated.content) {
         return { ok: false, error: parentGenerated.error ?? "리포트 생성에 실패했습니다." };
       }
@@ -310,7 +313,10 @@ export async function generateLessonReport(
       });
       if (!parentCreated.ok) return parentCreated;
 
-      const studentGenerated = await generateReport("lesson", "basic", studentPrompt);
+      const studentGenerated = await generateReport("lesson", "basic", studentPrompt, session.tenantId, {
+        type: "student",
+        id: lesson.studentId,
+      });
       if (!studentGenerated.ok || !studentGenerated.content) {
         return { ok: false, error: studentGenerated.error ?? "리포트 생성에 실패했습니다." };
       }

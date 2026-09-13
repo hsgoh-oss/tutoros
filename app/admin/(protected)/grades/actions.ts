@@ -354,7 +354,10 @@ export async function generateExamReport(
           context,
         ].join("\n");
 
-        const generated = await generateReport("exam", "basic", prompt);
+        const generated = await generateReport("exam", "basic", prompt, session.tenantId, {
+          type: "student",
+          id: grade.studentId,
+        });
         if (!generated.ok || !generated.content) {
           return { ok: false, error: generated.error ?? "시험 리포트 생성에 실패했습니다." };
         }

@@ -75,6 +75,11 @@ export const consultFormSchema = z
     guardianPhone: z.string().optional(),
     guardianConsent: z.boolean(),
     privacyConsent: z.boolean(),
+    // 외부 AI 처리 위탁 — **선택 동의**다(정본 D-09 「목적별 선택 동의·거절 시 수동 대체」).
+    // 예전에는 필수 동의 문구 안에 묶여 있어서, 접수하면 무조건 동의로 기록됐다.
+    // 거절할 방법이 없는 동의는 동의가 아니다. 여기서 빠지면 그 대상에는 AI 생성이
+    // 막히고(lib/ai/consent.ts) 운영자가 직접 작성한다.
+    overseasAiConsent: z.boolean(),
     marketingConsent: z.boolean(),
     checklistItems: z.array(z.string()),
   })

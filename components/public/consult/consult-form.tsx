@@ -80,6 +80,7 @@ export function ConsultForm({
       guardianPhone: "",
       guardianConsent: false,
       privacyConsent: false,
+      overseasAiConsent: false,
       marketingConsent: false,
       checklistItems: [],
     },
@@ -392,9 +393,8 @@ export function ConsultForm({
               }
             />
             <span className="text-sm leading-relaxed text-ink-soft">
-              [필수] 개인정보 수집·이용 동의 (TUTOR OS 플랫폼 처리위탁 및
-              AI 처리 목적 가명화 국외이전 포함) — 법정대리인으로서
-              동의합니다(보호자 신청 기준).{" "}
+              [필수] 개인정보 수집·이용 동의 (TUTOR OS 플랫폼 처리위탁 포함) —
+              법정대리인으로서 동의합니다(보호자 신청 기준).{" "}
               <Link href="/privacy" className="font-bold text-brand-600 underline underline-offset-2">
                 자세히 보기
               </Link>
@@ -409,6 +409,24 @@ export function ConsultForm({
               {errors.privacyConsent.message}
             </p>
           )}
+
+          {/* 필수 동의에서 떼어낸 항목 — 거절해도 상담 접수는 그대로 진행된다.
+              동의하지 않으면 AI가 리포트를 대신 쓰지 않고 선생님이 직접 작성한다. */}
+          <label className="flex min-h-12 items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
+              {...register("overseasAiConsent")}
+            />
+            <span className="text-sm leading-relaxed text-ink-soft">
+              [선택] AI 리포트 작성을 위한 국외 처리 위탁 동의 — 이름을 가린 학습 기록을
+              해외 AI 사업자에 전달합니다. 동의하지 않으셔도 상담·수업에는 영향이 없고,
+              리포트는 선생님이 직접 작성합니다.{" "}
+              <Link href="/privacy" className="font-bold text-brand-600 underline underline-offset-2">
+                자세히 보기
+              </Link>
+            </span>
+          </label>
 
           <label className="flex min-h-12 items-start gap-3">
             <input

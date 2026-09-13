@@ -3,6 +3,11 @@
 
 import { resolveModel } from "./adapter";
 import type { ReportType } from "@/lib/types";
+import {
+  AI_CONSENT_MISSING_ERROR,
+  hasOverseasAiConsent,
+  type AiConsentSubject,
+} from "./consent";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -78,11 +83,25 @@ async function callAnthropic(model: string, prompt: string): Promise<CallResult>
   }
 }
 
+/**
+ * 외부 AI 생성의 유일한 입구 — 그래서 동의 게이트도 여기 하나뿐이다(정본 D-09).
+ *
+ * `tenantId`·`subject`를 선택 인자로 두지 않은 이유: 새 호출부가 하나라도 빠뜨리면 게이트가
+ * 없는 경로가 생기고, 그건 코드를 읽어서는 눈에 띄지 않는다. 필수 인자로 두면 컴파일러가
+ * 대신 지켜 준다.
+ */
 export async function generateReport(
   type: ReportType,
   depth: "basic" | "deep",
   prompt: string,
+  tenantId: string,
+  subject: AiConsentSubject,
 ): Promise<GenerateReportResult> {
+  // 동의 확인이 먼저다 — 모델 설정 여부보다 앞이어야 "설정만 되면 나간다"가 성립하지 않는다.
+  if (!(await hasOverseasAiConsent(tenantId, subject))) {
+    return { ok: false, error: AI_CONSENT_MISSING_ERROR };
+  }
+
   const route = resolveModel(type, depth);
   if (!route.configured || !route.model) {
     return { ok: false, error: AI_NOT_CONFIGURED_ERROR };

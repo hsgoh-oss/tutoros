@@ -110,10 +110,12 @@ export async function submitConsult(
     policy_version: POLICY_VERSION,
     via: "form",
   };
-  // 필수 동의 문구에 'AI 처리 목적 가명화 국외이전'이 포함되므로 privacy와 함께 overseas_ai도 기록.
+  // overseas_ai는 **선택 동의**다(정본 D-09). 예전에는 필수 문구에 묶여 무조건 기록됐는데,
+  // 거절 경로가 없는 동의는 동의로 성립하지 않는다. 체크했을 때만 남기고, 없으면 그 대상에는
+  // AI 생성이 막힌다(lib/ai/consent.ts) — 리포트는 운영자가 직접 쓴다.
   const consentRows = [
     { ...consentBase, item: "privacy" },
-    { ...consentBase, item: "overseas_ai" },
+    ...(data.overseasAiConsent ? [{ ...consentBase, item: "overseas_ai" }] : []),
     ...(data.marketingConsent ? [{ ...consentBase, item: "marketing" }] : []),
     ...(isMinorGuardian ? [{ ...consentBase, item: "guardian" }] : []),
   ];

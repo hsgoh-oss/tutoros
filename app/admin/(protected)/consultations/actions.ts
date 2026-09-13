@@ -367,7 +367,10 @@ export async function generateConsultBrief(
     async (): Promise<
       { ok: true; reportId: string } | { ok: false; error: string }
     > => {
-      const generated = await generateReport("consult_brief", "basic", prompt);
+      const generated = await generateReport("consult_brief", "basic", prompt, session.tenantId, {
+        type: "consultation",
+        id,
+      });
       if (!generated.ok || !generated.content) {
         return { ok: false, error: generated.error ?? "브리핑 생성에 실패했습니다." };
       }

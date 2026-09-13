@@ -92,6 +92,8 @@ export const intakeFormSchema = z
 
     /* ---------- 동의 ---------- */
     privacyConsent: z.boolean(),
+    // 외부 AI 처리 위탁 — 선택 동의(상담 폼과 같은 규약 · 정본 D-09).
+    overseasAiConsent: z.boolean(),
     marketingConsent: z.boolean(),
   })
   .superRefine((data, ctx) => {
@@ -226,8 +228,8 @@ export interface IntakePayload {
   } | null;
   consents: {
     privacy: true;
-    /** 필수 동의 문구에 'AI 처리 목적 가명화 국외이전'이 포함된다(상담 폼과 같은 문구). */
-    overseasAi: true;
+    /** 외부 AI 처리 위탁 — 선택 동의라 false일 수 있다(정본 D-09 · 상담 폼과 같은 규약). */
+    overseasAi: boolean;
     marketing: boolean;
     policyVersion: string;
     consentedAt: string;
@@ -298,7 +300,7 @@ export function buildIntakePayload(
         : null,
     consents: {
       privacy: true,
-      overseasAi: true,
+      overseasAi: values.overseasAiConsent,
       marketing: values.marketingConsent,
       policyVersion: meta.policyVersion,
       consentedAt: meta.consentedAt,

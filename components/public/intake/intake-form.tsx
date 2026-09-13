@@ -98,6 +98,7 @@ export function IntakeForm({
       freq: undefined,
       classType: "unspecified",
       privacyConsent: false,
+      overseasAiConsent: false,
       marketingConsent: false,
     },
   });
@@ -486,8 +487,7 @@ export function IntakeForm({
             }
           />
           <span className="text-sm leading-relaxed text-ink-soft">
-            [필수] 개인정보 수집·이용 동의 (TUTOR OS 플랫폼 처리위탁 및 AI 처리
-            목적 가명화 국외이전 포함){" "}
+            [필수] 개인정보 수집·이용 동의 (TUTOR OS 플랫폼 처리위탁 포함){" "}
             <Link
               href="/privacy"
               className="font-bold text-brand-600 underline underline-offset-2"
@@ -500,6 +500,25 @@ export function IntakeForm({
           id="intake-privacyconsent-error"
           message={errors.privacyConsent?.message}
         />
+
+        {/* 필수에서 떼어낸 항목 — 거절해도 신청은 그대로 진행되고, 리포트만 선생님이 직접 쓴다. */}
+        <label className="flex min-h-12 items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
+            {...register("overseasAiConsent")}
+          />
+          <span className="text-sm leading-relaxed text-ink-soft">
+            [선택] AI 리포트 작성을 위한 국외 처리 위탁 동의 — 이름을 가린 학습 기록을
+            해외 AI 사업자에 전달합니다. 동의하지 않으셔도 수업에는 영향이 없습니다.{" "}
+            <Link
+              href="/privacy"
+              className="font-bold text-brand-600 underline underline-offset-2"
+            >
+              자세히 보기
+            </Link>
+          </span>
+        </label>
 
         <label className="flex min-h-12 items-start gap-3">
           <input

@@ -101,7 +101,8 @@ export async function submitIntakeForm(
 
   // 동의 원장 기록 — 주체는 이 폼이 달린 상담이다(consents.subject_type에 폼 종류가 없고,
   // 신청서 동의도 결국 같은 상담 건의 개인정보 처리 동의다). 상담 폼과 같은 항목 구성:
-  // 필수 문구에 'AI 처리 목적 가명화 국외이전'이 포함되므로 privacy와 overseas_ai를 함께 남긴다.
+  // overseas_ai는 선택 동의다(정본 D-09) — 체크한 경우에만 남긴다. 없으면 그 대상에는
+  // AI 생성이 막히고(lib/ai/consent.ts) 리포트는 운영자가 직접 쓴다.
   //
   // 실패해도 제출을 되돌리지 않는다: 동의 사실은 이미 payload.consents에 제출과 같은 문장으로
   // 기록돼 있어 근거가 사라지지 않는다(상담 폼은 payload가 없어 보상 삭제가 유일한 방법이었다).
@@ -114,7 +115,7 @@ export async function submitIntakeForm(
   };
   const consentRows = [
     { ...consentBase, item: "privacy" },
-    { ...consentBase, item: "overseas_ai" },
+    ...(parsed.data.overseasAiConsent ? [{ ...consentBase, item: "overseas_ai" }] : []),
     ...(parsed.data.marketingConsent ? [{ ...consentBase, item: "marketing" }] : []),
   ];
   // tenant-scope-ok: consentBase가 tenant_id를 담고 전 행이 이를 스프레드한다(바로 위 선언).
