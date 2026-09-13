@@ -353,9 +353,17 @@
   transform: translateY(0);
 }
 
-/* 모바일 메뉴가 열려 있는 동안 배경 스크롤을 잠근다 */
-body.axm-menu-open {
+/* 모바일 메뉴가 열려 있는 동안 배경 스크롤을 잠근다.
+   body에 overflow:hidden만 두면 iOS Safari가 무시해 메뉴 뒤 본문이 함께 스크롤됐다.
+   html·body 둘 다 잠그고(터치 스크롤 차단은 touch-action), 메뉴 패널 자체를 고정 오버레이
+   스크롤 컨테이너로 만들어(site-header.tsx) 손가락이 패널 안에서만 움직이게 한다. */
+html.axm-menu-open,
+html.axm-menu-open body {
   overflow: hidden;
+  overscroll-behavior: none;
+}
+html.axm-menu-open body {
+  touch-action: none;
 }
 
 /* ============================================================================

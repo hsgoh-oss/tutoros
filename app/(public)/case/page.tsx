@@ -3,7 +3,8 @@ import Link from "next/link";
 import { resolveTenant } from "@/lib/tenant";
 import { getSiteContent } from "@/lib/data/content";
 import { Container } from "@/components/public/section";
-import { CaseResults } from "@/components/public/case-results";
+import { CaseResults, type CaseResultItem } from "@/components/public/case-results";
+import { publicStudentLabel } from "@/lib/review/masking";
 import { buttonClass } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -22,10 +23,29 @@ export default async function CasePage() {
   const tenant = await resolveTenant();
   const content = await getSiteContent(tenant.id);
 
-  // 후기 중 전·후 등급이 모두 기록된 건 — 사례와 같은 근거이므로 같은 화면에 둔다.
   // 정본 S-01·S-03: 공개 콘텐츠는 승인·게시된 것만 노출한다(lib/data/content.ts에서 이미 걸러진다).
+  //
+  // 등급 변화의 1순위는 작성자가 제출해 검토·게시된 사례(kind='case' · 00025)다 — 이름은 승인된
+  // 마스킹 이름, 이미지는 공개 동의가 있을 때만(content.ts가 imagesPublic=false면 비운다).
+  // 그런 사례가 아직 없으면 옛 site_settings 사례(content.cases)를 그대로 보여 준다 — 기존 공개
+  // 데이터를 조용히 떨어뜨리지 않는다.
+  const submittedCases: CaseResultItem[] = content.reviews
+    .filter((r) => r.kind === "case" && r.beforeGrade && r.afterGrade)
+    .map((r) => ({
+      id: r.id,
+      name: publicStudentLabel(r.publicName),
+      beforeLabel: r.beforeLabel ?? "수업 전",
+      beforeGrade: r.beforeGrade ?? "",
+      afterLabel: r.afterLabel ?? "수업 후",
+      afterGrade: r.afterGrade ?? "",
+      content: r.content,
+      images: r.screenshots,
+    }));
+  const cases: CaseResultItem[] = submittedCases.length > 0 ? submittedCases : content.cases;
+
+  // 후기 중 전·후 등급이 모두 기록된 건 — 사례와 같은 근거이므로 같은 화면에 둔다.
   const gradeChanges = content.reviews.filter(
-    (r) => r.beforeGrade && r.afterGrade,
+    (r) => r.kind === "review" && r.beforeGrade && r.afterGrade,
   );
 
   return (
@@ -46,8 +66,8 @@ export default async function CasePage() {
             등급 변화
           </h2>
           <div className="mt-6">
-            {content.cases.length > 0 ? (
-              <CaseResults cases={content.cases} />
+            {cases.length > 0 ? (
+              <CaseResults cases={cases} />
             ) : (
               <p className="rounded-[var(--radius-panel)] border border-line bg-soft px-6 py-10 text-center text-sm text-muted">
                 공개된 사례가 아직 없습니다.

@@ -102,6 +102,7 @@ export default async function ApplyPage({
                 initialHours={sp.hours}
                 initialFreq={sp.freq}
                 kakaoUrl={content.settings.kakaoUrl}
+                trialFee={content.rates.trial}
               />
             </>
           )}

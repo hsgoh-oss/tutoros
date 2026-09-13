@@ -10,16 +10,22 @@ export function LessonFormFields({
   lesson,
   studentOptions,
   studentName,
+  defaultStudentId,
 }: {
   lesson?: Lesson;
   studentOptions?: StudentOption[];
   studentName?: string;
+  defaultStudentId?: string;
 }) {
   return (
     <div className="grid gap-5 md:grid-cols-2">
       {studentOptions ? (
         <Field label="학생" required>
-          <Select name="studentId" defaultValue={lesson?.studentId ?? ""} required>
+          <Select
+            name="studentId"
+            defaultValue={lesson?.studentId ?? defaultStudentId ?? ""}
+            required
+          >
             <option value="" disabled>
               학생 선택
             </option>

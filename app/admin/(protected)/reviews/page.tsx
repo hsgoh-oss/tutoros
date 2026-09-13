@@ -1,62 +1,142 @@
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
-import { hasDb, listReviews, formatKDate, formatKDateTime } from "@/lib/data/crm";
+import { hasDb, formatKDate, formatKDateTime } from "@/lib/data/crm";
 import { listBackups } from "@/lib/data/backup";
+import { listReviewInvitations, listReviewRecords, type ReviewRecord } from "@/lib/data/reviews";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
+import { cn } from "@/lib/cn";
+import { Toolbar } from "@/components/admin/crm/toolbar";
 import { ActionButton } from "@/components/admin/crm/action-button";
-import type { ReviewStatus } from "@/lib/types";
-import { reviewerTypeLabel, reviewStatusLabel } from "./constants";
-import { listReviewStatuses } from "./storage";
 import {
-  approveReview,
-  deleteReview,
+  REVIEW_FILTERS,
+  reviewKindLabel,
+  reviewStatusLabel,
+  reviewStatusTone,
+  reviewerTypeLabel,
+} from "./constants";
+import { InvitationList } from "./invitation-list";
+import {
   moveReviewDown,
   moveReviewUp,
+  publishReview,
   restoreReviewsBackup,
+  startReview,
   togglePinReview,
 } from "./actions";
 
-/** 게시 상태별 배지 톤 — draft(승인 대기)는 경고색으로 눈에 띄게(승인 전 비공개 상태). */
-const STATUS_TONES: Record<ReviewStatus, "brand" | "soft" | "success" | "warning" | "danger"> = {
-  draft: "warning",
-  approved: "brand",
-  published: "success",
-  retracted: "danger",
-};
+// 후기·사례 관리 목록 — 운영자가 할 수 있는 일은 상태 전환뿐이다(작성·수정 없음 — S-01·S-03).
+// 각 행에는 "지금 할 다음 행동" 하나만 둔다. 판단이 필요한 전환(승인·반려·수정 요청·마스킹 확인·철회)은
+// 상세 화면으로 보낸다 — 본문을 읽지 않고 목록에서 누르는 승인은 검토가 아니다.
 
-export default async function ReviewsPage() {
+function NextAction({ review }: { review: ReviewRecord }) {
+  const detail = `/admin/reviews/${review.id}`;
+  switch (review.status) {
+    case "draft":
+    case "submitted":
+      return <ActionButton action={startReview} id={review.id} label="검토 시작" />;
+    case "in_review":
+      return (
+        <Link href={detail} className="text-xs font-bold text-brand-700 hover:underline">
+          검토하기 →
+        </Link>
+      );
+    case "approved":
+      return review.maskingConfirmedAt ? (
+        <ActionButton
+          action={publishReview}
+          id={review.id}
+          label="게시"
+          confirmText="이 건을 공개 사이트에 게시할까요? 이미지 공개 동의가 있으면 공개 사본이 생성됩니다."
+        />
+      ) : (
+        <Link href={detail} className="text-xs font-bold text-brand-700 hover:underline">
+          마스킹·최소정보 확인 →
+        </Link>
+      );
+    case "published":
+      return (
+        <Link href={detail} className="text-xs font-medium text-muted hover:text-rose-600 hover:underline">
+          철회(사유 입력) →
+        </Link>
+      );
+    case "revision_requested":
+      return <span className="text-xs text-muted">작성자 재제출 대기</span>;
+    default:
+      return <span className="text-xs text-muted">-</span>;
+  }
+}
+
+export default async function ReviewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const { status } = await searchParams;
   const session = await getAdminSession();
   const connected = hasDb();
-  const reviews = session ? await listReviews(session.tenantId) : [];
-  const backups = session ? await listBackups(session.tenantId, "reviews") : [];
-  // 게시 상태(00016)는 목록 조회(listReviews)와 별도로 보강 조회한다 — S-01 승인 게시 흐름 표시용.
-  const statuses = session ? await listReviewStatuses(session.tenantId) : new Map();
+
+  const filter = REVIEW_FILTERS.find((f) => f.value === status) ?? REVIEW_FILTERS[0];
+  const [reviews, invitations, backups] = session
+    ? await Promise.all([
+        listReviewRecords(session.tenantId, filter.statuses ? { status: filter.statuses } : {}),
+        listReviewInvitations(session.tenantId, { status: "sent" }),
+        listBackups(session.tenantId, "reviews"),
+      ])
+    : [[], [], []];
 
   return (
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">후기 관리</h1>
+          <h1 className="text-xl font-semibold tracking-tight">후기·사례 관리</h1>
+          <p className="mt-1 text-sm text-muted">
+            작성자가 링크로 제출한 후기·성적 향상 사례를 검토·게시·철회합니다. 본문은 여기서 고칠 수
+            없고, 고쳐야 하면 작성자에게 수정 요청을 보냅니다.
+          </p>
         </div>
-        <Link href="/admin/reviews/new" className={buttonClass("primary", "sm")}>
-          신규 등록
+        <Link href="/admin/reviews/invite" className={buttonClass("primary", "sm")}>
+          작성 초대 보내기
         </Link>
       </div>
 
       {!connected && <DbBanner />}
 
+      <Toolbar>
+        {/* 상태 묶음 칩 — 기본(링크 없음)은 '검토 대기'다. 공용 FilterChips는 기본 칩을 '전체'로 고정해
+            두 뜻이 충돌하므로 같은 모양의 링크를 직접 그린다. */}
+        <div className="flex flex-wrap gap-2">
+          {REVIEW_FILTERS.map((f) => {
+            const active = f.value === filter.value;
+            return (
+              <Link
+                key={f.value}
+                href={f.value === "open" ? "/admin/reviews" : `/admin/reviews?status=${f.value}`}
+                className={cn(
+                  "inline-flex min-h-[var(--ui-h-sm)] items-center rounded-[var(--radius-control)] border px-3.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight transition-colors",
+                  active
+                    ? "border-brand-600 bg-brand-50 text-brand-700"
+                    : "border-line bg-white text-ink-soft hover:border-brand-200",
+                )}
+              >
+                {f.label}
+              </Link>
+            );
+          })}
+        </div>
+      </Toolbar>
+
       {reviews.length === 0 ? (
         <EmptyState
-          title="등록된 후기가 없습니다"
-          description="신규 등록 버튼으로 후기를 추가할 수 있습니다."
+          title={filter.value === "open" ? "검토 대기 중인 건이 없습니다" : "해당 상태의 건이 없습니다"}
+          description="작성 초대를 보내면 작성자가 제출한 건이 여기에 쌓입니다."
           action={
-            <Link href="/admin/reviews/new" className={buttonClass("outline", "sm")}>
-              신규 등록
+            <Link href="/admin/reviews/invite" className={buttonClass("outline", "sm")}>
+              작성 초대 보내기
             </Link>
           }
         />
@@ -65,29 +145,23 @@ export default async function ReviewsPage() {
           <Table>
             <thead>
               <tr>
-                <Th>유형</Th>
+                <Th>종류</Th>
+                <Th>학생(공개명)</Th>
+                <Th>작성자</Th>
                 <Th>상태</Th>
-                <Th>평점</Th>
-                <Th>성적 변화</Th>
-                <Th>지역</Th>
-                <Th>출처</Th>
-                <Th>일자</Th>
+                <Th>평점 · 등급 변화</Th>
+                <Th>제출일</Th>
+                <Th>다음 행동</Th>
                 <Th>고정</Th>
                 <Th>순서</Th>
-                <Th>삭제</Th>
               </tr>
             </thead>
             <tbody>
-              {reviews.map((r, i) => {
-                const status = statuses.get(r.id)?.status as ReviewStatus | undefined;
-                return (
+              {reviews.map((r, i) => (
                 <tr key={r.id}>
                   <Td>
-                    <Link
-                      href={`/admin/reviews/${r.id}`}
-                      className="font-bold text-ink hover:text-brand-600"
-                    >
-                      {reviewerTypeLabel(r.reviewerType)}
+                    <Link href={`/admin/reviews/${r.id}`} className="font-bold text-ink hover:text-brand-600">
+                      {reviewKindLabel(r.kind)}
                     </Link>
                     {r.isPinned && (
                       <Badge tone="brand" className="ml-2">
@@ -95,35 +169,48 @@ export default async function ReviewsPage() {
                       </Badge>
                     )}
                   </Td>
+                  <Td>{r.publicName ?? <span className="text-muted">(마스킹 없음)</span>}</Td>
                   <Td>
-                    <div className="flex items-center gap-2">
-                      <Badge tone={status ? STATUS_TONES[status] : "soft"}>
-                        {reviewStatusLabel(status)}
+                    {reviewerTypeLabel(r.reviewerType)}
+                    {r.isMinor && (
+                      <Badge tone="warning" className="ml-2">
+                        미성년
                       </Badge>
-                      {/* S-01: 신규 후기는 draft(비공개)로 등록되고 운영자 승인으로만 게시된다 */}
-                      {(status === "draft" || status === "approved") && (
-                        <ActionButton
-                          action={approveReview}
-                          id={r.id}
-                          label="게시 승인"
-                          confirmText="이 후기를 공개 사이트에 게시하시겠습니까? 증빙 스크린샷의 공개 사본이 생성됩니다."
-                        />
-                      )}
-                    </div>
+                    )}
                   </Td>
-                  <Td>{r.rating}점</Td>
                   <Td>
-                    {r.beforeGrade ?? "-"} → {r.afterGrade ?? "-"}
+                    <Badge tone={reviewStatusTone(r.status)}>{reviewStatusLabel(r.status)}</Badge>
                   </Td>
-                  <Td>{r.region ?? "-"}</Td>
-                  <Td>{r.source ?? "-"}</Td>
-                  <Td>{formatKDate(r.reviewedAt)}</Td>
                   <Td>
-                    <ActionButton
-                      action={togglePinReview}
-                      id={r.id}
-                      label={r.isPinned ? "고정 해제" : "고정"}
-                    />
+                    {r.kind === "case" ? (
+                      <>
+                        {r.beforeGrade ?? "-"} → {r.afterGrade ?? "-"}
+                      </>
+                    ) : (
+                      <>
+                        {r.rating}점
+                        {r.beforeGrade && r.afterGrade && (
+                          <span className="ml-1 text-muted">
+                            ({r.beforeGrade} → {r.afterGrade})
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </Td>
+                  <Td>{formatKDate(r.submittedAt ?? r.createdAt)}</Td>
+                  <Td>
+                    <NextAction review={r} />
+                  </Td>
+                  <Td>
+                    {r.status === "published" || r.isPinned ? (
+                      <ActionButton
+                        action={togglePinReview}
+                        id={r.id}
+                        label={r.isPinned ? "고정 해제" : "고정"}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted">-</span>
+                    )}
                   </Td>
                   <Td>
                     <div className="flex items-center gap-3">
@@ -137,28 +224,27 @@ export default async function ReviewsPage() {
                         action={moveReviewDown}
                         id={r.id}
                         label="아래로"
-                        className={
-                          i === reviews.length - 1 ? "pointer-events-none opacity-30" : undefined
-                        }
+                        className={i === reviews.length - 1 ? "pointer-events-none opacity-30" : undefined}
                       />
                     </div>
                   </Td>
-                  <Td>
-                    <ActionButton
-                      action={deleteReview}
-                      id={r.id}
-                      label="삭제"
-                      confirmText="이 후기를 삭제하시겠습니까?"
-                      tone="danger"
-                    />
-                  </Td>
                 </tr>
-                );
-              })}
+              ))}
             </tbody>
           </Table>
         </TableWrap>
       )}
+
+      <Card className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-ink-soft">열린 작성 초대</h2>
+          <Badge tone={invitations.length > 0 ? "brand" : "soft"}>{invitations.length}건</Badge>
+        </div>
+        <InvitationList
+          invitations={invitations}
+          emptyText="열려 있는 작성 초대가 없습니다. 위 '작성 초대 보내기'로 발급합니다."
+        />
+      </Card>
 
       {backups.length > 0 && (
         <Card className="mt-8">

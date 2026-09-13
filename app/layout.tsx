@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -31,6 +31,10 @@ export const metadata: Metadata = {
   applicationName: BRAND,
   description: DESCRIPTION,
   alternates: { canonical: "/" },
+  // PWA — 매니페스트(app/manifest.ts)와 iOS 홈 화면 아이콘. 설치까지만 다루고 푸시는 별도 회차.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: BRAND, statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
   openGraph: {
     type: "website",
     siteName: BRAND,
@@ -53,6 +57,13 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     images: ["/img/og-axiom.png"],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2353ef",
+  width: "device-width",
+  initialScale: 1,
+  // 확대는 막지 않는다(접근성). 설치 앱에서도 같은 뷰포트를 쓴다.
 };
 
 export default function RootLayout({

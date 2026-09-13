@@ -15,7 +15,9 @@ import {
   studentStatusLabel,
   studentStatusTone,
 } from "./constants";
+import { ActionButton } from "@/components/admin/crm/action-button";
 import { CsvUpload } from "./csv-upload";
+import { deleteStudent } from "./actions";
 import type { Student } from "@/lib/types";
 
 export default async function StudentsPage({
@@ -96,6 +98,7 @@ export default async function StudentsPage({
                 <Th>과목</Th>
                 <Th>등록일</Th>
                 <Th>상태</Th>
+                <Th>삭제</Th>
               </tr>
             </thead>
             <tbody>
@@ -121,6 +124,16 @@ export default async function StudentsPage({
                     <Badge tone={studentStatusTone(s.status)}>
                       {studentStatusLabel(s.status)}
                     </Badge>
+                  </Td>
+                  <Td>
+                    {/* 활성 학생은 서버가 거부한다 — 버튼을 숨기지 않고 눌렀을 때 이유를 보여 준다. */}
+                    <ActionButton
+                      action={deleteStudent}
+                      id={s.id}
+                      label="삭제"
+                      tone="danger"
+                      confirmText={`${s.name} 학생을 삭제할까요?\n일정·수업·과제·성적·결제·포털 관계가 함께 삭제되며 되돌릴 수 없습니다. 상담·동의·후기 기록은 남습니다.`}
+                    />
                   </Td>
                 </tr>
               ))}

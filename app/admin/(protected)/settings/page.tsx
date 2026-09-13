@@ -8,7 +8,7 @@ import { Field, Input } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { BackupPanel } from "@/components/admin/backup-panel";
-import { updateSiteInfo, restoreSetting } from "./actions";
+import { updateRates, updateSiteInfo, restoreSetting } from "./actions";
 import { SecurityCard } from "./security-card";
 
 export default async function SettingsPage() {
@@ -16,11 +16,16 @@ export default async function SettingsPage() {
   if (!session) return null;
   const connected = hasDb();
 
-  const [content, backups] = await Promise.all([
+  const [content, backups, rateBackups] = await Promise.all([
     getSiteContent(session.tenantId),
     listBackups(session.tenantId, "settings:site_info"),
+    listBackups(session.tenantId, "settings:rates"),
   ]);
   const entries = backups.map((b) => ({ id: b.id, createdAt: formatKDateTime(b.createdAt) }));
+  const rateEntries = rateBackups.map((b) => ({
+    id: b.id,
+    createdAt: formatKDateTime(b.createdAt),
+  }));
 
   return (
     <div>
@@ -110,6 +115,44 @@ export default async function SettingsPage() {
           </div>
         </SubmitForm>
         <BackupPanel entries={entries} restoreAction={restoreSetting} />
+      </Card>
+
+      {/* 수업료 — 공개 사이트 계산기·가격표·상담 폼 안내가 전부 이 값을 읽는다. 저장 즉시 반영. */}
+      <Card className="mt-8 max-w-3xl">
+        <h2 className="text-lg font-semibold tracking-tight">수업료</h2>
+        <p className="mt-1 mb-6 text-sm text-muted">
+          시간당 단가와 시범수업료입니다. 수업 안내 페이지의 계산기·가격표, 상담 신청서의
+          시범수업 안내에 즉시 반영됩니다. 이미 발행된 청구서 금액은 바뀌지 않습니다.
+        </p>
+        <SubmitForm action={updateRates} submitLabel="수업료 저장">
+          <div className="grid gap-5 md:grid-cols-3">
+            <Field label="대면 수업 (시간당)" required hint="원 단위 정수">
+              <Input
+                name="inperson"
+                inputMode="numeric"
+                defaultValue={content.rates.inperson}
+                placeholder="80000"
+              />
+            </Field>
+            <Field label="화상 수업 (시간당)" required hint="원 단위 정수">
+              <Input
+                name="video"
+                inputMode="numeric"
+                defaultValue={content.rates.video}
+                placeholder="60000"
+              />
+            </Field>
+            <Field label="시범수업료 (화상 1시간)" required hint="원 단위 정수">
+              <Input
+                name="trial"
+                inputMode="numeric"
+                defaultValue={content.rates.trial}
+                placeholder="50000"
+              />
+            </Field>
+          </div>
+        </SubmitForm>
+        <BackupPanel entries={rateEntries} restoreAction={restoreSetting} />
       </Card>
 
       {/* 관리자 보안 — 전 세션 로그아웃·운영자 이메일 교체 (P-10). DB 미연결이면 동작하지 않는다(액션이 안내). */}

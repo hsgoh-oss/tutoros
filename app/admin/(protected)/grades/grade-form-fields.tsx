@@ -5,14 +5,16 @@ import type { GradeRecord } from "@/lib/types";
 export function GradeFormFields({
   studentOptions,
   record,
+  defaultStudentId,
 }: {
   studentOptions: StudentOption[];
   record?: GradeRecord;
+  defaultStudentId?: string;
 }) {
   return (
     <div className="grid gap-5 md:grid-cols-2">
       <Field label="학생" required>
-        <Select name="studentId" defaultValue={record?.studentId ?? ""}>
+        <Select name="studentId" defaultValue={record?.studentId ?? defaultStudentId ?? ""}>
           <option value="" disabled>
             학생을 선택하세요
           </option>

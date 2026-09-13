@@ -74,6 +74,9 @@ export const consultFormSchema = z
     guardianName: z.string().trim().optional(),
     guardianPhone: z.string().optional(),
     guardianConsent: z.boolean(),
+    // 동의 구조(2026-09): 이용약관(필수) · 상담 개인정보 처리(필수) · AI 처리·국외이전(선택) · 마케팅(선택).
+    // 후기·사례 공개·이미지 공개·미성년 게시 동의는 상담이 아니라 후기 작성 폼(components/public/review-submit)에서 건별로 받는다.
+    termsConsent: z.boolean(),
     privacyConsent: z.boolean(),
     // 외부 AI 처리 위탁 — **선택 동의**다(정본 D-09 「목적별 선택 동의·거절 시 수동 대체」).
     // 예전에는 필수 동의 문구 안에 묶여 있어서, 접수하면 무조건 동의로 기록됐다.
@@ -84,11 +87,18 @@ export const consultFormSchema = z
     checklistItems: z.array(z.string()),
   })
   .superRefine((data, ctx) => {
+    if (!data.termsConsent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["termsConsent"],
+        message: "이용약관 동의는 필수입니다.",
+      });
+    }
     if (!data.privacyConsent) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["privacyConsent"],
-        message: "개인정보 수집·이용 동의는 필수입니다.",
+        message: "상담 개인정보 처리 동의는 필수입니다.",
       });
     }
 

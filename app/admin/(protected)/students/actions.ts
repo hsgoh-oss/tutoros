@@ -1043,3 +1043,97 @@ export async function revokePortalRelation(
   revalidatePath(`/admin/students/${studentId}`);
   return result;
 }
+
+/* ---------- 학생 삭제 ---------- */
+
+/**
+ * 학생 삭제 — 학생 행과 그 학생에 매달린 기록(일정·수업·과제·성적·결제·등록·포털 관계·자료 메타)을
+ * DB 제약(on delete cascade)으로 함께 지운다. 상담·동의·후기·AI 리포트는 학생 참조만 끊기고 남는다
+ * (on delete set null) — 동의 증명과 후기 철회 증명은 학생이 사라져도 보존해야 하는 기록이다.
+ *
+ * 되돌릴 수 없는 개인정보 파기라 fail-closed 감사(runCritical · privacy)로 감싸고, 직전 학생 행을
+ * backups(students)에 남겨 "무엇을 지웠는지"는 대조할 수 있게 한다. 스토리지 파일(자료·과제 첨부)은
+ * 여기서 지우지 않는다 — 삭제 결과에 그 사실을 warning으로 돌려 운영자가 알게 한다.
+ *
+ * 활성(active) 학생은 지우지 않는다: 살아 있는 등록·잔여 회차·미납이 있는 학생을 한 번의 클릭으로
+ * 없애면 정산 근거까지 사라진다. 먼저 상태를 종료·보류로 바꾸고 지우게 한다.
+ */
+export async function deleteStudent(id: string): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+  if (!id) return { ok: false, error: "잘못된 요청입니다." };
+
+  const db = createServiceClient()!;
+  const { data: existing, error: fetchError } = await db
+    .from("students")
+    .select("*")
+    .eq("tenant_id", session.tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError || !existing) {
+    console.error("[students] fetch before delete failed", fetchError);
+    return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
+  }
+  const row = existing as { name: string; status: Student["status"] };
+  if (row.status === "active") {
+    return {
+      ok: false,
+      error:
+        "수업 중(활성)인 학생은 삭제할 수 없습니다. 기본 정보에서 상태를 종료 또는 보류로 바꾼 뒤 삭제해 주세요.",
+    };
+  }
+
+  // 미납 청구가 남아 있으면 정산 근거가 사라진다 — 먼저 정리하게 한다.
+  const { count: unpaid } = await db
+    .from("payments")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", session.tenantId)
+    .eq("student_id", id)
+    .in("status", ["pending", "overdue"]);
+  if ((unpaid ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `미납·청구 중인 결제가 ${unpaid}건 있습니다. 결제 관리에서 완납 처리하거나 취소한 뒤 삭제해 주세요.`,
+    };
+  }
+
+  const { recordBackup } = await import("@/lib/data/backup");
+  await recordBackup(session.tenantId, "students", [existing]);
+
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "delete",
+      targetType: "student",
+      targetId: id,
+      summary: `학생 삭제 — ${row.name}`,
+      category: "privacy",
+      before: { status: row.status },
+      after: null,
+      reason: "운영자 요청 — 학생 관리에서 삭제(연결 기록 cascade · 동의·후기·상담은 참조만 해제)",
+    },
+    async (): Promise<CrmActionResult> => {
+      const { error } = await db
+        .from("students")
+        .delete()
+        .eq("tenant_id", session.tenantId)
+        .eq("id", id);
+      if (error) {
+        console.error("[students] delete failed", error);
+        return { ok: false, error: "학생 삭제 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
+
+  revalidatePath("/admin/students");
+  revalidatePath("/admin/dashboard");
+  return {
+    ok: true,
+    warning:
+      "학생과 연결 기록을 삭제했습니다. 스토리지에 올린 자료·과제 첨부 파일은 남아 있으니 필요하면 Supabase Storage에서 따로 정리해 주세요.",
+  };
+}

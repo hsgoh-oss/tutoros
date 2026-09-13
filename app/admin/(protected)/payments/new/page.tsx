@@ -1,12 +1,19 @@
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions } from "@/lib/data/crm";
+import { isUuid } from "@/lib/uuid";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { PAYMENT_METHOD_OPTIONS } from "../constants";
 import { createPayment } from "../actions";
 
-export default async function NewPaymentPage() {
+export default async function NewPaymentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ student?: string }>;
+}) {
+  const { student } = await searchParams;
+  const defaultStudentId = isUuid(student) ? student : "";
   const session = await getAdminSession();
   const students = session ? await listStudentOptions(session.tenantId) : [];
 
@@ -36,7 +43,7 @@ export default async function NewPaymentPage() {
         >
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="학생" required>
-              <Select name="studentId" defaultValue="">
+              <Select name="studentId" defaultValue={defaultStudentId}>
                 <option value="" disabled>
                   학생 선택
                 </option>

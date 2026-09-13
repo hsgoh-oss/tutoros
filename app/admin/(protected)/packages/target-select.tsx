@@ -14,8 +14,16 @@ export interface TargetOption {
   studentName: string;
 }
 
-export function PackageTargetSelect({ options }: { options: TargetOption[] }) {
-  const [selected, setSelected] = useState("");
+export function PackageTargetSelect({
+  options,
+  defaultStudentId,
+}: {
+  options: TargetOption[];
+  defaultStudentId?: string;
+}) {
+  const [selected, setSelected] = useState(
+    () => options.find((o) => o.studentId === defaultStudentId)?.contractId ?? "",
+  );
   const current = options.find((o) => o.contractId === selected) ?? null;
 
   return (

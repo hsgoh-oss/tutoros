@@ -790,10 +790,13 @@ interface ReviewMeta {
   track?: string;
   source?: string;
   reviewed_at?: string;
+  before_label?: string;
+  after_label?: string;
 }
 
 interface ReviewRow {
   id: string;
+  kind?: Review["kind"] | null;
   reviewer_type: Review["reviewerType"];
   content: string;
   rating: number;
@@ -803,21 +806,30 @@ interface ReviewRow {
   screenshots: string[] | null;
   ai_tags: string[] | null;
   is_pinned: boolean;
+  public_name?: string | null;
+  images_public?: boolean | null;
 }
 
+// 관리자 조회용 — 검토 근거로 쓰는 증빙은 공개 동의와 무관하게 전부 싣는다(공개 로더와 다른 점).
+// 검토 이력·작성자 등 워크플로 컬럼까지 필요하면 lib/data/reviews.ts(ReviewRecord)를 쓴다.
 function mapReview(row: ReviewRow): Review {
   return {
     id: row.id,
+    kind: row.kind ?? "review",
     reviewerType: row.reviewer_type,
     content: row.content,
     rating: row.rating,
     beforeGrade: row.before_grade,
     afterGrade: row.after_grade,
+    beforeLabel: row.meta?.before_label ?? null,
+    afterLabel: row.meta?.after_label ?? null,
     region: row.meta?.region ?? null,
     grade: row.meta?.grade ?? null,
     track: row.meta?.track ?? null,
     source: row.meta?.source ?? null,
     reviewedAt: row.meta?.reviewed_at ?? null,
+    publicName: row.public_name ?? null,
+    imagesPublic: row.images_public ?? true,
     screenshots: row.screenshots ?? [],
     aiTags: row.ai_tags ?? [],
     isPinned: row.is_pinned,

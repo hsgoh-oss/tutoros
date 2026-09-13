@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
-import { hasDb } from "@/lib/data/crm";
+import { getStudent, hasDb } from "@/lib/data/crm";
 import { listPackageTargets, listPackages } from "@/lib/data/packages";
+import { isUuid } from "@/lib/uuid";
+import type { LessonPackage, Student } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/form";
@@ -31,15 +33,27 @@ import {
 export default async function PackagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; student?: string }>;
 }) {
-  const { status } = await searchParams;
+  const { status, student } = await searchParams;
+  const filterStudentId = isUuid(student) ? student : undefined;
   const session = await getAdminSession();
   const connected = hasDb();
 
-  const all = session ? await listPackages(session.tenantId) : [];
+  let all: LessonPackage[] = [];
+  let filteredStudent: Student | null = null;
+  if (session) {
+    [all, filteredStudent] = await Promise.all([
+      listPackages(session.tenantId),
+      filterStudentId ? getStudent(session.tenantId, filterStudentId) : Promise.resolve(null),
+    ]);
+  }
   const filterStatus = isPackageStatus(status) ? status : undefined;
-  const rows = filterStatus ? all.filter((p) => p.status === filterStatus) : all;
+  // 상태 필터·학생 필터는 목록(rows)에만 걸고, 위 집계 카드는 테넌트 전체 기준을 유지한다
+  // (상태 FilterChips가 이미 같은 방식으로 동작한다).
+  let rows = all;
+  if (filterStatus) rows = rows.filter((p) => p.status === filterStatus);
+  if (filterStudentId) rows = rows.filter((p) => p.studentId === filterStudentId);
 
   const activeCount = all.filter((p) => p.status === "active").length;
   const draftCount = all.filter((p) => p.status === "draft").length;
@@ -106,6 +120,7 @@ export default async function PackagesPage({
                   studentId: t.studentId,
                   studentName: t.studentName,
                 }))}
+                defaultStudentId={filterStudentId}
               />
               <Field label="묶음 이름" hint="예: 2026 가을 정규">
                 <Input name="title" maxLength={60} />
@@ -137,6 +152,20 @@ export default async function PackagesPage({
               </Field>
             </div>
           </SubmitForm>
+        </Card>
+      )}
+
+      {filterStudentId && (
+        <Card className="mb-6 flex items-center justify-between">
+          <span className="text-sm font-bold text-ink-soft">
+            {filteredStudent?.name ?? "선택한 학생"} 학생으로 필터링됨
+          </span>
+          <Link
+            href="/admin/packages"
+            className="text-xs font-bold text-brand-700 hover:underline"
+          >
+            학생 필터 해제
+          </Link>
         </Card>
       )}
 

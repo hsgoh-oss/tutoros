@@ -67,29 +67,79 @@ export interface RecruitStatus {
 }
 
 /**
- * 후기·성적사례 상태(00016 — S-01·S-03 정본 해소).
- * draft(등록·제출 — 비공개) → approved(검토 승인 — 아직 비공개) → published(공개용 최소 본 게시)
- * → retracted(철회 — 즉시 공개 중단, 행·이력은 보존).
- * 공개 콘텐츠는 published만 노출하며, 철회 후 재공개는 이전 본을 되돌리지 않고
- * 새 제출본을 다시 검토·승인·게시한다(재활성 금지 — 정정·철회는 adjustments 이력으로 남긴다).
+ * 후기·성적사례 상태(00016 → 00025 — S-01·S-03 정본 해소).
+ *
+ *   submitted(작성자 제출) → in_review(검토 시작) → revision_requested(작성자에게 수정 요청 — 재제출로 submitted)
+ *                                               → rejected(반려 — 공개 금지·사유 안내)
+ *                                               → approved(승인) → [마스킹·최소정보 확인] → published(게시) → retracted(철회)
+ *   draft = 00016 이전 운영자 대필 등록분(호환). submitted와 같은 자리로 취급한다.
+ *
+ * 공개 콘텐츠는 published만 노출한다. 철회는 행을 지우지 않고 공개만 중단하며(철회 증명 최소 보존),
+ * 재공개는 이전 본을 되돌리지 않고 새 제출본을 다시 검토·승인·게시한다(재활성 금지).
+ * 운영자는 본문을 고치지 못한다 — 상태 전환만 할 수 있고, 본문 수정은 작성자 재제출로만 이뤄진다.
  */
-export type ReviewStatus = "draft" | "approved" | "published" | "retracted";
+export type ReviewStatus =
+  | "draft"
+  | "submitted"
+  | "in_review"
+  | "revision_requested"
+  | "rejected"
+  | "approved"
+  | "published"
+  | "retracted";
+
+/** 후기(review) / 성적 향상 사례(case). 사례는 전·후 등급과 그 라벨(시험명)을 갖는다. */
+export type ReviewKind = "review" | "case";
 
 export interface Review {
   id: string;
+  kind: ReviewKind;
   reviewerType: "student" | "parent";
   content: string;
   rating: number; // 1~5
   beforeGrade: string | null;
   afterGrade: string | null;
+  /** 사례의 전·후 라벨(예: "고1 2학기 내신") — meta.before_label / after_label. */
+  beforeLabel: string | null;
+  afterLabel: string | null;
   region: string | null;
   grade: string | null; // 고1·고2·고3·재수
   track: string | null; // 문과·이과
   source: string | null; // 김과외 등
   reviewedAt: string | null; // YYYY-MM-DD
+  /** 공개용 마스킹 이름(예: 홍*동). 옛 대필 등록분은 null. */
+  publicName: string | null;
+  /**
+   * 이미지 공개 동의(review_image) 여부. false면 screenshots는 검토 근거일 뿐 공개면에 싣지 않는다
+   * — 공개 로더(lib/data/content.ts)가 이 값으로 걸러 빈 배열로 내린다.
+   */
+  imagesPublic: boolean;
   screenshots: string[];
   aiTags: string[];
   isPinned: boolean;
+}
+
+/** 작성 초대 상태 — intake_forms와 같은 네 가지. 만료·종료된 링크는 되살리지 않는다(재발급은 새 행). */
+export type ReviewInvitationStatus = "sent" | "submitted" | "closed" | "expired";
+
+export interface ReviewInvitation {
+  id: string;
+  studentId: string | null;
+  studentName: string;
+  authorRole: "student" | "parent";
+  authorName: string;
+  authorPhone: string;
+  status: ReviewInvitationStatus;
+  /** 수정 요청 재발급이면 원 후기 id — 작성 화면이 기존 본을 채워 주고 제출은 그 행을 갱신한다. */
+  reviewId: string | null;
+  sentAt: string;
+  expiresAt: string | null;
+  submittedAt: string | null;
+  closedAt: string | null;
+  closeReason: string | null;
+  createdBy: string | null;
+  /** status='sent'이고 기한 전 — 작성 화면이 열리는 유일한 조건. */
+  isOpen: boolean;
 }
 
 export interface Faq {
@@ -340,16 +390,25 @@ export interface Consultation {
   createdAt: string;
 }
 
+/**
+ * 동의 항목(consents.item — 00025).
+ *   terms(이용약관·필수) · privacy(상담 개인정보 처리·필수) · overseas_ai(AI 처리·국외이전·선택)
+ *   · marketing(마케팅·선택) · review(후기·사례 공개 — 건별 선택) · review_image(사례 이미지 공개 —
+ *   이미지가 있을 때 별도 선택) · guardian(미성년 — 법정대리인 동의) · student_phone(학생 연락처 수집)
+ */
 export type ConsentItem =
+  | "terms"
   | "privacy"
   | "overseas_ai"
   | "marketing"
   | "review"
+  | "review_image"
+  | "guardian"
   | "student_phone";
 
 export interface Consent {
   id: string;
-  subjectType: "consultation" | "student" | "guardian";
+  subjectType: "consultation" | "student" | "guardian" | "review";
   subjectId: string;
   item: ConsentItem;
   policyVersion: string;

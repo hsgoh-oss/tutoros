@@ -22,6 +22,7 @@ interface DdayRow {
 
 interface ReviewRow {
   id: string;
+  kind?: "review" | "case" | null;
   reviewer_type: "student" | "parent";
   content: string;
   rating: number;
@@ -33,10 +34,14 @@ interface ReviewRow {
     track?: string;
     source?: string;
     reviewed_at?: string;
+    before_label?: string;
+    after_label?: string;
   } | null;
   screenshots: string[] | null;
   ai_tags: string[] | null;
   is_pinned: boolean;
+  public_name?: string | null;
+  images_public?: boolean | null;
 }
 
 interface FaqRow {
@@ -147,22 +152,32 @@ export const getSiteContent = cache(
 
   const reviews: Review[] =
     reviewsRes.data && reviewsRes.data.length > 0
-      ? (reviewsRes.data as ReviewRow[]).map((r) => ({
-          id: r.id,
-          reviewerType: r.reviewer_type,
-          content: r.content,
-          rating: r.rating,
-          beforeGrade: r.before_grade,
-          afterGrade: r.after_grade,
-          region: r.meta?.region ?? null,
-          grade: r.meta?.grade ?? null,
-          track: r.meta?.track ?? null,
-          source: r.meta?.source ?? null,
-          reviewedAt: r.meta?.reviewed_at ?? null,
-          screenshots: (r.screenshots ?? []).map(publicScreenshotUrl),
-          aiTags: r.ai_tags ?? [],
-          isPinned: r.is_pinned,
-        }))
+      ? (reviewsRes.data as ReviewRow[]).map((r) => {
+          // 이미지 공개 동의(review_image · 00025)가 없는 건은 증빙을 공개면에 싣지 않는다 —
+          // 컬럼이 없던 시절(00025 이전)의 행은 운영자가 동의 확인 후 등록한 본이라 공개로 간주한다.
+          const imagesPublic = r.images_public ?? true;
+          return {
+            id: r.id,
+            kind: r.kind ?? "review",
+            reviewerType: r.reviewer_type,
+            content: r.content,
+            rating: r.rating,
+            beforeGrade: r.before_grade,
+            afterGrade: r.after_grade,
+            beforeLabel: r.meta?.before_label ?? null,
+            afterLabel: r.meta?.after_label ?? null,
+            region: r.meta?.region ?? null,
+            grade: r.meta?.grade ?? null,
+            track: r.meta?.track ?? null,
+            source: r.meta?.source ?? null,
+            reviewedAt: r.meta?.reviewed_at ?? null,
+            publicName: r.public_name ?? null,
+            imagesPublic,
+            screenshots: imagesPublic ? (r.screenshots ?? []).map(publicScreenshotUrl) : [],
+            aiTags: r.ai_tags ?? [],
+            isPinned: r.is_pinned,
+          };
+        })
       : DEFAULT_CONTENT.reviews;
 
   const faqs: Faq[] =

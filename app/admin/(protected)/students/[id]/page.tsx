@@ -15,7 +15,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Field, Textarea } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
+import { buttonClass } from "@/components/ui/button";
+import { ActionButton } from "@/components/admin/crm/action-button";
 import {
+  deleteStudent,
   invitePortalRelation,
   reEnrollStudent,
   resendPortalInvite,
@@ -27,6 +30,8 @@ import {
   type PortalRelationItem,
 } from "../portal-relations-card";
 import { StudentFormFields } from "../student-form-fields";
+import { ReviewInviteCard } from "../review-invite-card";
+import { listReviewInvitations } from "@/lib/data/reviews";
 
 import { classTypeLabel, studentStatusLabel, studentStatusTone } from "../constants";
 import { consentItemLabel } from "../../consultations/constants";
@@ -142,13 +147,14 @@ export default async function StudentDetailPage({
   const student = await getStudent(session.tenantId, id);
   if (!student) notFound();
 
-  const [summary, consents, notifications, materials, portalRelations] =
+  const [summary, consents, notifications, materials, portalRelations, reviewInvitations] =
     await Promise.all([
       getStudentSummary(session.tenantId, id),
       listConsents(session.tenantId, "student", id),
       listStudentNotifications(session.tenantId, id, 10),
       listMaterials(session.tenantId, id),
       listPortalRelations(session.tenantId, id),
+      listReviewInvitations(session.tenantId, { studentId: id }),
     ]);
 
   return (
@@ -174,6 +180,31 @@ export default async function StudentDetailPage({
           ← 목록으로
         </Link>
       </div>
+
+      {/* 이 학생으로 이어지는 다음 행동 — 상세에서 다른 모듈로 건너뛸 때 학생을 다시 고르지 않게
+          학생 id를 쿼리로 넘긴다. 각 화면이 ?student= 를 읽어 필터·기본값으로 쓴다. */}
+      <nav
+        aria-label="학생 관련 바로가기"
+        className="mb-8 flex flex-wrap gap-2 rounded-panel border border-line bg-white p-3"
+      >
+        <span className="inline-flex min-h-[var(--ui-h-sm)] items-center pr-2 text-xs font-bold text-muted">
+          바로가기
+        </span>
+        {[
+          { href: `/admin/schedules/new?student=${student.id}`, label: "+ 수업 일정" },
+          { href: `/admin/lessons/new?student=${student.id}`, label: "+ 수업 기록" },
+          { href: `/admin/homework/new?student=${student.id}`, label: "+ 과제" },
+          { href: `/admin/grades/new?student=${student.id}`, label: "+ 성적" },
+          { href: `/admin/payments/new?student=${student.id}`, label: "+ 청구서" },
+          { href: `/admin/reports/new?student=${student.id}`, label: "+ AI 리포트" },
+          { href: `/admin/packages?student=${student.id}`, label: "수업 묶음" },
+          { href: `/admin/enrollments?student=${student.id}`, label: "정규 등록" },
+        ].map((item) => (
+          <Link key={item.href} href={item.href} className={buttonClass("ghost", "sm")}>
+            {item.label}
+          </Link>
+        ))}
+      </nav>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -474,6 +505,35 @@ export default async function StudentDetailPage({
             )}
           </Card>
 
+          {/* S-01 후기·사례 작성 초대 — 자동 요청은 없다. 운영자가 여기서 직접 발급해야만 링크가 나간다. */}
+          <Card>
+            <ReviewInviteCard
+              studentId={student.id}
+              studentName={student.name}
+              parentPhone={student.parentPhone}
+              studentPhone={student.studentPhone}
+              invitations={reviewInvitations}
+            />
+          </Card>
+
+          {/* 삭제 — 되돌릴 수 없는 파기라 카드 맨 아래, 평소엔 가라앉힌 링크 한 줄로 둔다.
+              활성·미납이 있으면 서버가 거부하고 이유를 알려 준다(버튼을 숨겨 두면 왜 안 되는지 모른다). */}
+          <Card className="border-rose-100">
+            <h2 className="mb-2 text-sm font-semibold text-rose-700">학생 삭제</h2>
+            <p className="mb-3 text-xs leading-relaxed text-muted">
+              일정·수업·과제·성적·결제·포털 관계가 함께 삭제됩니다. 상담·동의·후기 기록은
+              학생 연결만 끊긴 채 보존됩니다. 수업 중(활성)이거나 미납 청구가 있으면 삭제되지
+              않습니다.
+            </p>
+            <ActionButton
+              action={deleteStudent}
+              id={student.id}
+              label="이 학생 삭제"
+              tone="danger"
+              redirectTo="/admin/students"
+              confirmText={`${student.name} 학생을 삭제할까요?\n연결된 기록이 함께 삭제되며 되돌릴 수 없습니다.`}
+            />
+          </Card>
         </div>
       </div>
     </div>

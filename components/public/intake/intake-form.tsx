@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card } from "@/components/ui/card";
@@ -19,6 +18,7 @@ import {
   type IntakeKind,
 } from "@/components/public/intake/schema";
 import { submitIntakeForm } from "@/app/f/[token]/actions";
+import { ConsentFields } from "@/components/public/consult/consent-fields";
 
 // 신청폼 작성 화면(공개) — T-01 시범 신청폼 · R-01 정규 신청폼.
 // 상담 폼(components/public/consult/consult-form.tsx)의 구조·동의·오류 표시 관례를 그대로 따른다.
@@ -72,6 +72,7 @@ export function IntakeForm({
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<IntakeFormInput, unknown, IntakeFormValues>({
     resolver: zodResolver(intakeFormSchema),
@@ -97,6 +98,7 @@ export function IntakeForm({
       hours: undefined,
       freq: undefined,
       classType: "unspecified",
+      termsConsent: false,
       privacyConsent: false,
       overseasAiConsent: false,
       marketingConsent: false,
@@ -105,6 +107,12 @@ export function IntakeForm({
 
   const contractorSame = watch("contractorSameAsGuardian");
   const payerSame = watch("payerSameAsContractor");
+  const consentValues = {
+    termsConsent: watch("termsConsent"),
+    privacyConsent: watch("privacyConsent"),
+    overseasAiConsent: watch("overseasAiConsent"),
+    marketingConsent: watch("marketingConsent"),
+  };
 
   async function onSubmit(values: IntakeFormValues) {
     setSubmitState("submitting");
@@ -474,71 +482,25 @@ export function IntakeForm({
         </>
       )}
 
-      {/* 동의 — 상담 폼과 같은 문구·같은 필수 판정(개인정보 수집·이용). */}
-      <Card className="space-y-3 p-8">
-        <label className="flex min-h-12 items-start gap-3">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
-            {...register("privacyConsent")}
-            aria-invalid={errors.privacyConsent ? true : undefined}
-            aria-describedby={
-              errors.privacyConsent ? "intake-privacyconsent-error" : undefined
-            }
-          />
-          <span className="text-sm leading-relaxed text-ink-soft">
-            [필수] 개인정보 수집·이용 동의 (TUTOR OS 플랫폼 처리위탁 포함){" "}
-            <Link
-              href="/privacy"
-              className="font-bold text-brand-600 underline underline-offset-2"
-            >
-              자세히 보기
-            </Link>
-          </span>
-        </label>
-        <ErrorText
-          id="intake-privacyconsent-error"
-          message={errors.privacyConsent?.message}
-        />
-
-        {/* 필수에서 떼어낸 항목 — 거절해도 신청은 그대로 진행되고, 리포트만 선생님이 직접 쓴다. */}
-        <label className="flex min-h-12 items-start gap-3">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
-            {...register("overseasAiConsent")}
-          />
-          <span className="text-sm leading-relaxed text-ink-soft">
-            [선택] AI 리포트 작성을 위한 국외 처리 위탁 동의 — 이름을 가린 학습 기록을
-            해외 AI 사업자에 전달합니다. 동의하지 않으셔도 수업에는 영향이 없습니다.{" "}
-            <Link
-              href="/privacy"
-              className="font-bold text-brand-600 underline underline-offset-2"
-            >
-              자세히 보기
-            </Link>
-          </span>
-        </label>
-
-        <label className="flex min-h-12 items-start gap-3">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-200"
-            {...register("marketingConsent")}
-          />
-          <span className="text-sm leading-relaxed text-ink-soft">
-            [선택] 마케팅·수업 안내 수신 동의
-          </span>
-        </label>
-
-        {isRegular && (
-          // R-03 예외 — 신청폼 동의만으로 계약 수락으로 처리하지 않는다. 화면에서도 구분해 알린다.
-          <p className="rounded-panel bg-soft px-4 py-3 text-xs leading-relaxed text-muted">
-            이 동의는 신청서 접수를 위한 것으로, 수업 계약의 수락과는 다릅니다.
-            계약 조건은 확인 후 별도로 안내드리고 그때 다시 동의를 받습니다.
-          </p>
-        )}
-      </Card>
+      {/* 동의 — 상담 폼과 같은 구조(components/public/consult/consent-fields.tsx). */}
+      <ConsentFields
+        register={register}
+        errors={errors}
+        values={consentValues}
+        onToggleAll={(checked) => {
+          setValue("termsConsent", checked, { shouldValidate: checked });
+          setValue("privacyConsent", checked, { shouldValidate: checked });
+          setValue("overseasAiConsent", checked);
+          setValue("marketingConsent", checked);
+        }}
+        idPrefix="intake"
+        privacyLabel="개인정보 수집·이용 동의 (TUTOR OS 플랫폼 처리위탁 포함)"
+        footnote={
+          isRegular
+            ? "이 동의는 신청서 접수를 위한 것으로, 수업 계약의 수락과는 다릅니다. 계약 조건은 확인 후 별도로 안내드리고 그때 다시 동의를 받습니다."
+            : undefined
+        }
+      />
 
       {serverError && (
         <p

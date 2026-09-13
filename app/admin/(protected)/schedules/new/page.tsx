@@ -3,10 +3,17 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions } from "@/lib/data/crm";
+import { isUuid } from "@/lib/uuid";
 import { CLASS_TYPE_OPTIONS } from "../constants";
 import { createSchedule } from "../actions";
 
-export default async function NewSchedulePage() {
+export default async function NewSchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ student?: string }>;
+}) {
+  const { student } = await searchParams;
+  const defaultStudentId = isUuid(student) ? student : "";
   const session = await getAdminSession();
   const students = session ? await listStudentOptions(session.tenantId) : [];
 
@@ -24,7 +31,7 @@ export default async function NewSchedulePage() {
         >
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="학생" required>
-              <Select name="studentId" defaultValue="">
+              <Select name="studentId" defaultValue={defaultStudentId}>
                 <option value="" disabled>
                   학생을 선택하세요
                 </option>

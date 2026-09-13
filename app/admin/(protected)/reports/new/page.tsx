@@ -1,5 +1,6 @@
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions } from "@/lib/data/crm";
+import { isUuid } from "@/lib/uuid";
 import { Card } from "@/components/ui/card";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { createReport } from "../actions";
@@ -11,6 +12,7 @@ export default async function NewReportPage({
   searchParams: Promise<{ student?: string }>;
 }) {
   const { student } = await searchParams;
+  const defaultStudentId = isUuid(student) ? student : undefined;
   const session = await getAdminSession();
   const studentOptions = session ? await listStudentOptions(session.tenantId) : [];
 
@@ -25,7 +27,7 @@ export default async function NewReportPage({
 
       <Card className="max-w-3xl">
         <SubmitForm action={createReport} submitLabel="생성" redirectTo="/admin/reports">
-          <ReportFormFields studentOptions={studentOptions} defaultStudentId={student} />
+          <ReportFormFields studentOptions={studentOptions} defaultStudentId={defaultStudentId} />
         </SubmitForm>
       </Card>
     </div>

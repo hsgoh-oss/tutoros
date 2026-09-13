@@ -121,6 +121,65 @@ export async function updateSiteInfo(formData: FormData): Promise<CrmActionResul
   return result;
 }
 
+/**
+ * 수업료 저장 — 대면·화상 시간당 단가와 시범수업료(rates). 공개 사이트의 계산기·가격표·상담 폼 안내와
+ * 구조화 데이터(Offer)가 전부 이 값을 읽는다. 금전 안내가 바뀌는 일이라 fail-closed 감사(money)로 감싼다.
+ */
+export async function updateRates(formData: FormData): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, error: "인증이 필요합니다." };
+  if (!hasDb()) return { ok: false, error: DB_ERROR };
+
+  const parse = (key: string): number | null => {
+    const raw = String(formData.get(key) ?? "").replace(/[^\d]/g, "");
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 && n <= 10_000_000 ? n : null;
+  };
+  const inperson = parse("inperson");
+  const video = parse("video");
+  const trial = parse("trial");
+  if (inperson === null || video === null || trial === null) {
+    return { ok: false, error: "수업료는 1원 이상 1,000만 원 이하의 정수로 입력해 주세요." };
+  }
+
+  const current = await getSiteContent(session.tenantId);
+  const next = { inperson, video, trial };
+  const changed =
+    current.rates.inperson !== inperson ||
+    current.rates.video !== video ||
+    current.rates.trial !== trial;
+  if (!changed) return { ok: true, warning: "변경된 값이 없습니다." };
+
+  const result = await runCritical(
+    {
+      tenantId: session.tenantId,
+      actorEmail: session.email,
+      action: "settings_update_rates",
+      targetType: "site_settings",
+      targetId: null,
+      summary: `수업료 변경 — 대면 ${inperson.toLocaleString("ko-KR")}원 · 화상 ${video.toLocaleString("ko-KR")}원 · 시범 ${trial.toLocaleString("ko-KR")}원`,
+      category: "money",
+      before: current.rates,
+      after: next,
+      reason: "설정 페이지에서 수업료·시범수업료 변경",
+    },
+    async (): Promise<CrmActionResult> => {
+      await recordBackup(session.tenantId, "settings:rates", current.rates);
+      const { error } = await upsertSetting(session.tenantId, "rates", next);
+      if (error) {
+        console.error("[settings] rates update failed", error);
+        return { ok: false, error: "수업료 저장 중 오류가 발생했습니다." };
+      }
+      return { ok: true };
+    },
+  );
+  if (!result.ok) return result;
+
+  revalidatePath("/", "layout");
+  return result;
+}
+
 /** target(예: settings:site_info)에서 키를 복원해 해당 site_settings 행에 되돌려 쓴다. */
 export async function restoreSetting(backupId: string): Promise<CrmActionResult> {
   const session = await getAdminSession();

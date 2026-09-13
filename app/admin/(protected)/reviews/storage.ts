@@ -129,6 +129,35 @@ export async function removeScreenshotObjects(
   return { ok: true };
 }
 
+/**
+ * 철회(S-03) — 공개 사본만 지운다. 비공개 원본(review-evidence)은 남긴다: 철회 뒤에도 "무엇을
+ * 공개했었는지"는 보존·파기 흐름(D-04 review_consent 3년)이 판단할 대상이고, 여기서 함께 지우면
+ * 그 근거가 사라진다. 레거시 public URL(과거 public 버킷 원본)도 공개 중단이 목적이므로 지운다.
+ * 실패는 성공으로 표시하지 않는다 — 호출부가 철회 전환을 멈춘다(공개가 실제로 멈춰야 철회다).
+ */
+export async function removePublicCopies(
+  db: Db,
+  entries: string[],
+): Promise<RemoveObjectsResult> {
+  const legacyPaths = entries
+    .filter((e) => e.startsWith("http://") || e.startsWith("https://"))
+    .map((url) => storageObjectPath(url))
+    .filter((p): p is string => Boolean(p));
+  const evidencePaths = entries.filter((e) => !isLegacyPublicUrl(e));
+  const publicPaths = [...legacyPaths, ...evidencePaths];
+  if (publicPaths.length === 0) return { ok: true };
+
+  const { error } = await db.storage.from(REVIEWS_BUCKET).remove(publicPaths);
+  if (error) {
+    console.error("[reviews] 공개 사본 제거 실패", error);
+    return {
+      ok: false,
+      error: `공개 사본(${REVIEWS_BUCKET})을 지우지 못해 철회를 중단했습니다. 잠시 후 다시 시도해 주세요.`,
+    };
+  }
+  return { ok: true };
+}
+
 /** 관리자 화면용 스크린샷 뷰 — 저장 원문(stored)과 표시 URL을 분리해 전달한다. */
 export interface ScreenshotView {
   /** DB에 저장된 원문(레거시 URL 또는 증빙 경로) — 수정 폼의 삭제 체크박스 값으로 그대로 쓴다. */

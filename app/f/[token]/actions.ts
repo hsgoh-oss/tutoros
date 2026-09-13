@@ -114,6 +114,7 @@ export async function submitIntakeForm(
     via: "form",
   };
   const consentRows = [
+    { ...consentBase, item: "terms" },
     { ...consentBase, item: "privacy" },
     ...(parsed.data.overseasAiConsent ? [{ ...consentBase, item: "overseas_ai" }] : []),
     ...(parsed.data.marketingConsent ? [{ ...consentBase, item: "marketing" }] : []),

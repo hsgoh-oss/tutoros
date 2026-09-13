@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
-import { formatKDate, hasDb, listConsultations, listStudentOptions } from "@/lib/data/crm";
+import {
+  formatKDate,
+  getStudent,
+  hasDb,
+  listConsultations,
+  listStudentOptions,
+} from "@/lib/data/crm";
 import { getSeatAvailability, listEnrollments, listForms } from "@/lib/data/intake";
+import { isUuid } from "@/lib/uuid";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,16 +37,21 @@ import {
 export default async function EnrollmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; student?: string }>;
 }) {
-  const { status } = await searchParams;
+  const { status, student } = await searchParams;
+  const filterStudentId = isUuid(student) ? student : undefined;
   const session = await getAdminSession();
   const connected = hasDb();
 
-  // 상태 필터는 화면에서 건다 — 집계 카드가 전체를 보고, 표만 좁힌다(같은 목록을 두 번 읽지 않는다).
+  // 상태·학생 필터는 화면에서 건다 — 집계 카드가 전체를 보고, 표만 좁힌다(같은 목록을 두 번 읽지 않는다).
   const all = session ? await listEnrollments(session.tenantId) : [];
+  const filteredStudent =
+    session && filterStudentId ? await getStudent(session.tenantId, filterStudentId) : null;
   const filterStatus = isEnrollmentStatus(status) ? status : undefined;
-  const rows = filterStatus ? all.filter((e) => e.status === filterStatus) : all;
+  let rows = all;
+  if (filterStatus) rows = rows.filter((e) => e.status === filterStatus);
+  if (filterStudentId) rows = rows.filter((e) => e.studentId === filterStudentId);
 
   const pendingCount = all.filter((e) => e.status === "pending").length;
   const readyCount = all.filter(
@@ -116,7 +128,7 @@ export default async function EnrollmentsPage({
           <SubmitForm action={createEnrollment} submitLabel="등록 준비 시작">
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="학생" required>
-                <Select name="studentId" required defaultValue="">
+                <Select name="studentId" required defaultValue={filterStudentId ?? ""}>
                   <option value="">학생 선택</option>
                   {studentOptions.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -147,6 +159,20 @@ export default async function EnrollmentsPage({
               </Field>
             </div>
           </SubmitForm>
+        </Card>
+      )}
+
+      {filterStudentId && (
+        <Card className="mb-6 flex items-center justify-between">
+          <span className="text-sm font-bold text-ink-soft">
+            {filteredStudent?.name ?? "선택한 학생"} 학생으로 필터링됨
+          </span>
+          <Link
+            href="/admin/enrollments"
+            className="text-xs font-bold text-brand-700 hover:underline"
+          >
+            학생 필터 해제
+          </Link>
         </Card>
       )}
 

@@ -46,8 +46,15 @@ begin
     on conflict do nothing;
 
   -- 00016 ③: 승인 게시 흐름 컬럼(status·approved_at)까지 채워 CHECK를 함께 검증한다
-  insert into public.reviews (tenant_id, reviewer_type, content, status, approved_at)
-    values (t2, 'parent', 'T2 전용 후기 — 교차 노출 시 RLS 위반', 'published', now());
+  -- 00025 작성 초대 — 교차 노출 스캔 대상(타테넌트 행이 있어야 0건이 증명이 된다).
+  insert into public.review_invitations (tenant_id, student_name, author_role, author_name, author_phone, token_hash)
+    values (t2, 'T2 전용 학생', 'parent', 'T2 전용 보호자', '010-0000-0002', 'fixture-token-hash-t2');
+
+  -- 00025: published에는 마스킹·최소정보 확인 시각이 필수(reviews_published_needs_masking).
+  insert into public.reviews (tenant_id, reviewer_type, content, status, approved_at,
+                              masking_confirmed_at, masking_confirmed_by, published_at)
+    values (t2, 'parent', 'T2 전용 후기 — 교차 노출 시 RLS 위반', 'published', now(),
+            now(), 'fixture', now());
 
   insert into public.lessons (tenant_id, student_id, lesson_date)
     values (t2, s2, '2026-07-01');

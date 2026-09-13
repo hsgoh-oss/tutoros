@@ -21,7 +21,7 @@ export default async function PublicLayout({
         본문 바로가기
       </a>
       <SiteHeader kakaoUrl={content.settings.kakaoUrl} />
-      <FloatingCtas kakaoUrl={content.settings.kakaoUrl} />
+      <FloatingCtas />
       <main id="main-content">{children}</main>
       <SiteFooter settings={content.settings} />
     </>

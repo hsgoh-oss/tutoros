@@ -37,7 +37,8 @@ insert into public.site_settings (tenant_id, key, value) values
   "instagramUrl": "https://www.instagram.com/axiom_math_lab",
   "kimProfileUrl": "https://kimstudy.com/tutor/s/e0d107b4-c91a-4aca-9381-717157e99ecb?O3WRXJQK9E=D1072AQ1A",
   "kimReviewUrl": "https://kimstudy.com/tutor/s/e0d107b4-c91a-4aca-9381-717157e99ecb?O3WRXJQK9E=D1072AQ1A",
-  "gaId": "G-TEKQVSK73W"
+  "gaId": "G-TEKQVSK73W",
+  "commerceNo": "제2026-수원영통-1043호"
 }'::jsonb),
 ('00000000-0000-0000-0000-000000000001', 'rates',
  '{"inperson": 80000, "video": 60000, "trial": 50000}'::jsonb),
@@ -89,7 +90,14 @@ insert into public.reviews (tenant_id, reviewer_type, content, rating, meta, scr
 
 -- 00016 이후 status 기본값이 draft(비공개)라 시드 후기가 공개 사이트에 보이지 않게 된다.
 -- 시드 후기는 이미 검토된 공개본으로 간주해 published로 승급한다(00016 기존 행 백필과 동일 논리).
-update public.reviews set status = 'published', approved_at = created_at
+-- 00025 이후 published에는 마스킹 확인 시각이 필수(reviews_published_needs_masking)라 함께 채운다.
+update public.reviews
+   set status = 'published',
+       approved_at = created_at,
+       published_at = created_at,
+       masking_confirmed_at = created_at,
+       masking_confirmed_by = 'seed',
+       images_public = true
  where tenant_id = '00000000-0000-0000-0000-000000000001' and status = 'draft';
 
 /* ---------- 1호 테넌트: FAQ 10문항 ---------- */

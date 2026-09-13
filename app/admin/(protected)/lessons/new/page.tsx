@@ -1,11 +1,18 @@
 import { Card } from "@/components/ui/card";
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions } from "@/lib/data/crm";
+import { isUuid } from "@/lib/uuid";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { createLesson } from "../actions";
 import { LessonFormFields } from "../lesson-form-fields";
 
-export default async function NewLessonPage() {
+export default async function NewLessonPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ student?: string }>;
+}) {
+  const { student } = await searchParams;
+  const defaultStudentId = isUuid(student) ? student : undefined;
   const session = await getAdminSession();
   const studentOptions = session ? await listStudentOptions(session.tenantId) : [];
 
@@ -20,7 +27,10 @@ export default async function NewLessonPage() {
 
       <Card className="max-w-3xl">
         <SubmitForm action={createLesson} submitLabel="등록" redirectTo="/admin/lessons">
-          <LessonFormFields studentOptions={studentOptions} />
+          <LessonFormFields
+            studentOptions={studentOptions}
+            defaultStudentId={defaultStudentId}
+          />
         </SubmitForm>
       </Card>
     </div>

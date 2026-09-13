@@ -40,12 +40,18 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
 
   // 열린 동안: 첫 항목으로 포커스 이동, 배경 스크롤 잠금, Esc 닫기, Tab 순환 가둠,
   // 데스크톱 폭으로 넓어지면 자동 닫기(패널이 남아 본문을 가리는 것을 막는다).
+  //
+  // 스크롤 잠금은 html에 건다(globals.css .axm-menu-open). 예전엔 body overflow:hidden뿐이라
+  // iOS Safari에서 메뉴를 열고 손가락을 움직이면 뒤 본문이 같이 스크롤됐다. 패널은 아래에서
+  // 고정 오버레이 스크롤 컨테이너로 두어 손가락 움직임이 패널 밖으로 새지 않게 한다.
   useEffect(() => {
     if (!open) return;
 
     const panel = panelRef.current;
-    panel?.querySelector<HTMLElement>("a,button")?.focus();
-    document.body.classList.add("axm-menu-open");
+    document.documentElement.classList.add("axm-menu-open");
+    // preventScroll: 고정 패널 안의 링크에 포커스를 주면 Chrome이 문서를 그 링크의 흐름상 위치로
+    // 스크롤해 버린다(메뉴를 열었을 뿐인데 본문이 위로 튄다). 패널은 이미 화면 안에 있다.
+    panel?.querySelector<HTMLElement>("a,button")?.focus({ preventScroll: true });
 
     const desktop = window.matchMedia("(min-width: 768px)");
     const onViewportChange = (event: MediaQueryListEvent) => {
@@ -56,7 +62,9 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
       if (event.key === "Escape") {
         event.preventDefault();
         setOpen(false);
-        window.requestAnimationFrame(() => toggleRef.current?.focus());
+        window.requestAnimationFrame(() =>
+          toggleRef.current?.focus({ preventScroll: true }),
+        );
         return;
       }
       if (event.key !== "Tab" || !panel) return;
@@ -80,11 +88,12 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       desktop.removeEventListener("change", onViewportChange);
-      document.body.classList.remove("axm-menu-open");
+      document.documentElement.classList.remove("axm-menu-open");
     };
   }, [open]);
 
   return (
+    <>
     <header className="sticky top-0 z-60 border-b border-line bg-white/96 backdrop-blur-lg">
       <div className="axm-measure flex h-[72px] items-center justify-between gap-6">
         {/* block+py로 44px 히트영역 — flex로 감싸면 next/image가 종횡비 경고를 낸다. */}
@@ -138,14 +147,23 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
           {open ? "닫기" : "메뉴"}
         </button>
       </div>
+    </header>
 
+      {/* 고정 오버레이 — 헤더(72px) 아래 화면 전체를 덮는 스크롤 컨테이너. header 밖에 두는 이유:
+          header의 backdrop-filter가 fixed 자손의 기준 상자(containing block)가 되어 위치가 깨진다.
+          overscroll-contain으로 끝에 닿아도 본문으로 스크롤이 이어지지 않고,
+          안쪽 min-h를 화면보다 1px 크게 두어 항목이 적어도 항상 "패널이 스크롤되는" 상태를 유지한다
+          (스크롤할 게 없으면 iOS가 제스처를 본문에 넘긴다). */}
       <div
         ref={panelRef}
         id="site-menu"
-        className="border-t border-line bg-white md:hidden"
+        className="fixed inset-x-0 top-[72px] bottom-0 z-60 overflow-y-auto overscroll-contain border-t border-line bg-white [touch-action:pan-y] md:hidden"
         hidden={!open}
       >
-        <nav className="axm-measure py-4" aria-label="전체 메뉴">
+        <nav
+          className="axm-measure min-h-[calc(100%+1px)] py-4 pb-[calc(2rem+env(safe-area-inset-bottom))]"
+          aria-label="전체 메뉴"
+        >
           <ul>
             {PRIMARY_NAV.map((item) => {
               const current = isCurrentPath(pathname, item.href);
@@ -208,6 +226,6 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
           </div>
         </nav>
       </div>
-    </header>
+    </>
   );
 }

@@ -38,7 +38,11 @@ export type NotifyType =
   | "intake_form_sent"
   | "trial_confirmed"
   | "waitlist_offer"
-  | "enrollment_activated";
+  | "enrollment_activated"
+  | "review_invite"
+  | "review_revision_request"
+  | "review_rejected"
+  | "review_published";
 
 export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
   consult_received: "{name}님, 상담 신청이 접수되었습니다. 빠르게 연락드리겠습니다.",
@@ -83,6 +87,19 @@ export const NOTIFY_TEMPLATES: Record<NotifyType, string> = {
     "{name}님, 수업 자리가 생겨 안내드립니다. {date}까지 회신해 주시면 자리를 배정해 드립니다.",
   enrollment_activated:
     "{name}님, 정규 수업 등록이 완료되었습니다. 학습 포털 초대가 곧 전달됩니다.",
+  // 후기·성적사례 작성 초대(S-01 · 00025) — 작성 링크는 호출부가 붙인다(lib/review/token.ts reviewFormPath).
+  // 자동 발송이 아니라 운영자가 학생 상세·후기 관리에서 직접 발급할 때만 나간다(S-01 자동 요청 금지).
+  review_invite:
+    "{name}님, 후기·성적 향상 사례 작성 링크를 보내드립니다. 아래 링크에서 작성해 주세요. 공개 여부는 작성 화면에서 직접 선택하실 수 있습니다.",
+  // 수정 요청(S-03 보완 요청 → 작성자에게 반환) — 새 작성 링크를 붙여 보낸다. 사유는 링크 화면이 보여 준다.
+  review_revision_request:
+    "{name}님, 남겨 주신 후기·사례에 보완이 필요해 다시 작성 링크를 보내드립니다. 아래 링크에서 수정 후 다시 제출해 주세요.",
+  // 반려 안내(S-03 거절 → 사유 안내) — 사유는 호출부가 {date} 자리 대신 본문에 덧붙인다.
+  review_rejected:
+    "{name}님, 남겨 주신 후기·사례는 검토 결과 게시하지 않기로 했습니다. 문의는 편히 연락 주세요.",
+  // 게시 안내 — 공개 페이지 주소는 호출부가 붙인다.
+  review_published:
+    "{name}님, 남겨 주신 후기·사례가 게시되었습니다. 공개를 원하지 않으시면 언제든 철회를 요청하실 수 있습니다.",
 };
 
 /**
@@ -117,6 +134,10 @@ export const NOTIFY_TYPE_LABEL: Record<NotifyType, string> = {
   trial_confirmed: "시범수업 확정",
   waitlist_offer: "대기 자리 제안",
   enrollment_activated: "정규 등록 완료",
+  review_invite: "후기·사례 작성 초대",
+  review_revision_request: "후기·사례 수정 요청",
+  review_rejected: "후기·사례 반려 안내",
+  review_published: "후기·사례 게시 안내",
 };
 
 /** DB의 type 문자열 → 한글 이름. 미등록 키는 원문을 그대로 보여 준다(숨기지 않는다). */

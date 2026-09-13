@@ -86,7 +86,8 @@ test.describe("공개 사이트", () => {
     await page.goto("/apply");
     await page.getByPlaceholder("홍길동").fill(`E2E상담-${Date.now()}`);
     await page.locator('input[inputmode="numeric"]').first().fill("01012345678");
-    // [필수] 개인정보 동의 체크박스 — 라벨 내 링크 오클릭 방지 위해 input 직접 체크
+    // [필수] 이용약관·개인정보 동의 체크박스 — 라벨 내 링크 오클릭 방지 위해 input 직접 체크
+    await page.locator('input[name="termsConsent"]').check();
     await page.locator('input[name="privacyConsent"]').check();
     await page.getByRole("button", { name: "상담 신청하기" }).click();
 

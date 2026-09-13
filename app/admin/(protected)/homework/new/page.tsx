@@ -1,5 +1,6 @@
 import { getAdminSession } from "@/lib/auth/session";
 import { listLessons, listStudentOptions } from "@/lib/data/crm";
+import { isUuid } from "@/lib/uuid";
 import { Card } from "@/components/ui/card";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
 import { createAssignment } from "../actions";
@@ -14,6 +15,7 @@ export default async function NewHomeworkPage({
   searchParams: Promise<{ student?: string }>;
 }) {
   const { student } = await searchParams;
+  const defaultStudentId = isUuid(student) ? student : undefined;
   const session = await getAdminSession();
   const [studentOptions, lessons] = session
     ? await Promise.all([
@@ -45,7 +47,7 @@ export default async function NewHomeworkPage({
           <HomeworkFormFields
             studentOptions={studentOptions}
             lessonOptions={lessonOptions}
-            defaults={{ studentId: student }}
+            defaults={{ studentId: defaultStudentId }}
           />
         </SubmitForm>
       </Card>

@@ -61,12 +61,14 @@ export const RETENTION_POLICY: Record<RetentionCategory, RetentionPolicy> = {
 export type RetentionEvent =
   | "enrollment_ended"
   | "waitlist_closed"
-  | "payment_settled";
+  | "payment_settled"
+  | "review_retracted";
 
 export const RETENTION_EVENT_LABEL: Record<RetentionEvent, string> = {
   enrollment_ended: "등록·계약 종료",
   waitlist_closed: "대기 철회·만료",
   payment_settled: "거래 종료(완납)",
+  review_retracted: "후기·사례 철회",
 };
 
 /**
@@ -77,9 +79,9 @@ export const RETENTION_EVENT_LABEL: Record<RetentionEvent, string> = {
  */
 export const RETENTION_EVENTS_NOT_TRACKED = [
   {
-    label: "콘텐츠·후기 철회",
+    label: "후기·사례 반려·미게시 종료",
     reason:
-      "후기를 철회로 전환하는 코드가 없고(S-03 미구현 — retracted는 상태값·라벨로만 존재), 철회 시각 컬럼도 없다(00016의 retracted_at은 ai_reports에만 붙었다).",
+      "철회(retracted_at · 00025)는 기산한다. 반려(rejected_at)·수정 요청 뒤 미재제출 건은 '공개된 적 없는 제출본'이라 정본 D-04의 어느 사건에 넣을지 미확정 — 확정 전에는 기산하지 않는다.",
   },
   {
     label: "상담·시범 미전환 종결",
@@ -429,10 +431,34 @@ export async function recomputeRetention(tenantId: string): Promise<RecomputeRes
     });
   }
 
-  // 후기 철회(review_consent)는 여기 없다 — 기산할 시각이 없기 때문이다.
-  // reviews에는 철회 시각 컬럼이 없고(00016의 retracted_at은 ai_reports에 붙었다), 애초에
-  // 후기를 retracted로 전환하는 코드도 없다(S-03 미구현). 없는 사건을 updated_at 같은 대체
-  // 값으로 지어내면 원장이 거짓이 되므로, RETENTION_EVENTS_NOT_TRACKED에 이유를 적고 비워 둔다.
+  // ④ 후기·사례 철회 → 동의·철회 최소 증명(3년). 00025가 reviews.retracted_at을 붙였고
+  //    retractReview(app/admin/(protected)/reviews/actions.ts)가 그 시각을 찍는다.
+  //    대상 요약은 공개용 마스킹 이름(public_name)이다 — 이미 개인정보 없는 표현이라 그대로 쓴다.
+  const { data: retractedReviews, error: reviewError } = await db
+    .from("reviews")
+    .select("id, public_name, kind, retracted_at")
+    .eq("tenant_id", tenantId)
+    .eq("status", "retracted")
+    .not("retracted_at", "is", null);
+  if (reviewError) {
+    console.error("[retention] reviews 조회 실패", reviewError);
+    return fail("후기 철회 조회 실패");
+  }
+  for (const row of (retractedReviews ?? []) as {
+    id: string;
+    public_name: string | null;
+    kind: string | null;
+    retracted_at: string;
+  }[]) {
+    derived.push({
+      subjectType: "review",
+      subjectId: row.id,
+      subjectLabel: `${row.public_name ?? "수강생"} ${row.kind === "case" ? "사례" : "후기"}`,
+      category: "review_consent",
+      event: "review_retracted",
+      startedAt: row.retracted_at,
+    });
+  }
 
   // 같은 (대상, 종류)에 사건이 여럿이면 가장 늦은 것만 남긴다(규칙 ①).
   const latest = new Map<string, DerivedRecord>();

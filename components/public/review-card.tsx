@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { publicStudentLabel } from "@/lib/review/masking";
 import type { Review } from "@/lib/types";
 
 export function ReviewCard({ review }: { review: Review }) {
@@ -10,6 +11,12 @@ export function ReviewCard({ review }: { review: Review }) {
         <Badge tone={review.reviewerType === "parent" ? "brand" : "soft"}>
           {review.reviewerType === "parent" ? "학부모" : "학생"}
         </Badge>
+        {/* 작성자 제출 후기(00025)는 승인된 마스킹 이름을 갖는다 — 실명은 공개하지 않는다. 옛 등록분은 없다. */}
+        {review.publicName && (
+          <span className="text-[13px] font-extrabold tracking-[-0.02em] text-ink-soft">
+            {publicStudentLabel(review.publicName)}
+          </span>
+        )}
         {review.grade && <Badge tone="soft">{review.grade}</Badge>}
         {review.track && <Badge tone="soft">{review.track}</Badge>}
         {review.region && <Badge tone="soft">{review.region}</Badge>}

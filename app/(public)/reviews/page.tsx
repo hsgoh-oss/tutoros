@@ -21,10 +21,12 @@ export default async function ReviewsPage() {
   const tenant = await resolveTenant();
   const content = await getSiteContent(tenant.id);
 
-  const reviewCount = content.reviews.length;
+  // 후기 화면은 후기만 싣는다 — 성적 향상 사례(kind='case')는 /case가 보여 준다(00025).
+  const reviews = content.reviews.filter((r) => r.kind === "review");
+  const reviewCount = reviews.length;
   const avgRating =
     reviewCount > 0
-      ? content.reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
       : 0;
   const avgStars = Math.round(avgRating);
 
@@ -68,7 +70,7 @@ export default async function ReviewsPage() {
           )}
 
           {reviewCount > 0 ? (
-            <ReviewTabs reviews={content.reviews} />
+            <ReviewTabs reviews={reviews} />
           ) : (
             <p className="rounded-[var(--radius-panel)] border border-line bg-soft px-6 py-10 text-center text-sm text-muted">
               공개된 후기가 아직 없습니다.

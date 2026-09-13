@@ -102,7 +102,7 @@ export const ADMIN_MODULES = [
     hint: "공개 사이트에 나가는 것",
     items: [
       { href: "/admin/dday", label: "입시 캘린더", icon: "dday" },
-      { href: "/admin/reviews", label: "후기 관리", icon: "review" },
+      { href: "/admin/reviews", label: "후기·사례 관리", icon: "review" },
       { href: "/admin/faq", label: "FAQ 관리", icon: "faq" },
       { href: "/admin/settings", label: "사이트 설정", icon: "settings" },
     ],

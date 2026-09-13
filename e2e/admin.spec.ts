@@ -78,7 +78,8 @@ test.describe("관리자", () => {
     ).toBeVisible();
     // 자동 기산하지 못하는 사건을 숨기지 않는다 — 비어 있는 이유가 화면에 있어야 한다.
     await expect(page.getByText("아직 자동으로 기산하지 않는 사건")).toBeVisible();
-    await expect(page.getByText("콘텐츠·후기 철회", { exact: false })).toBeVisible();
+    // 후기 철회는 00025 이후 기산한다(retracted_at) — 남은 미기산 사건은 반려·미게시 종료다.
+    await expect(page.getByText("후기·사례 반려·미게시 종료", { exact: false })).toBeVisible();
   });
 
   test("발송 현황: 상태 필터가 URL로 유지된다", async ({ page }) => {

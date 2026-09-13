@@ -91,12 +91,21 @@ export const intakeFormSchema = z
     classType: z.enum(CLASS_TYPE_OPTIONS),
 
     /* ---------- 동의 ---------- */
+    // 상담 폼과 같은 구조: 이용약관(필수) · 개인정보 처리(필수) · AI 처리·국외이전(선택) · 마케팅(선택).
+    termsConsent: z.boolean(),
     privacyConsent: z.boolean(),
     // 외부 AI 처리 위탁 — 선택 동의(상담 폼과 같은 규약 · 정본 D-09).
     overseasAiConsent: z.boolean(),
     marketingConsent: z.boolean(),
   })
   .superRefine((data, ctx) => {
+    if (!data.termsConsent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["termsConsent"],
+        message: "이용약관 동의는 필수입니다.",
+      });
+    }
     if (!data.privacyConsent) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -227,6 +236,7 @@ export interface IntakePayload {
     classType: (typeof CLASS_TYPE_OPTIONS)[number];
   } | null;
   consents: {
+    terms: true;
     privacy: true;
     /** 외부 AI 처리 위탁 — 선택 동의라 false일 수 있다(정본 D-09 · 상담 폼과 같은 규약). */
     overseasAi: boolean;
@@ -299,6 +309,7 @@ export function buildIntakePayload(
           }
         : null,
     consents: {
+      terms: true,
       privacy: true,
       overseasAi: values.overseasAiConsent,
       marketing: values.marketingConsent,

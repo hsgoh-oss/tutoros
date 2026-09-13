@@ -114,6 +114,7 @@ export async function submitConsult(
   // 거절 경로가 없는 동의는 동의로 성립하지 않는다. 체크했을 때만 남기고, 없으면 그 대상에는
   // AI 생성이 막힌다(lib/ai/consent.ts) — 리포트는 운영자가 직접 쓴다.
   const consentRows = [
+    { ...consentBase, item: "terms" },
     { ...consentBase, item: "privacy" },
     ...(data.overseasAiConsent ? [{ ...consentBase, item: "overseas_ai" }] : []),
     ...(data.marketingConsent ? [{ ...consentBase, item: "marketing" }] : []),

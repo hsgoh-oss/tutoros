@@ -27,10 +27,13 @@ export function consultationStatusTone(status: ConsultationStatus): BadgeTone {
 }
 
 const CONSENT_ITEM_LABEL: Record<ConsentItem, string> = {
-  privacy: "개인정보 처리방침",
-  overseas_ai: "해외 AI 처리 위탁",
-  marketing: "마케팅 정보 수신",
-  review: "후기 활용",
+  terms: "이용약관(필수)",
+  privacy: "상담 개인정보 처리(필수)",
+  overseas_ai: "AI 처리·국외이전(선택)",
+  marketing: "마케팅 수신(선택)",
+  review: "후기·사례 공개(건별)",
+  review_image: "사례 이미지 공개",
+  guardian: "법정대리인 동의",
   student_phone: "학생 연락처 수집",
 };
 
