@@ -2,7 +2,7 @@
 -- + payssam_events(00014) + homework_assignments·homework_submissions·homework_questions(00015)
 -- + trial_sessions·trial_results·enrollments·contracts·waitlist_offers(00018)
 -- + lesson_packages·session_ledger·attendance_contacts·attendance_corrections
---   ·booking_restrictions(00020))
+--   ·booking_restrictions(00020) · retention_records(00023))
 -- 전부에 타테넌트(T2) 행을 1건씩 심는다.
 -- 이게 없으면 "타테넌트 행 0건"이 RLS 덕분인지 데이터가 없어서인지 구별할 수 없다.
 -- (seed.sql은 faqs·students·recruit_status에만 T2 행을 넣는다)
@@ -229,4 +229,13 @@ begin
   insert into public.booking_restrictions (tenant_id, student_id, reason, review_on, decided_by)
     values (t2, s2, 'T2 전용 예약 제한 — 교차 노출 시 RLS 위반',
             current_date + 30, 'test-english@example.com');
+
+  -- 00023 개인정보 보존기록. 대상은 FK 없이 (종류, id)로만 가리키므로(원 데이터보다 오래 살아야
+  -- 한다) 학생 id를 그대로 쓴다 — 교차 노출 시 다른 학원의 파기 예정 목록이 보인다는 뜻이다.
+  insert into public.retention_records (tenant_id, subject_type, subject_id, subject_label,
+                                        category, event, started_at, retain_until,
+                                        policy_days, policy_label)
+    values (t2, 'student', s2, 'T2 전용 보존기록 — 교차 노출 시 RLS 위반',
+            'student_service', 'enrollment_ended', now() - interval '400 days',
+            (current_date - 35), 365, '내부 운영 기준: 서비스 종료일부터 12개월');
 end $$;

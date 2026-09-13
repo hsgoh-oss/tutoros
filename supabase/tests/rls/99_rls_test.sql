@@ -49,7 +49,7 @@ declare
   -- 00001의 18개 + 테넌트 정책 계열 12개(activity_log(00006)·adjustments·work_items(00013)
   -- ·payssam_events(00014)·homework_assignments·homework_submissions·homework_questions(00015)
   -- ·lesson_packages·session_ledger·attendance_contacts·attendance_corrections
-  -- ·booking_restrictions(00020)
+  -- ·booking_restrictions(00020) ·retention_records(00023)
   -- ·trial_sessions·trial_results·enrollments·contracts·waitlist_offers(00018))
   tables constant text[] := array[
     'site_settings','theme_settings','ddays','recruit_status','page_contents',
@@ -59,7 +59,7 @@ declare
     'homework_assignments','homework_submissions','homework_questions',
     'trial_sessions','trial_results','enrollments','contracts','waitlist_offers',
     'lesson_packages','session_ledger','attendance_contacts','attendance_corrections',
-    'booking_restrictions'
+    'booking_restrictions','retention_records'
   ];
 begin
   foreach t in array tables loop
@@ -2461,6 +2461,138 @@ where n.nspname = 'public'
   and c.relkind = 'r'
   and not c.relrowsecurity
   and c.relname <> '_applied_migrations';
+
+/* ───────── 9. 개인정보 보존기록 불변식 (00023 · D-04 기산 · D-05 보존 잠금) ─────────
+   원장 한 줄이 곧 "이 데이터를 언제까지 갖고 있기로 했나"라는 약속이다. 그 약속을 무너뜨리는
+   네 가지를 DB가 직접 막는지 본다 — 앱이 실수해도 여기서 걸려야 한다.
+     · 사유 없는 보존 잠금 (재검토할 근거가 없는 잠금은 잠금이 아니다)
+     · 잠금 중 파기 완료 표시 (D-05 예외 「hold 중에는 대상 파기를 완료로 표시하지 않는다」)
+     · 담당자 없는 파기 기록 (누가 했는지 없는 증적은 증적이 아니다)
+     · 같은 대상·같은 데이터 종류의 중복 줄 (기한이 둘이면 어느 쪽이 약속인지 알 수 없다)
+   더불어 "같은 사람이라도 데이터 종류가 다르면 각각 계산한다"(D-04)가 성립하는지도 확인한다. */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  st uuid;
+  blocked boolean;
+  n int;
+begin
+  select id into st from public.students where tenant_id = t1 limit 1;
+
+  -- (a) 사유 없는 보존 잠금
+  blocked := false;
+  begin
+    insert into public.retention_records (tenant_id, subject_type, subject_id, subject_label,
+                                          category, event, started_at, retain_until,
+                                          policy_days, policy_label, hold_at)
+      values (t1, 'student', st, '홍*동', 'student_service', 'enrollment_ended',
+              now() - interval '400 days', current_date - 35, 365, '12개월', now());
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('보존 잠금 사유 필수(D-05)', '사유 없이 hold_at만 설정', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (b) 잠금 중 파기 완료 표시
+  blocked := false;
+  begin
+    insert into public.retention_records (tenant_id, subject_type, subject_id, subject_label,
+                                          category, event, started_at, retain_until,
+                                          policy_days, policy_label,
+                                          hold_at, hold_reason, destroyed_at, destroyed_by)
+      values (t1, 'student', st, '홍*동', 'student_service', 'enrollment_ended',
+              now() - interval '400 days', current_date - 35, 365, '12개월',
+              now(), '분쟁 진행', now(), 'admin@example.com');
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('잠금 중 파기 금지(D-05)', 'hold_at과 destroyed_at 동시 설정', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (c) 담당자 없는 파기 기록
+  blocked := false;
+  begin
+    insert into public.retention_records (tenant_id, subject_type, subject_id, subject_label,
+                                          category, event, started_at, retain_until,
+                                          policy_days, policy_label, destroyed_at)
+      values (t1, 'student', st, '홍*동', 'student_service', 'enrollment_ended',
+              now() - interval '400 days', current_date - 35, 365, '12개월', now());
+  exception when check_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('파기 증적 행위자 필수(D-07)', 'destroyed_by 없이 destroyed_at만', '차단(check)',
+          case when blocked then '차단됨' else '허용됨(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (d) 정상 적재 — 위 셋이 막힌 뒤에도 제대로 된 줄은 들어가야 한다(과잉 차단 아님)
+  insert into public.retention_records (tenant_id, subject_type, subject_id, subject_label,
+                                        category, event, started_at, retain_until,
+                                        policy_days, policy_label)
+    values (t1, 'student', st, '홍*동', 'student_service', 'enrollment_ended',
+            now() - interval '400 days', current_date - 35, 365,
+            '내부 운영 기준: 서비스 종료일부터 12개월');
+
+  -- (e) 같은 대상·같은 종류 중복
+  blocked := false;
+  begin
+    insert into public.retention_records (tenant_id, subject_type, subject_id, subject_label,
+                                          category, event, started_at, retain_until,
+                                          policy_days, policy_label)
+      values (t1, 'student', st, '홍*동', 'student_service', 'enrollment_ended',
+              now(), current_date, 365, '12개월');
+  exception when unique_violation then blocked := true;
+    when others then blocked := false;
+  end;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('보존기록 단일성(D-04)', '같은 대상·같은 데이터 종류 두 줄', '차단(유니크)',
+          case when blocked then '차단됨' else '중복 허용(위반)' end,
+          case when blocked then 'PASS' else 'FAIL' end);
+
+  -- (f) 데이터 종류가 다르면 공존한다 — "목적별로 각각 계산"(D-04)
+  insert into public.retention_records (tenant_id, subject_type, subject_id, subject_label,
+                                        category, event, started_at, retain_until,
+                                        policy_days, policy_label)
+    values (t1, 'student', st, '홍*동', 'consent_proof', 'enrollment_ended',
+            now() - interval '400 days', current_date + 695, 1095, '3년');
+  select count(*) into n from public.retention_records
+   where tenant_id = t1 and subject_id = st;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('목적별 개별 기산(D-04)', '같은 학생의 서로 다른 데이터 종류 2줄', '2줄 공존',
+          n::text || '줄',
+          case when n = 2 then 'PASS' else 'FAIL' end);
+end $$;
+
+/* ───────── 10. 옛 포털 토큰 은퇴 (00024 · P-01·P-02 충돌 해소) ─────────
+   은퇴의 뜻은 "새로 생기지 않는다 + 남아 있던 것도 죽었다" 둘 다다. 하나만 지키면
+   기존 링크가 계속 열리거나(회수 실패) 새 학생에게 또 발급된다(은퇴 실패). */
+do $$
+declare
+  t1 constant uuid := '00000000-0000-0000-0000-000000000001';
+  live int;
+  minted text;
+  sid uuid;
+begin
+  select count(*) into live from public.students where portal_token is not null;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('옛 포털 토큰 회수(P-02)', '살아 있는 portal_token', '0개',
+          live::text || '개',
+          case when live = 0 then 'PASS' else 'FAIL' end);
+
+  -- 새 학생을 만들어도 토큰이 붙지 않아야 한다(default 제거 확인)
+  insert into public.students (tenant_id, name, parent_phone)
+    values (t1, '토큰 은퇴 검증 학생', '01000000000')
+    returning id, portal_token into sid, minted;
+  insert into rls_result (scenario, detail, expected, actual, verdict)
+  values ('옛 포털 토큰 미발급(P-01)', '신규 학생 생성 시 portal_token', 'null',
+          coalesce(minted, 'null'),
+          case when minted is null then 'PASS' else 'FAIL' end);
+  delete from public.students where id = sid;
+end $$;
 
 /* ───────── 결과 출력 ───────── */
 \set QUIET off
