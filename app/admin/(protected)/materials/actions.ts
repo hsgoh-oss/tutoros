@@ -132,7 +132,14 @@ export async function deleteMaterial(id: string): Promise<CrmActionResult> {
       .from(MATERIALS_BUCKET)
       .remove([objectPath]);
     if (removeError) {
+      // 파일이 남았는데 DB 행만 지우면, 참조를 잃은 자료 파일이 스토리지에 영원히 남는다
+      // (정본 D-07 「일부 삭제 실패를 성공으로 표시하지 않는다」). 삭제 자체를 멈춘다.
       console.error("[materials] storage remove failed", removeError);
+      return {
+        ok: false,
+        error:
+          "자료 파일을 지우지 못했습니다. 파일이 남아 있어 삭제를 중단했습니다 — 잠시 후 다시 시도해 주세요.",
+      };
     }
   }
 

@@ -80,9 +80,21 @@ export async function publishEvidenceCopies(
  *  · 레거시 URL → reviews 버킷의 원 오브젝트 제거(기존 동작 유지).
  *  · 증빙 경로 → 비공개 원본(review-evidence) + 있을 수 있는 공개 사본(reviews) 모두 제거
  *    — 공개 사본을 지워야 삭제·철회가 실제 비공개화로 이어진다(S-03 "공개 사본 제거").
- * 스토리지 제거 실패는 로그만 남긴다(기존 deleteReview와 동일 — DB 행 처리를 막지 않는다).
+ * **실패는 성공으로 표시하지 않는다**(정본 D-07 「일부 삭제 실패를 성공으로 표시하지 않는다」).
+ * 예전에는 제거 실패를 console.error로만 남기고 DB 행을 그대로 지웠다. 그러면 참조를 잃은
+ * 파일만 조용히 남는다 — 삭제·철회가 "공개 중단"으로 이어졌는지 아무도 확인할 수 없고,
+ * 개인정보 파기로도 성립하지 않는다. 이제 실패 사유를 반환하고, 호출부가 DB 삭제를 멈춘다.
  */
-export async function removeScreenshotObjects(db: Db, entries: string[]): Promise<void> {
+export interface RemoveObjectsResult {
+  ok: boolean;
+  /** 어느 버킷에서 실패했는지 — 호출부가 운영자에게 그대로 보여 준다. */
+  error?: string;
+}
+
+export async function removeScreenshotObjects(
+  db: Db,
+  entries: string[],
+): Promise<RemoveObjectsResult> {
   // 정적 자산("/img/…")은 스토리지 대상이 아니다 — http(s) URL만 레거시 오브젝트로 취급.
   const legacyPaths = entries
     .filter((e) => e.startsWith("http://") || e.startsWith("https://"))
@@ -90,15 +102,31 @@ export async function removeScreenshotObjects(db: Db, entries: string[]): Promis
     .filter((p): p is string => Boolean(p));
   const evidencePaths = entries.filter((e) => !isLegacyPublicUrl(e));
 
+  const failures: string[] = [];
+
   if (evidencePaths.length > 0) {
     const { error } = await db.storage.from(EVIDENCE_BUCKET).remove(evidencePaths);
-    if (error) console.error("[reviews] 증빙 원본 제거 실패", error);
+    if (error) {
+      console.error("[reviews] 증빙 원본 제거 실패", error);
+      failures.push(`증빙 원본(${EVIDENCE_BUCKET})`);
+    }
   }
   const publicPaths = [...legacyPaths, ...evidencePaths]; // 공개 사본은 원본과 같은 경로
   if (publicPaths.length > 0) {
     const { error } = await db.storage.from(REVIEWS_BUCKET).remove(publicPaths);
-    if (error) console.error("[reviews] 공개 스크린샷 제거 실패", error);
+    if (error) {
+      console.error("[reviews] 공개 스크린샷 제거 실패", error);
+      failures.push(`공개 사본(${REVIEWS_BUCKET})`);
+    }
   }
+
+  if (failures.length > 0) {
+    return {
+      ok: false,
+      error: `첨부 파일을 지우지 못했습니다 — ${failures.join(", ")}. 파일이 남아 있어 삭제를 중단했습니다.`,
+    };
+  }
+  return { ok: true };
 }
 
 /** 관리자 화면용 스크린샷 뷰 — 저장 원문(stored)과 표시 URL을 분리해 전달한다. */

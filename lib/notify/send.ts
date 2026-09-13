@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from "crypto";
 import { createServiceClient } from "@/lib/supabase/server";
+import { revokeAccessLinkByToken } from "@/lib/portal/auth";
 import { createWorkItem } from "@/lib/data/work";
 import {
   defaultChannel,
@@ -256,6 +257,11 @@ function redactPortalLink(message: string): string {
   return message.replace(/(\/p\/link\/)[A-Za-z0-9_-]+/g, "$1[삭제됨]");
 }
 
+/** 본문에 실려 나간 초대 링크의 원문 토큰. 없으면 null(포털 초대가 아니거나 이미 지워진 본문). */
+function portalTokenIn(message: string): string | null {
+  return message.match(/\/p\/link\/([A-Za-z0-9_-]+)/)?.[1] ?? null;
+}
+
 /** notify_exhausted 우선순위 — 광고성은 normal, 결제 계열은 money(금전 흐름 중단), 그 외 normal. */
 function exhaustedPriority(req: SendDispatchRequest): "money" | "normal" {
   if (req.isAd) return "normal";
@@ -358,14 +364,47 @@ export async function dispatchQueued(
     await propagateReportDelivery(db, req.tenantId, req.reportId, "failed");
   }
   if (nextRetry >= MAX_RETRY) {
+    // 포털 초대가 끝내 전달되지 않았다면, 그 링크는 여기서 죽인다.
+    //
+    // 성공 경로는 발송 직후 본문을 마스킹하지만(위 sent 분기) 실패 경로에는 그 처리가 없어서,
+    // 실패한 초대는 **살아 있는 로그인 링크를 notifications.message에 원문으로 남긴 채** 방치됐다.
+    // 초대 링크에는 만료가 없으므로 그 상태가 영구적이다 — 알림 이력 열람 권한이 곧 포털 로그인
+    // 권한이 된다. 본인에게 닿지도 않은 자격이라 살려 둘 이유가 없다: 회수하고 본문도 지운다.
+    // 다시 보내는 것은 새 초대 발급이고, 아래 업무 카드가 그걸 지시한다.
+    let revokedNote: string | null = null;
+    if (req.type === "portal_invite") {
+      const token = portalTokenIn(req.message);
+      if (token) {
+        const revoked = await revokeAccessLinkByToken(
+          req.tenantId,
+          token,
+          "전달 실패로 회수 — 재시도 소진",
+        );
+        revokedNote = revoked
+          ? "전달되지 않은 초대 링크는 회수했습니다. 새 초대를 발급해 주세요."
+          : "초대 링크 회수에 실패했습니다 — 학생 상세에서 링크를 직접 재발급해 주세요.";
+      }
+      // tenant-scope-ok: 위와 동일 — 내부 생성 uuid로 단일 행을 지목한다.
+      const { error: redactError } = await db
+        .from("notifications")
+        .update({ message: redactPortalLink(req.message) })
+        .eq("id", notificationId);
+      if (redactError) {
+        console.error("[notify] 실패한 포털 초대 본문 마스킹 실패", redactError);
+      }
+    }
+
     // 재시도 소진 — 자동 경로는 여기서 끝. 사람 손이 필요한 업무로 넘긴다(열린 상태에는 다음 행동이 있다).
     await createWorkItem(req.tenantId, {
       kind: "notify_exhausted",
       title: `알림 재시도 소진 — ${req.type}`,
       sourceType: "notification",
       sourceId: notificationId,
-      nextAction: "실패 사유 확인 후 수동 재발송 또는 종결",
-      detail: result.error ?? null,
+      nextAction:
+        req.type === "portal_invite"
+          ? "새 포털 초대를 발급해 전달 (이전 링크는 회수됨)"
+          : "실패 사유 확인 후 수동 재발송 또는 종결",
+      detail: [result.error, revokedNote].filter(Boolean).join(" · ") || null,
       priority: exhaustedPriority(req),
     });
   }

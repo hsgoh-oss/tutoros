@@ -373,7 +373,9 @@ export async function updateReview(formData: FormData): Promise<CrmActionResult>
 
   // 제거 선택분 스토리지 정리 — 레거시 URL은 공개 버킷, 증빙 경로는 비공개 원본+공개 사본까지.
   if (removeUrls.size > 0) {
-    await removeScreenshotObjects(db, [...removeUrls]);
+    // 파일이 안 지워졌는데 DB에서만 빼면, 공개면에서 사라진 것처럼 보이지만 오브젝트는 남는다.
+    const removed = await removeScreenshotObjects(db, [...removeUrls]);
+    if (!removed.ok) return { ok: false, error: removed.error };
   }
 
   const { error } = await db
@@ -472,7 +474,10 @@ export async function deleteReview(id: string): Promise<CrmActionResult> {
   // 공개 사본까지 지워야 삭제가 실제 비공개화로 이어진다(S-03 "공개 사본 제거").
   const entries = (existing?.screenshots as string[] | null) ?? [];
   if (entries.length > 0) {
-    await removeScreenshotObjects(db, entries);
+    // 파일 제거가 실패하면 후기 행을 지우지 않는다 — 행이 사라지면 어떤 파일이 남았는지
+    // 되짚을 근거까지 함께 사라진다(정본 D-07).
+    const removed = await removeScreenshotObjects(db, entries);
+    if (!removed.ok) return { ok: false, error: removed.error };
   }
 
   const { error } = await db
