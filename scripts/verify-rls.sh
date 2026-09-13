@@ -41,9 +41,23 @@ echo "═══ 2/5 Supabase 런타임 shim (auth.jwt · 역할) ═══"
 run -f "$TESTS/00_shim.sql" 2>&1 | grep -viE "notice|already exists" || true
 
 echo "═══ 3/5 마이그레이션 + 권한 + 시드 ═══"
+# 적용 실패는 즉시 중단이다.
+#
+# 예전에는 `run -f "$f" | grep -v notice || true`였다. 파이프라인의 종료 코드는 grep의 것이고
+# `|| true`가 그마저 지워서, 마이그레이션이 중간에 죽어도 루프가 그냥 다음 파일로 넘어갔다.
+# 그 결과 **절반만 적용된 스키마 위에서 검증이 돌고 200/200 PASS가 나왔다**(2026-09-10 실측:
+# pg_cron 없는 검증 DB에서 00022가 중단됐는데도 통과). 검증 장치가 거짓 통과를 내면
+# 그 위의 판단이 전부 무의미해지므로, 출력은 변수에 받고 종료 코드로 판정한다.
 for f in "$ROOT"/supabase/migrations/*.sql; do
   echo "  ▶ $(basename "$f")"
-  run -f "$f" 2>&1 | grep -viE "notice|skipping" || true
+  if ! migration_out="$(run -f "$f" 2>&1)"; then
+    echo "$migration_out" | tail -20
+    echo "" >&2
+    echo "❌ 마이그레이션 적용 실패: $(basename "$f")" >&2
+    echo "   이 지점부터 뒤 파일과 시드가 적용되지 않았습니다 — 검증을 중단합니다." >&2
+    exit 1
+  fi
+  echo "$migration_out" | grep -viE "notice|skipping" || true
 done
 run -f "$TESTS/90_grants.sql"
 run -f "$ROOT/supabase/seed.sql"

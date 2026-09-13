@@ -147,16 +147,48 @@ $$;
 revoke execute on function public.automation_session_gc() from public, anon, authenticated;
 grant execute on function public.automation_session_gc() to service_role;
 
-/* ---------- 크론 등록 ---------- */
+/* ---------- 크론 등록 ----------
+   pg_cron 미설치 시 전체를 건너뛴다 — 00002·00005와 같은 가드다.
 
--- 10분마다: 응답이 지워지기 전에 결과를 옮겨 적는다.
-select cron.schedule('automation_settle', '*/10 * * * *',
-                     'select public.automation_settle_runs();');
+   이 가드가 뒤늦게 붙은 이유(2026-09-10): 원래 `select cron.schedule(...)`을 맨몸으로 두었는데,
+   pg_cron이 꺼진 환경(새 로컬 스택, RLS 검증용 임시 DB)에서 이 문장이 `schema "cron" does not
+   exist`로 실패하며 **마이그레이션 체인이 여기서 통째로 끊겼다.** 그 뒤 파일(00023~)과 seed가
+   아예 적용되지 않는데도 겉으로는 조용해서, 절반만 적용된 스키마 위에서 검증이 돌았다.
 
--- 매일 03:20 UTC(12:20 KST): 만료 세션·OTP 정리.
-select cron.schedule('session_gc', '20 3 * * *',
-                     'select public.automation_session_gc();');
+   이미 적용된 마이그레이션을 고치는 것이 원칙적으로는 꺼려지지만, 이 변경은 pg_cron이 있는
+   환경(운영)에서 **동작이 완전히 동일한** 가드일 뿐이라 재적용해도 결과가 달라지지 않는다.
+   pg_cron이 없는 환경에서만 '실패' 대신 '건너뜀'이 된다. */
 
--- 지금까지 쌓인 것도 한 번 정리해 둔다(이 마이그레이션 이전 행은 전부 unsettled다).
-select public.automation_settle_runs();
+do $$
+begin
+  if not exists (select 1 from pg_extension where extname = 'pg_cron') then
+    raise notice '[automation] pg_cron 미설치 — automation_settle·session_gc 크론 등록을 생략합니다. scripts/setup-supabase.sh 1단계 또는 대시보드에서 pg_cron 활성화 후 이 파일을 재적용하세요.';
+    return;
+  end if;
+
+  -- 10분마다: 응답이 지워지기 전에 결과를 옮겨 적는다.
+  perform cron.schedule('automation_settle', '*/10 * * * *',
+                        'select public.automation_settle_runs();');
+
+  -- 매일 03:20 UTC(12:20 KST): 만료 세션·OTP 정리.
+  perform cron.schedule('session_gc', '20 3 * * *',
+                        'select public.automation_session_gc();');
+end $$;
+
+/* ---------- 초기 1회 실행 ----------
+   지금까지 쌓인 것도 한 번 정리해 둔다(이 마이그레이션 이전 행은 전부 unsettled다).
+
+   settle은 net._http_response를 읽으므로 **pg_net이 없으면 호출 자체가 실패한다**(위 크론 가드와
+   같은 이유로 체인이 끊긴다). 크론도 어차피 등록되지 않는 환경이라 건너뛰는 것이 맞다.
+   session_gc는 확장에 의존하지 않으므로 언제나 돈다. */
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_net') then
+    perform public.automation_settle_runs();
+  else
+    raise notice '[automation] pg_net 미설치 — 초기 settle을 건너뜁니다(크론도 등록되지 않았습니다).';
+  end if;
+end $$;
+
 select public.automation_session_gc();
