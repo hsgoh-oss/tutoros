@@ -1,65 +1,26 @@
+import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { Card } from "@/components/ui/card";
-import { Field, Input, Select } from "@/components/ui/form";
-import { SubmitForm } from "@/components/admin/crm/submit-form";
+import { buttonClass } from "@/components/ui/button";
+import { ScheduleCreateForm } from "@/components/admin/calendar/schedule-create-form";
 import { getAdminSession } from "@/lib/auth/session";
-import { listStudentOptions } from "@/lib/data/crm";
-import { isUuid } from "@/lib/uuid";
-import { CLASS_TYPE_OPTIONS } from "../constants";
-import { createSchedule } from "../actions";
+import { listStudents } from "@/lib/data/crm";
+import { calendarHref, validCalendarDate, validCalendarTime } from "@/lib/admin-calendar";
+import { kstTodayDateOnly } from "@/lib/kst";
 
-export default async function NewSchedulePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ student?: string }>;
+export default async function NewSchedulePage({ searchParams }: {
+  searchParams: Promise<{ student?: string; date?: string; time?: string; view?: string }>;
 }) {
-  const { student } = await searchParams;
-  const defaultStudentId = isUuid(student) ? student : "";
+  const query = await searchParams;
   const session = await getAdminSession();
-  const students = session ? await listStudentOptions(session.tenantId) : [];
-
-  return (
-    <div className="dash-page">
-      <AdminPageHeader>
-        <h1 className="text-xl font-semibold tracking-tight">일정 신규 등록</h1>
-      </AdminPageHeader>
-
-      <Card className="max-w-3xl">
-        <SubmitForm
-          action={createSchedule}
-          submitLabel="등록"
-          redirectTo="/admin/schedules"
-        >
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field label="학생" required>
-              <Select name="studentId" defaultValue={defaultStudentId}>
-                <option value="" disabled>
-                  학생을 선택하세요
-                </option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-
-            <Field label="일시" required>
-              <Input type="datetime-local" name="scheduledAt" />
-            </Field>
-
-            <Field label="수업 방식">
-              <Select name="classType" defaultValue="inperson">
-                {CLASS_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-        </SubmitForm>
-      </Card>
-    </div>
-  );
+  const students = session ? (await listStudents(session.tenantId)).map(({ id, name, classType }) => ({ id, name, classType })) : [];
+  const studentId = students.some((student) => student.id === query.student) ? query.student! : "";
+  const date = validCalendarDate(query.date) ? query.date : kstTodayDateOnly();
+  const time = validCalendarTime(query.time) ? query.time : "";
+  const view = query.view === "month" ? "month" : "week";
+  const returnHref = calendarHref({ view, date, studentId });
+  return <div className="dash-page">
+    <AdminPageHeader><h1>일정 신규 등록</h1><Link href={returnHref} className={buttonClass("ghost", "sm")}>캘린더로</Link></AdminPageHeader>
+    <Card className="max-w-2xl"><ScheduleCreateForm students={students} initialStudentId={studentId} initialDate={date} initialTime={time} view={view} returnHref={returnHref} /></Card>
+  </div>;
 }

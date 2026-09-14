@@ -314,17 +314,20 @@ export interface ScheduleListItem extends ScheduleItem {
 
 export async function listSchedules(
   tenantId: string,
-  range: { from: string; to: string },
+  range: { from: string; to: string; includeOverlapping?: boolean },
 ): Promise<ScheduleListItem[]> {
   const db = createServiceClient();
   if (!db) return [];
-  const { data } = await db
+  let query = db
     .from("schedules")
     .select("*, students(name)")
     .eq("tenant_id", tenantId)
-    .gte("scheduled_at", range.from)
     .lt("scheduled_at", range.to)
     .order("scheduled_at");
+  query = range.includeOverlapping
+    ? query.or(`scheduled_at.gte.${range.from},ends_at.gt.${range.from},and(ends_at.is.null,scheduled_at.gt.${new Date(Date.parse(range.from) - 3_600_000).toISOString()})`)
+    : query.gte("scheduled_at", range.from);
+  const { data } = await query;
   return (data ?? []).map((r) => {
     const row = r as ScheduleJoinRow;
     return { ...mapSchedule(row), studentName: row.students?.name ?? "알 수 없음" };

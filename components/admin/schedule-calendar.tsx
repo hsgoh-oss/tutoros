@@ -1,133 +1,47 @@
-import Link from "next/link";
-import { cn } from "@/lib/cn";
-import type { ScheduleItem } from "@/lib/types";
-import type { ScheduleListItem } from "@/lib/data/crm";
-import { kstDateOnly, kstTime, kstTodayDateOnly } from "@/lib/kst";
+"use client";
 
-// 월간 달력(서버 컴포넌트) — 한 달치 일정을 7열 그리드로 렌더.
-//
-// 날짜 그룹핑은 **KST 기준**이다(주간 뷰와 동일). month를 Date가 아니라 "YYYY-MM" 문자열로 받는
-// 이유도 같다 — Date로 넘기면 서버(UTC)에서 로컬 조각을 읽게 되어 KST 00~09시 회차가 전날 칸에
-// 떨어진다. 달력 격자는 시간대가 없는 순수 달력이므로 조각 계산은 UTC API로만 한다.
+import { Plus } from "lucide-react";
+import type { CSSProperties } from "react";
+import type { ScheduleListItem } from "@/lib/data/crm";
+import { kstTime } from "@/lib/kst";
+import { schedulesOnDay, studentColorIndex } from "@/lib/admin-calendar";
+import { scheduleStatusLabel } from "@/app/admin/(protected)/schedules/constants";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+export type CalendarOpen = (date: string, time?: string, eventId?: string) => void;
+export function studentCalendarStyle(studentId: string): CSSProperties {
+  return { "--student-color": `var(--calendar-student-${studentColorIndex(studentId)})` } as CSSProperties;
+}
 
-const STATUS_CHIP: Record<ScheduleItem["status"], string> = {
-  planned: "bg-brand-50 text-brand-700",
-  done: "bg-emerald-50 text-emerald-700",
-  canceled: "bg-rose-50 text-rose-700 line-through",
-  makeup: "bg-amber-50 text-amber-700",
-  conflict: "bg-orange-100 text-orange-800 ring-1 ring-orange-300",
-};
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
-const formatTime = kstTime;
-
-export function ScheduleCalendar({
-  schedules,
-  month,
-}: {
-  schedules: ScheduleListItem[];
-  /** "YYYY-MM" (KST) */
-  month: string;
+export function ScheduleCalendar({ schedules, month, today, onOpen }: {
+  schedules: ScheduleListItem[]; month: string; today: string; onOpen: CalendarOpen;
 }) {
-  const [yRaw, mRaw] = month.split("-");
-  const year = Number(yRaw);
-  const monthIdx = Number(mRaw) - 1;
-  const firstWeekday = new Date(Date.UTC(year, monthIdx, 1)).getUTCDay(); // 0=일 ... 6=토
-  const daysInMonth = new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate();
-
-  // KST 날짜별 그룹핑. listSchedules가 scheduled_at 오름차순이라 각 배열은 시간순이 유지된다.
-  const byDate = new Map<string, ScheduleListItem[]>();
-  for (const s of schedules) {
-    const key = kstDateOnly(s.scheduledAt);
-    const arr = byDate.get(key);
-    if (arr) arr.push(s);
-    else byDate.set(key, [s]);
-  }
-
-  // 앞(1일 요일)·뒤 빈 칸을 채워 7의 배수로 셀을 구성한다.
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const todayKey = kstTodayDateOnly();
-
-  return (
-    <div className="overflow-x-auto rounded-card border border-line">
-      <div className="min-w-[720px]">
-        <div className="grid grid-cols-7 border-b border-line bg-soft">
-          {WEEKDAYS.map((w, i) => (
-            <div
-              key={w}
-              className={cn(
-                "px-2 py-2 text-center text-xs font-bold",
-                i === 0
-                  ? "text-rose-600"
-                  : i === 6
-                    ? "text-brand-600"
-                    : "text-muted",
-              )}
-            >
-              {w}
-            </div>
-          ))}
+  const [year, monthNumber] = month.split("-").map(Number);
+  const first = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
+  const days = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const cells = Array.from({ length: Math.ceil((first + days) / 7) * 7 }, (_, index) => index >= first && index < first + days ? index - first + 1 : null);
+  return <div className="calendar-month" aria-label={`${year}년 ${monthNumber}월 수업 캘린더`}>
+    <div className="calendar-month-weekdays">{WEEKDAYS.map((day, index) => <span key={day} data-weekend={index === 0 ? "sun" : index === 6 ? "sat" : undefined}>{day}</span>)}</div>
+    <div className="calendar-month-grid">{cells.map((day, index) => {
+      if (day === null) return <div key={`blank-${index}`} className="calendar-month-blank" aria-hidden="true" />;
+      const date = `${month}-${String(day).padStart(2, "0")}`;
+      const items = schedulesOnDay(schedules, date);
+      return <div key={date} className="calendar-month-day" data-today={date === today || undefined}
+        onClick={(event) => { if (event.target === event.currentTarget) onOpen(date); }}>
+        <button type="button" className="calendar-day-trigger" onClick={() => onOpen(date)} aria-label={`${date} 수업 ${items.length}건 보기 · 일정 추가`}>
+          <span className="calendar-day-number" data-weekend={index % 7 === 0 ? "sun" : index % 7 === 6 ? "sat" : undefined}>{day}</span>
+          <Plus size={13} className="calendar-day-plus" aria-hidden="true" />
+        </button>
+        <div className="calendar-month-events">
+          {items.slice(0, 3).map((item) => <button type="button" key={item.id} onClick={() => onOpen(date, undefined, item.id)}
+            className="calendar-month-event" style={studentCalendarStyle(item.studentId)} data-status={item.status}
+            aria-label={`${kstTime(item.scheduledAt)} ${item.studentName} ${scheduleStatusLabel(item.status)} 수업 보기`}>
+            <span className="calendar-student-dot" /><span className="calendar-event-time">{kstTime(item.scheduledAt)}</span><span className="truncate">{item.studentName}</span>
+            {item.status !== "planned" && <span className="calendar-event-status">{scheduleStatusLabel(item.status)}</span>}
+          </button>)}
+          {items.length > 3 && <button type="button" className="calendar-more" onClick={() => onOpen(date)}>+{items.length - 3}건 더 보기</button>}
         </div>
-        <div className="grid grid-cols-7">
-          {cells.map((day, i) => {
-            if (day === null) {
-              return (
-                <div
-                  key={`blank-${i}`}
-                  className="min-h-28 border-b border-r border-line bg-soft"
-                />
-              );
-            }
-            const key = `${year}-${pad2(monthIdx + 1)}-${pad2(day)}`;
-            const items = byDate.get(key) ?? [];
-            const isToday = key === todayKey;
-            const weekday = i % 7;
-            return (
-              <div
-                key={key}
-                className="min-h-28 border-b border-r border-line p-1.5"
-              >
-                <div
-                  className={cn(
-                    "mb-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-bold",
-                    isToday
-                      ? "bg-brand-600 text-white"
-                      : weekday === 0
-                        ? "text-rose-600"
-                        : weekday === 6
-                          ? "text-brand-600"
-                          : "text-ink",
-                  )}
-                >
-                  {day}
-                </div>
-                <div className="flex flex-col gap-1">
-                  {items.map((s) => (
-                    <Link
-                      key={s.id}
-                      href={`/admin/schedules/${s.id}`}
-                      title={`${formatTime(s.scheduledAt)} ${s.studentName}`}
-                      className={cn(
-                        "block truncate rounded-panel px-1.5 py-1 text-[11px] font-semibold leading-tight transition-opacity hover:opacity-80",
-                        STATUS_CHIP[s.status],
-                      )}
-                    >
-                      {formatTime(s.scheduledAt)} {s.studentName}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
+      </div>;
+    })}</div>
+  </div>;
 }

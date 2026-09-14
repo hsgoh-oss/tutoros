@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDateTime } from "@/lib/data/crm";
+import { calendarHref, calendarReturnHref } from "@/lib/admin-calendar";
+import { kstDateOnly } from "@/lib/kst";
 import { getScheduleDetail, listContractCandidates } from "@/lib/data/packages";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,8 +38,10 @@ import {
 
 export default async function ScheduleDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
   const session = await getAdminSession();
@@ -46,6 +50,8 @@ export default async function ScheduleDetailPage({
   const detail = await getScheduleDetail(session.tenantId, id);
   if (!detail) notFound();
   const { schedule, studentName, contacts, corrections, packageTitle, remaining } = detail;
+  const { from } = await searchParams;
+  const calendarReturn = calendarReturnHref(from, calendarHref({ view: "week", date: kstDateOnly(schedule.scheduledAt), studentId: schedule.studentId }));
 
   const settled = schedule.attendance !== null;
   const closed = schedule.status === "canceled" || schedule.status === "done";
@@ -93,8 +99,8 @@ export default async function ScheduleDetailPage({
           <Badge tone={attendanceTone(schedule.attendance)}>
             {attendanceLabel(schedule.attendance)}
           </Badge>
-          <Link href="/admin/schedules" className={buttonClass("ghost", "sm")}>
-            일정
+          <Link href={calendarReturn} className={buttonClass("ghost", "sm")}>
+            캘린더로
           </Link>
         </div>
       </AdminPageHeader>

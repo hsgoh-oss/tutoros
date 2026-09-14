@@ -24,7 +24,7 @@ export default defineConfig({
     },
     {
       name: "admin",
-      testMatch: /admin\.spec\.ts/,
+      testMatch: /(?:admin|calendar)\.spec\.ts/,
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" },
     },

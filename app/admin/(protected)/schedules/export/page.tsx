@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { DbBanner } from "@/components/admin/crm/db-banner";
 import { EmptyState } from "@/components/admin/crm/empty-state";
+import { calendarReturnHref, validCalendarDate } from "@/lib/admin-calendar";
+import { addKstDays, kstTodayDateOnly } from "@/lib/kst";
 
 // 학생 일정 내보내기 (L-09) — 정본: docs/flow-canon/01_atlas_02_portal_lessons.md.
 //
@@ -14,15 +16,18 @@ import { EmptyState } from "@/components/admin/crm/empty-state";
 // GET인 이유는 내보내기가 아무것도 바꾸지 않기 때문이다(L-09 "내보내기가 회차 상태·출결·잔액을
 // 변경하지 않는다"). 생성 실패·일정 없음은 라우트가 문구로 답한다.
 
-export default async function ScheduleExportPage() {
+export default async function ScheduleExportPage({ searchParams }: {
+  searchParams: Promise<{ student?: string; from?: string; to?: string; back?: string }>;
+}) {
+  const query = await searchParams;
   const session = await getAdminSession();
   const connected = hasDb();
   const students = session ? await listStudentOptions(session.tenantId) : [];
 
-  const today = new Date();
-  const kst = new Date(today.getTime() + 9 * 3600 * 1000);
-  const start = kst.toISOString().slice(0, 10);
-  const end = new Date(kst.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const start = validCalendarDate(query.from) ? query.from : kstTodayDateOnly();
+  const end = validCalendarDate(query.to) && query.to >= start ? query.to : addKstDays(start, 30);
+  const studentId = students.some((student) => student.id === query.student) ? query.student : "";
+  const returnHref = calendarReturnHref(query.back, "/admin/schedules");
 
   return (
     <div className="dash-page">
@@ -34,8 +39,8 @@ export default async function ScheduleExportPage() {
             않습니다. 해당 기간에 일정이 없으면 빈 파일 대신 안내로 끝납니다.
           </p>
         </div>
-        <Link href="/admin/schedules" className={buttonClass("ghost", "sm")}>
-          일정
+        <Link href={returnHref} className={buttonClass("ghost", "sm")}>
+          캘린더로
         </Link>
       </AdminPageHeader>
 
@@ -51,7 +56,7 @@ export default async function ScheduleExportPage() {
           <form action="/api/admin/schedule-export" method="get" target="_blank">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Field label="학생" required>
-                <Select name="studentId" required defaultValue="">
+                <Select name="studentId" required defaultValue={studentId}>
                   <option value="">학생 선택</option>
                   {students.map((s) => (
                     <option key={s.id} value={s.id}>

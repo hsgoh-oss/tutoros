@@ -193,6 +193,7 @@ export default async function StudentDetailPage({
           바로가기
         </span>
         {[
+          { href: `/admin/schedules?student=${student.id}`, label: "수업 캘린더" },
           { href: `/admin/schedules/new?student=${student.id}`, label: "+ 수업 일정" },
           { href: `/admin/lessons/new?student=${student.id}`, label: "+ 수업 기록" },
           { href: `/admin/homework/new?student=${student.id}`, label: "+ 과제" },
