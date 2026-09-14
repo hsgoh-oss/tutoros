@@ -4,9 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { nextSessionNumber } from "@/lib/data/crm";
-import { hasActiveBookingRestriction } from "@/lib/data/packages";
 import { logActivity } from "@/lib/data/activity";
-import { formatKDateTime, kstDateOnly } from "@/lib/kst";
+import { kstDateOnly } from "@/lib/kst";
 import { sendNotification } from "@/lib/notify/send";
 import type { ClassType, ScheduleItem } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
@@ -76,50 +75,6 @@ async function linkLessonForSchedule(
   }
 }
 
-/**
- * 같은 학생의 살아 있는 회차와 겹치는지 확인한다(L-01 "겹치는 후보는 확정하지 않는다").
- *
- * 묶음 회차 생성(generate_package_sessions)은 겹치는 후보를 conflict로 남기는데, 손으로 만드는
- * 이 경로에는 검사가 없어 같은 학생·같은 시각에 회차가 조용히 두 개 생겼다(실검증에서 확인).
- * 잔액은 계약에 귀속된 쪽만 차감해 안전하지만, 학부모 캘린더·알림에 중복 회차가 나간다.
- *
- * 다른 학생끼리의 시간 충돌은 막지 않는다 — 정본은 충돌을 금지하지 않고(시범 T-02도 목록만
- * 돌려준다) 운영자가 판단할 몫이다. 여기서 막는 건 "한 학생이 같은 시각에 두 번"뿐이다.
- *
- * 종료 시각이 없는 기존 회차는 DB의 schedule_span 규약과 같은 60분으로 본다.
- */
-async function findStudentOverlap(
-  db: NonNullable<ReturnType<typeof createServiceClient>>,
-  tenantId: string,
-  studentId: string,
-  at: Date,
-  endsAt: Date,
-): Promise<string | null> {
-  // 새 수업 전체 구간과 겹치는 회차만 조회한다. 경계가 맞닿은 연속 수업은 허용한다.
-  const { data, error } = await db
-    .from("schedules")
-    .select("scheduled_at, ends_at")
-    .eq("tenant_id", tenantId)
-    .eq("student_id", studentId)
-    .in("status", ["planned", "makeup"])
-    .lt("scheduled_at", endsAt.toISOString())
-    .or(`ends_at.gt.${at.toISOString()},and(ends_at.is.null,scheduled_at.gt.${new Date(at.getTime() - 3_600_000).toISOString()})`);
-  if (error) {
-    console.error("[schedules] overlap scan failed", error);
-    throw new Error("일정 중복 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-  }
-
-  const t = at.getTime();
-  for (const row of (data ?? []) as { scheduled_at: string; ends_at: string | null }[]) {
-    const start = new Date(row.scheduled_at).getTime();
-    const end = row.ends_at ? new Date(row.ends_at).getTime() : start + 3_600_000;
-    if (t < end && endsAt.getTime() > start) {
-      return formatKDateTime(row.scheduled_at);
-    }
-  }
-  return null;
-}
-
 export async function createSchedule(formData: FormData): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
@@ -136,16 +91,6 @@ export async function createSchedule(formData: FormData): Promise<CrmActionResul
     return { ok: false, error: "수업 시간은 15분부터 8시간까지, 15분 단위로 입력해 주세요." };
   }
 
-  // L-08 "제한은 새 예약·추가 자리 제안에만 적용한다": 예약 위험이 확정된 학생에게는 새 회차를
-  // 잡지 않는다. 기존 확정 수업·보강(원 회차의 대체)·학습기록·정산 접근은 건드리지 않으므로
-  // 이 게이트는 '새 예약'인 여기와 묶음 회차 생성·자리 제안에만 있다.
-  if (await hasActiveBookingRestriction(session.tenantId, studentId)) {
-    return {
-      ok: false,
-      error: "예약이 제한된 학생입니다. 출결·정정 화면에서 제한을 검토·해제한 뒤 예약하세요.",
-    };
-  }
-
   // 운영자가 친 "19:01"은 KST 19:01이다 — 서버가 UTC라 new Date()로 파싱하면 9시간 늦게 저장된다.
   const scheduledAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(scheduledAtRaw)
     ? calendarStart(scheduledAtRaw.slice(0, 10), scheduledAtRaw.slice(11)) : null;
@@ -158,36 +103,27 @@ export async function createSchedule(formData: FormData): Promise<CrmActionResul
     : "inperson";
 
   const db = createServiceClient()!;
-  const { data: student } = await db.from("students").select("id")
-    .eq("tenant_id", session.tenantId).eq("id", studentId).maybeSingle();
-  if (!student) return { ok: false, error: "학생을 찾을 수 없습니다. 목록을 새로고침해 주세요." };
-  const endsAt = new Date(scheduledAt.getTime() + duration * 60_000);
-
-  let overlap: string | null;
-  try { overlap = await findStudentOverlap(db, session.tenantId, studentId, scheduledAt, endsAt); }
-  catch { return { ok: false, error: "일정 중복 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요." }; }
-  if (overlap) {
-    return {
-      ok: false,
-      error: `이 학생은 ${overlap} 회차와 시간이 겹칩니다. 기존 회차를 취소·보강으로 정리하거나 다른 시각을 골라 주세요.`,
-    };
-  }
-  const { data, error } = await db
-    .from("schedules")
-    .insert({
-      tenant_id: session.tenantId,
-      student_id: studentId,
-      scheduled_at: scheduledAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      class_type: classType,
-      status: "planned",
-      reminder_sent: false,
-    })
-    .select("id")
-    .single();
+  const packageChoice = String(formData.get("packageId") ?? "auto");
+  if (!["auto", "standalone"].includes(packageChoice) && !isUuid(packageChoice)) return { ok: false, error: "수업 묶음을 확인해 주세요." };
+  const { data, error } = await db.rpc("create_calendar_schedule", {
+    p_tenant: session.tenantId, p_student: studentId, p_at: scheduledAt.toISOString(),
+    p_duration: duration, p_class_type: classType, p_package: packageChoice,
+  });
   if (error) {
-    console.error("[schedules] insert failed", error);
-    return { ok: false, error: "일정 등록 중 오류가 발생했습니다." };
+    console.error("[schedules] create rpc failed", error.code);
+    return { ok: false, error: "일정 등록 중 오류가 발생했습니다. 다시 시도해 주세요." };
+  }
+  const result = data as { ok: boolean; id?: string; reason?: string; package_id?: string | null };
+  if (!result?.ok) {
+    const messages: Record<string, string> = {
+      overlap: "이 학생의 기존 회차와 시간이 겹칩니다. 다른 시각을 선택해 주세요.",
+      restricted: "예약이 제한된 학생입니다. 제한을 검토·해제한 뒤 예약하세요.",
+      student_missing: "학생을 찾을 수 없습니다.",
+      ambiguous_package: "연결 가능한 수업 묶음이 여러 개입니다. 등록·계약 기간을 먼저 확인해 주세요.",
+      package_unavailable: "선택한 수업 묶음을 연결할 수 없습니다. 학생·일시·묶음 상태를 다시 확인해 주세요.",
+      slot_used: "이미 사용된 수업 자리입니다. 다른 시각을 선택해 주세요.",
+    };
+    return { ok: false, error: messages[result?.reason ?? ""] ?? "일정 입력을 확인해 주세요." };
   }
 
   await logActivity(
@@ -195,8 +131,8 @@ export async function createSchedule(formData: FormData): Promise<CrmActionResul
     session.email,
     "create",
     "schedule",
-    (data as { id: string } | null)?.id ?? null,
-    "새 일정 등록",
+    result.id ?? null,
+    result.package_id ? "수업 묶음에 새 일정 등록" : "차감 없는 새 일정 등록",
   );
 
   revalidateSchedules();

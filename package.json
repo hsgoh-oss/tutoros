@@ -15,7 +15,8 @@
     "payssam:smoke": "node scripts/payssam-smoke.mjs",
     "verify:all": "pnpm typecheck && pnpm audit:scope && pnpm audit:notify && pnpm verify:rls",
     "test:e2e": "playwright test",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "verify:commercial": "node scripts/verify-auth-storage.mjs && VERIFY_DB=tutoros_commercial_verify bash scripts/verify-rls.sh && psql -h /tmp -d tutoros_commercial_verify -v ON_ERROR_STOP=1 -f supabase/tests/commercial_safety.sql && node scripts/verify-calendar-concurrency.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

@@ -37,24 +37,25 @@ async function authorizeAdmin(email: string): Promise<AuthorizedAdmin | null> {
 
   const db = createServiceClient();
   if (db) {
-    const { data } = await db
+    const { data, error } = await db
       .from("admin_accounts")
       .select("email")
       .eq("tenant_id", tenant.id)
       .eq("email", normalized)
       .eq("status", "active")
       .maybeSingle();
+    if (error) return null;
     if (data) return { tenantId: tenant.id, email: normalized };
 
     // 소유자 폴백 — active 관리자가 0명일 때만(백필 누락·초기 상태 안전망).
     // active가 1명이라도 있으면 소유자라도 그 운영자만 인가한다(단일 활성 운영자 원칙).
     if (isOwner) {
-      const { count } = await db
+      const { count, error: countError } = await db
         .from("admin_accounts")
         .select("email", { count: "exact", head: true })
         .eq("tenant_id", tenant.id)
         .eq("status", "active");
-      if ((count ?? 0) === 0) {
+      if (!countError && count === 0) {
         console.warn(
           `[auth] tenant ${tenant.id}에 active 관리자 없음 — 소유자(${normalized}) 폴백 인가`,
         );

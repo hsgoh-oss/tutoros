@@ -1,3 +1,4 @@
+import { assertQuery } from "./query-error";
 // 수업 묶음·회차 원장·출결 데이터 계층 (M3).
 // 스키마 정본: supabase/migrations/00020_lesson_packages.sql
 //   (lesson_packages · session_ledger · lesson_package_balances 뷰 · attendance_contacts
@@ -308,17 +309,18 @@ export async function getScheduleDetail(
 ): Promise<ScheduleDetail | null> {
   const db = createServiceClient();
   if (!db) return null;
-  const { data } = await db
+  const { data, error } = await db
     .from("schedules")
     .select("*, students(name)")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .maybeSingle();
+  assertQuery(error, "schedule detail");
   if (!data) return null;
   const row = data as Record<string, unknown> & { students: unknown };
   const schedule = mapScheduleRow(row);
 
-  const [{ data: contacts }, { data: corrections }] = await Promise.all([
+  const [{ data: contacts, error: contactError }, { data: corrections, error: correctionError }] = await Promise.all([
     db
       .from("attendance_contacts")
       .select("*")
@@ -333,10 +335,12 @@ export async function getScheduleDetail(
       .order("created_at", { ascending: false }),
   ]);
 
+  assertQuery(contactError, "attendance contacts");
+  assertQuery(correctionError, "attendance corrections");
   let packageTitle: string | null = null;
   let remaining: number | null = null;
   if (schedule.packageId) {
-    const [{ data: pkg }, { data: bal }] = await Promise.all([
+    const [{ data: pkg, error: packageError }, { data: bal, error: balanceError }] = await Promise.all([
       db
         .from("lesson_packages")
         .select("title")
@@ -350,6 +354,8 @@ export async function getScheduleDetail(
         .eq("package_id", schedule.packageId)
         .maybeSingle(),
     ]);
+    assertQuery(packageError, "schedule package");
+    assertQuery(balanceError, "schedule balance");
     packageTitle = (pkg as { title: string } | null)?.title ?? null;
     remaining = (bal as { remaining: number } | null)?.remaining ?? null;
   }

@@ -81,6 +81,7 @@ test("캘린더: 빈 시간에서 등록·길이·학생 자동 입력과 요청
   await expect(dialog.getByLabel("학생", { exact: false })).toHaveValue(id!);
   await dialog.getByLabel("수업 시간").selectOption("90");
   await expect(dialog.getByText("19:00 시작 · 20:30 종료")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "일정 등록", exact: true })).toBeEnabled();
   await page.route("**/admin/schedules?**", (route) => route.request().method() === "POST" ? route.abort() : route.continue());
   await dialog.getByRole("button", { name: "일정 등록", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("입력 내용은 유지됩니다");

@@ -1,5 +1,7 @@
 "use server";
 
+import { restoreBackupAtomically } from "@/lib/data/backup";
+
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import {
@@ -13,7 +15,6 @@ import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getSiteContent } from "@/lib/data/content";
 import { getBackup, recordBackup } from "@/lib/data/backup";
 import { logActivity, runCritical } from "@/lib/data/activity";
-import { createWorkItem } from "@/lib/data/work";
 import { isPushConfigured } from "@/lib/push/config";
 import { pushToAdmins } from "@/lib/push/send";
 import {
@@ -193,60 +194,12 @@ export async function restoreSetting(backupId: string): Promise<CrmActionResult>
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
-
   const backup = await getBackup(session.tenantId, backupId);
-  if (!backup) return { ok: false, error: "백업을 찾을 수 없습니다." };
-  const key = backup.target.replace(/^settings:/, "");
-
-  // 복원 전 현재 값 — 감사 before_data로 남겨 "무엇에서 무엇으로" 대조 가능하게 한다.
-  const db = createServiceClient()!;
-  const { data: currentRow } = await db
-    .from("site_settings")
-    .select("value")
-    .eq("tenant_id", session.tenantId)
-    .eq("key", key)
-    .maybeSingle();
-
-  // 설정 스냅샷에는 연락처·주소 등 개인정보가 포함된다 — fail-closed 감사(category 'privacy').
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "settings_restore",
-      targetType: "site_settings",
-      targetId: backupId,
-      summary: `설정 백업 복원: ${backup.target}`,
-      category: "privacy",
-      before: currentRow?.value ?? null,
-      after: backup.snapshot,
-      reason: `백업(${backupId}) 시점 값으로 복원`,
-    },
-    async (): Promise<CrmActionResult> => {
-      const { error } = await upsertSetting(session.tenantId, key, backup.snapshot);
-      if (error) {
-        console.error("[settings] restore failed", error);
-        return { ok: false, error: "복원 중 오류가 발생했습니다." };
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  // D-08·W-06 최소 수렴: "복원은 정합 확인 업무로 수렴" — 복원분 정합·과거 파기 대상
-  // 재적용 여부를 사람이 확인하도록 업무를 남긴다(fail-open — 복원 성공은 유지).
-  // 격리 리허설→정합성→재파기→운영 연결 전면 구현은 M8 몫.
-  await createWorkItem(session.tenantId, {
-    kind: "manual",
-    priority: "privacy",
-    title: "백업 복원 정합 확인",
-    detail: `설정 백업 복원(${backup.target})`,
-    sourceType: "backup_restore",
-    sourceId: backupId,
-    nextAction: "복원분 데이터 정합·과거 파기 대상 재적용 여부 확인(D-08·W-06)",
-  });
-
-  revalidatePath("/", "layout");
-  return { ok: true };
+  if (!backup || !backup.target.startsWith("settings:")) return { ok: false, error: "설정 백업을 찾을 수 없습니다." };
+  const target = backup.target;
+  const result = await restoreBackupAtomically(session.tenantId, session.email, backupId, target);
+  if (result.ok) { revalidatePath("/", "layout"); }
+  return result;
 }
 
 /* ---------- 관리자 보안 — 세션 회수·운영자 교체 (P-10 · 시나리오 64–67) ---------- */

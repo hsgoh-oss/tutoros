@@ -1,12 +1,13 @@
 "use server";
 
+import { restoreBackupAtomically } from "@/lib/data/backup";
+
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
-import { getBackup, recordBackup } from "@/lib/data/backup";
-import { logActivity, runCritical } from "@/lib/data/activity";
-import { createWorkItem } from "@/lib/data/work";
+import { recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
@@ -221,87 +222,12 @@ export async function moveFaqDown(id: string): Promise<CrmActionResult> {
   return moveFaq(id, "down");
 }
 
-interface FaqSnapshotRow {
-  id: string;
-  tenant_id: string;
-  category: string;
-  question: string;
-  answer: string;
-  sort_order: number;
-  updated_at: string;
-}
-
 export async function restoreFaqsBackup(backupId: string): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
-
-  const backup = await getBackup(session.tenantId, backupId);
-  if (!backup || backup.target !== BACKUP_TARGET) {
-    return { ok: false, error: "백업을 찾을 수 없습니다." };
-  }
-
-  const db = createServiceClient()!;
-  // snapshot은 jsonb라 내용이 스키마를 보장하지 않는다. service_role은 RLS를 우회하므로
-  // 복원 행의 tenant_id를 현재 세션 테넌트로 강제해 타테넌트로 새는 경로를 원천 차단한다.
-  const rows = ((backup.snapshot as FaqSnapshotRow[]) ?? []).map((row) => ({
-    ...row,
-    tenant_id: session.tenantId,
-  }));
-
-  // 복원 전 현재 규모를 before_data 요약으로 남긴다(전문 스냅샷은 backups 테이블 몫).
-  const { count: currentCount } = await db
-    .from("faqs")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", session.tenantId);
-
-  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "restore",
-      targetType: "faq",
-      targetId: backupId,
-      summary: `FAQ 백업 복원 (${rows.length}건)`,
-      category: "privacy",
-      before: { faq_count: currentCount ?? 0 },
-      after: { backup_id: backupId, restored_count: rows.length },
-    },
-    async () => {
-      const { error: deleteError } = await db
-        .from("faqs")
-        .delete()
-        .eq("tenant_id", session.tenantId);
-      if (deleteError) {
-        console.error("[faq] restore delete failed", deleteError);
-        return { ok: false, error: "복원 중 오류가 발생했습니다." };
-      }
-      if (rows.length > 0) {
-        const { error: insertError } = await db.from("faqs").insert(rows);
-        if (insertError) {
-          console.error("[faq] restore insert failed", insertError);
-          return { ok: false, error: "복원 중 오류가 발생했습니다." };
-        }
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  // D-08·W-06 최소 수렴: "복원은 정합 확인 업무로 수렴" — 복원분 정합·과거 파기 대상
-  // 재적용 여부를 사람이 확인하도록 업무를 남긴다(fail-open — 복원 성공은 유지).
-  // 격리 리허설→정합성→재파기→운영 연결 전면 구현은 M8 몫.
-  await createWorkItem(session.tenantId, {
-    kind: "manual",
-    priority: "privacy",
-    title: "백업 복원 정합 확인",
-    detail: `FAQ 백업 복원(${rows.length}건)`,
-    sourceType: "backup_restore",
-    sourceId: backupId,
-    nextAction: "복원분 데이터 정합·과거 파기 대상 재적용 여부 확인(D-08·W-06)",
-  });
-
-  revalidateFaqs();
+  const target = BACKUP_TARGET;
+  const result = await restoreBackupAtomically(session.tenantId, session.email, backupId, target);
+  if (result.ok) { revalidateFaqs(); }
   return result;
 }

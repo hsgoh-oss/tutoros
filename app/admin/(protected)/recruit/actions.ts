@@ -1,5 +1,7 @@
 "use server";
 
+import { restoreBackupAtomically } from "@/lib/data/backup";
+
 // 모집 정원·접수 상태 운영(O-04) + 대기 자리 제안(C-06) 서버 액션.
 //
 // 정본: docs/flow-canon/01_atlas_01_intake.md O-04·C-06 · 03_scenarios_133.md 검수 61·62·63.
@@ -21,8 +23,8 @@
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
-import { getBackup, recordBackup } from "@/lib/data/backup";
-import { logActivity, runCritical } from "@/lib/data/activity";
+import { recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
 import { formatKDateTime } from "@/lib/data/crm";
 import { getSeatAvailability } from "@/lib/data/intake";
@@ -153,64 +155,9 @@ export async function restoreRecruitBackup(backupId: string): Promise<CrmActionR
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
-
-  const backup = await getBackup(session.tenantId, backupId);
-  if (!backup) return { ok: false, error: "백업을 찾을 수 없습니다." };
-  // 스냅샷은 저장 시점 recruit_status 행(snake_case) 또는 null(당시 행 없음)을 담고 있다.
-  const snapshot = backup.snapshot as RecruitStatusRow | null;
-  if (!snapshot) {
-    return { ok: false, error: "이 백업 시점에는 저장된 모집 현황이 없습니다." };
-  }
-
-  const previous = await fetchRecruitRow(session.tenantId);
-  await recordBackup(session.tenantId, BACKUP_TARGET, previous);
-
-  const db = createServiceClient()!;
-  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "restore",
-      targetType: "recruit",
-      targetId: backupId,
-      summary: `모집 현황 백업 복원 (${snapshot.status})`,
-      category: "privacy",
-      // 복원 전 행 요약(4필드 전부) — null이면 복원 전 저장된 모집 현황이 없던 상태.
-      before: previous,
-      after: snapshot,
-    },
-    async () => {
-      const { error } = await db.from("recruit_status").upsert({
-        tenant_id: session.tenantId,
-        status: snapshot.status,
-        message: snapshot.message,
-        seat_count: snapshot.seat_count,
-        is_banner_visible: snapshot.is_banner_visible,
-      });
-      if (error) {
-        console.error("[recruit] restore failed", error);
-        return { ok: false, error: "복원 중 오류가 발생했습니다." };
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  // D-08·W-06 최소 수렴: "복원은 정합 확인 업무로 수렴" — 복원분 정합·과거 파기 대상
-  // 재적용 여부를 사람이 확인하도록 업무를 남긴다(fail-open — 복원 성공은 유지).
-  // 격리 리허설→정합성→재파기→운영 연결 전면 구현은 M8 몫.
-  await createWorkItem(session.tenantId, {
-    kind: "manual",
-    priority: "privacy",
-    title: "백업 복원 정합 확인",
-    detail: `모집 현황 백업 복원(${snapshot.status})`,
-    sourceType: "backup_restore",
-    sourceId: backupId,
-    nextAction: "복원분 데이터 정합·과거 파기 대상 재적용 여부 확인(D-08·W-06)",
-  });
-
-  revalidateRecruit();
+  const target = BACKUP_TARGET;
+  const result = await restoreBackupAtomically(session.tenantId, session.email, backupId, target);
+  if (result.ok) { revalidateRecruit(); }
   return result;
 }
 

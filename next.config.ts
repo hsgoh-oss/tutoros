@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { assertProductionAuth } from "./lib/auth/environment";
 
 // 보안 헤더 4종 (기획 7-15 NFR). 전 경로 적용.
 const securityHeaders = [
@@ -41,4 +42,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function config(phase: string): NextConfig {
+  // next start can keep its socket open after an instrumentation error; fail before listening.
+  if (phase === "phase-production-server") assertProductionAuth();
+  return nextConfig;
+}

@@ -148,7 +148,7 @@ export function SessionControls({ id, initialMode, schedules, detailHref, onBack
     </nav>
     <h4 ref={heading} tabIndex={-1} className="calendar-control-title">{TITLES[mode]}</h4>
     {notice && <p className="calendar-saved" role="status">{notice}</p>}
-    {schedule.packageId && !schedule.contractId && <div className="calendar-overlap"><p>계약을 연결해야 회차를 차감할 수 있습니다.</p>{detail.candidates.length === 1 ? <button type="button" className={buttonClass("outline", "sm")} disabled={pending} onClick={resolveContract}>유효 계약 연결</button> : <Link href={detailHref}>수업 상세에서 계약 확인</Link>}</div>}
+    {!schedule.contractId && detail.candidates.length > 0 && <div className="calendar-overlap"><p>계약을 연결해야 회차를 차감할 수 있습니다.</p>{detail.candidates.length === 1 ? <button type="button" className={buttonClass("outline", "sm")} disabled={pending} onClick={resolveContract}>유효 계약 연결</button> : <Link href={detailHref}>수업 상세에서 계약 확인</Link>}</div>}
     <form onSubmit={submit}>
       <fieldset disabled={pending} className="calendar-control-fields" key={mode}>
         {(attendanceMode || mode === "correction") && <>

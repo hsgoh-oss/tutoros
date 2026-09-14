@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Field, Input, Select } from "@/components/ui/form";
@@ -10,6 +10,7 @@ import { calendarHref, calendarStart, durationLabel, scheduleEnd, validCalendarD
 import { kstDateOnly, kstTime } from "@/lib/kst";
 import type { ClassType } from "@/lib/types";
 import type { ScheduleListItem } from "@/lib/data/crm";
+import { getCalendarPackages } from "@/app/admin/(protected)/schedules/calendar-actions";
 
 export type CalendarStudent = { id: string; name: string; classType?: ClassType };
 
@@ -27,6 +28,22 @@ export function ScheduleCreateForm({ students, initialStudentId = "", initialDat
   const [classType, setClassType] = useState<ClassType>(students.find((student) => student.id === initialStudentId)?.classType ?? "inperson");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [packageId, setPackageId] = useState("auto");
+  const [packages, setPackages] = useState<{ id: string; title: string; remaining: number | null }[]>([]);
+  const [packageLoading, setPackageLoading] = useState(false);
+  const [packageError, setPackageError] = useState("");
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (!studentId || !calendarStart(date, time)) return;
+    let active = true;
+    setPackageLoading(true); setPackageError("");
+    getCalendarPackages(studentId, date, time).then((result) => {
+      if (!active) return;
+      if (result.ok) setPackages(result.packages); else setPackageError(result.error);
+      setPackageLoading(false);
+    }).catch(() => { if (active) { setPackageError("수업 묶음을 확인하지 못했습니다."); setPackageLoading(false); } });
+    return () => { active = false; };
+  }, [studentId, date, time, retry]);
   const start = calendarStart(date, time);
   const end = start ? new Date(start.getTime() + Number(duration) * 60_000) : null;
   const overlaps = start && end ? schedules.filter((item) => ["planned", "makeup"].includes(item.status) && Date.parse(item.scheduledAt) < end.getTime() && scheduleEnd(item) > start.getTime()) : [];
@@ -56,6 +73,7 @@ export function ScheduleCreateForm({ students, initialStudentId = "", initialDat
       <Field label="학생" required className="sm:col-span-2">
         <Select name="studentId" required value={studentId} onChange={(event) => {
           setStudentId(event.target.value);
+          setPackageId("auto");
           setClassType(students.find((student) => student.id === event.target.value)?.classType ?? "inperson");
         }}>
           <option value="" disabled>학생을 선택하세요</option>
@@ -72,7 +90,14 @@ export function ScheduleCreateForm({ students, initialStudentId = "", initialDat
       <Field label="수업 방식" className="sm:col-span-2">
         <Select name="classType" value={classType} onChange={(event) => setClassType(event.target.value as ClassType)}><option value="inperson">대면</option><option value="video">화상</option></Select>
       </Field>
+      {studentId && start && <Field label="수업 묶음" className="sm:col-span-2" hint={packageLoading ? "연결 가능한 묶음을 확인하고 있습니다." : packageId === "standalone" || packages.length === 0 ? "차감 없는 수업으로 등록됩니다." : "연결한 계약과 잔여 회차를 출결 처리에서도 사용합니다."}>
+        <Select name="packageId" value={packageId} onChange={(event) => setPackageId(event.target.value)} disabled={packageLoading || !!packageError}>
+          <option value="auto">{packages.length === 1 ? `자동 연결 · ${packages[0].title} (잔여 ${packages[0].remaining ?? "—"}회)` : packages.length > 1 ? "묶음 중복 — 등록·계약 기간 확인 필요" : "자동 연결 · 연결 가능한 묶음 없음"}</option>
+          <option value="standalone">차감 없는 수업</option>
+        </Select>
+      </Field>}
     </fieldset>
+    {packageError && <div className="calendar-control-error" role="alert">{packageError} <button type="button" className="calendar-text-action" onClick={() => setRetry((value) => value + 1)}>다시 확인</button></div>}
     {start && end && <p className="calendar-form-hint">{time} 시작 · {kstDateOnly(end) !== date && "다음 날 "}{kstTime(end)} 종료</p>}
     {overlaps.length > 0 && <div className="calendar-overlap" role="status">
       <p>{sameStudentOverlap ? "이 학생의 기존 수업과 시간이 겹칩니다." : "같은 시간에 다른 학생의 수업이 있습니다."}</p>
@@ -84,7 +109,7 @@ export function ScheduleCreateForm({ students, initialStudentId = "", initialDat
     <div className="calendar-form-actions">
       {onCancel ? <button type="button" className={buttonClass("outline", "sm")} disabled={pending} onClick={onCancel}>돌아가기</button>
         : returnHref && <Link className={buttonClass("outline", "sm")} href={returnHref}>취소</Link>}
-      <button type="submit" disabled={pending || !studentId || !time || !validCalendarDate(date) || sameStudentOverlap} className={buttonClass("primary", "sm")}>{pending ? "등록 중…" : "일정 등록"}</button>
+      <button type="submit" disabled={pending || packageLoading || !!packageError || (packageId === "auto" && packages.length > 1) || !studentId || !time || !validCalendarDate(date) || sameStudentOverlap} className={buttonClass("primary", "sm")}>{pending ? "등록 중…" : "일정 등록"}</button>
     </div>
   </form>;
 }

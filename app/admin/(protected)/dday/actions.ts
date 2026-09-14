@@ -1,11 +1,12 @@
 "use server";
 
+import { restoreBackupAtomically } from "@/lib/data/backup";
+
 import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
-import { getBackup, recordBackup } from "@/lib/data/backup";
-import { logActivity, runCritical } from "@/lib/data/activity";
-import { createWorkItem } from "@/lib/data/work";
+import { recordBackup } from "@/lib/data/backup";
+import { logActivity } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
@@ -238,78 +239,8 @@ export async function restoreDdayBackup(backupId: string): Promise<CrmActionResu
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
-
-  const backup = await getBackup(session.tenantId, backupId);
-  if (!backup) return { ok: false, error: "백업을 찾을 수 없습니다." };
-  const snapshot = backup.snapshot;
-  if (!Array.isArray(snapshot)) {
-    return { ok: false, error: "백업 데이터가 올바르지 않습니다." };
-  }
-  // 스냅샷은 저장 시점 ddays 행 배열(snake_case)을 그대로 담고 있다.
-  const snapshotRows = snapshot as DdayRow[];
-
-  const rows = await fetchDdayRows(session.tenantId);
-  await recordBackup(session.tenantId, BACKUP_TARGET, rows);
-
-  const db = createServiceClient()!;
-  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "restore",
-      targetType: "dday",
-      targetId: backupId,
-      summary: `D-day 백업 복원 (${snapshotRows.length}건)`,
-      category: "privacy",
-      // 복원 전 현재 규모 요약 — 전문 스냅샷은 위 recordBackup(backups 테이블) 몫.
-      before: { dday_count: rows.length },
-      after: { backup_id: backupId, restored_count: snapshotRows.length },
-    },
-    async () => {
-      const { error: delError } = await db
-        .from("ddays")
-        .delete()
-        .eq("tenant_id", session.tenantId);
-      if (delError) {
-        console.error("[dday] restore delete failed", delError);
-        return { ok: false, error: "복원 중 오류가 발생했습니다." };
-      }
-
-      if (snapshotRows.length > 0) {
-        const { error: insError } = await db.from("ddays").insert(
-          snapshotRows.map((r) => ({
-            id: r.id,
-            tenant_id: session.tenantId,
-            name: r.name,
-            exam_date: r.exam_date,
-            is_visible: r.is_visible,
-            sort_order: r.sort_order,
-          })),
-        );
-        if (insError) {
-          console.error("[dday] restore insert failed", insError);
-          return { ok: false, error: "복원 중 오류가 발생했습니다." };
-        }
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  // D-08·W-06 최소 수렴: "복원은 정합 확인 업무로 수렴" — 복원분 정합·과거 파기 대상
-  // 재적용 여부를 사람이 확인하도록 업무를 남긴다(fail-open — 복원 성공은 유지).
-  // 격리 리허설→정합성→재파기→운영 연결 전면 구현은 M8 몫.
-  await createWorkItem(session.tenantId, {
-    kind: "manual",
-    priority: "privacy",
-    title: "백업 복원 정합 확인",
-    detail: `D-day 백업 복원(${snapshotRows.length}건)`,
-    sourceType: "backup_restore",
-    sourceId: backupId,
-    nextAction: "복원분 데이터 정합·과거 파기 대상 재적용 여부 확인(D-08·W-06)",
-  });
-
-  revalidateDday();
+  const target = BACKUP_TARGET;
+  const result = await restoreBackupAtomically(session.tenantId, session.email, backupId, target);
+  if (result.ok) { revalidateDday(); }
   return result;
 }

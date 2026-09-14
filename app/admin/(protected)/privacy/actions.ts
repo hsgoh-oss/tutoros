@@ -4,18 +4,10 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { runCritical } from "@/lib/data/activity";
+import { isUuid } from "@/lib/uuid";
+import { erasureObject } from "@/lib/privacy/erasure-storage";
 import { recomputeRetention } from "@/lib/privacy/retention";
 import type { CrmActionResult } from "@/components/admin/crm/types";
-
-// 개인정보 보존기록 운영 (D-04 기산 · D-05 보존 잠금).
-//
-// 이 파일의 전환은 전부 **개인정보 범주**라 runCritical(category "privacy")로 감싼다 —
-// 감사 기록을 먼저 남기지 못하면 전환 자체를 실행하지 않는다(fail-closed, 00013 P-11).
-// 잠금·해제·파기 기록은 나중에 "누가 언제 왜"를 답해야 하는 종류의 행위다.
-//
-// ⚠️ 여기의 '파기 완료 기록'은 데이터를 지우지 않는다. 실제 파기(주 저장소·외부 처리자·백업)는
-// D-06·D-07의 몫이고 아직 구현돼 있지 않다 — 이 액션은 운영자가 파기를 실행했다는 사실을
-// 원장에 남기는 것뿐이다. 화면 문구도 그렇게 적혀 있어야 한다.
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
 
@@ -158,72 +150,64 @@ export async function releaseRetentionHold(id: string): Promise<CrmActionResult>
   return { ok: true };
 }
 
-/**
- * 파기 완료 **기록**.
- *
- * 다시 말하지만 이 액션은 아무것도 지우지 않는다. 운영자가 실제 파기(주 저장소 삭제·외부
- * 처리자 삭제 요청·백업 확인)를 마친 뒤, 그 사실과 범위를 원장에 적는 것이다.
- * 그래서 무엇을 어떻게 파기했는지(note)를 필수로 받는다 — 내용 없는 파기 기록은 증적이 아니다.
- *
- * 기한 전 파기도 막지 않는다: 정보주체의 삭제 요청처럼 기한보다 먼저 파기하는 경우가 있고,
- * 그건 정당한 사유가 있는 운영자 판단이다. 대신 잠금 중에는 기록할 수 없다(D-05·DB CHECK).
- */
-export async function recordRetentionDestruction(
-  formData: FormData,
-): Promise<CrmActionResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, error: "인증이 필요합니다." };
-  if (!hasDb()) return { ok: false, error: DB_ERROR };
+const ERASURE_ERRORS: Record<string, string> = {
+  held: "보존 잠금 중인 관련 기록이 있습니다. 잠금 근거를 먼저 확인해 주세요.",
+  not_due: "보존기한이 아직 남아 있습니다.",
+  active: "진행 중인 수업·신청·업무 또는 더 최근의 기록이 있습니다. 기산일과 종료 상태를 확인해 주세요.",
+  related_retention: "관련 계약·거래의 보존기한이 남아 있거나 보존 잠금 중입니다.",
+  shared_file: "다른 기록에서 사용하는 첨부파일이 있습니다. 파일 연결을 먼저 확인해 주세요.",
+  source_missing: "원본을 찾을 수 없습니다. 이미 삭제된 자료인지 확인해 주세요.",
+  completed: "이미 완료된 항목입니다.",
+};
 
+export async function executeRetentionErasure(formData: FormData): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  const db = createServiceClient();
+  if (!session || !db) return { ok: false, error: "인증과 데이터 연결을 확인해 주세요." };
+  const id = String(formData.get("id") ?? "");
+  if (!isUuid(id) || formData.get("confirmation") !== "파기") return { ok: false, error: "확인란에 ‘파기’를 입력해 주세요." };
+  const result = await runCritical({ tenantId: session.tenantId, actorEmail: session.email, action: "delete",
+    targetType: "retention", targetId: id, summary: "개인정보 원본·첨부파일 파기 실행", category: "privacy" }, async () => {
+    const { data, error } = await db.rpc("begin_retention_erasure", { p_tenant: session.tenantId, p_id: id, p_actor: session.email });
+    if (error || !data?.ok) return { ok: false as const, error: ERASURE_ERRORS[data?.reason] ?? "원본 삭제를 완료하지 못했습니다. 데이터는 이번 작업 전 상태로 유지됩니다." };
+    const { data: job, error: jobError } = await db.from("privacy_erasure_jobs").select("files,storage_completed_at")
+      .eq("tenant_id", session.tenantId).eq("retention_id", id).single();
+    if (jobError || !job) return { ok: false as const, error: "원본 삭제 후 파일 목록을 읽지 못했습니다. 파일 삭제를 다시 시도해 주세요." };
+    if (job.storage_completed_at) return { ok: true as const };
+    let external = 0;
+    for (const file of job.files as { bucket: string; location: string }[]) {
+      const object = erasureObject(file.bucket, file.location, session.tenantId, process.env.SUPABASE_URL!);
+      if (object.kind === "invalid") return { ok: false as const, error: "원본은 삭제했지만 첨부파일 경로를 확인하지 못했습니다. 파일 목록을 점검한 뒤 재시도해 주세요." };
+      if (object.kind === "external") { external++; continue; }
+      // Supabase remove is idempotent: a retry after a partial failure also removes absent objects.
+      const { error: storageError } = await db.storage.from(object.bucket).remove([object.path]);
+      if (storageError) return { ok: false as const, error: "원본 삭제는 끝났지만 첨부파일 삭제가 실패했습니다. 파일 삭제를 다시 시도해 주세요." };
+    }
+    const { error: saved } = await db.from("privacy_erasure_jobs")
+      .update({ storage_completed_at: new Date().toISOString(), external_file_count: external })
+      .eq("tenant_id", session.tenantId).eq("retention_id", id);
+    return saved ? { ok: false as const, error: "파일 처리 상태 저장에 실패했습니다. 다시 시도해 주세요." } : { ok: true as const };
+  });
+  revalidatePath("/admin", "layout");
+  revalidatePath("/", "layout");
+  return result;
+}
+
+/** Completion is now backed by the database job; old clients cannot bypass deletion. */
+export async function recordRetentionDestruction(formData: FormData): Promise<CrmActionResult> {
+  const session = await getAdminSession();
+  const db = createServiceClient();
+  if (!session || !db) return { ok: false, error: "인증과 데이터 연결을 확인해 주세요." };
   const id = String(formData.get("id") ?? "");
   const note = String(formData.get("note") ?? "").trim();
-  if (!id) return { ok: false, error: "잘못된 요청입니다." };
-  if (!note) {
-    return { ok: false, error: "무엇을 어떻게 파기했는지 적어 주세요(파기 범위·방법)." };
+  if (!isUuid(id) || formData.get("externalChecked") !== "on" || note.length < 10 || note.length > 2000) {
+    return { ok: false, error: "외부 서비스·백업 확인을 체크하고 처리 근거를 10~2,000자로 남겨 주세요." };
   }
-
-  const db = createServiceClient()!;
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "delete",
-      targetType: "retention",
-      targetId: id,
-      summary: "개인정보 파기 완료 기록",
-      category: "privacy",
-      reason: note,
-    },
-    async () => {
-      const { data: updated, error } = await db
-        .from("retention_records")
-        .update({
-          destroyed_at: new Date().toISOString(),
-          destroyed_by: session.email,
-          destroyed_note: note,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("tenant_id", session.tenantId)
-        .eq("id", id)
-        .is("hold_at", null)
-        .is("destroyed_at", null)
-        .select("id");
-      if (error) {
-        console.error("[privacy] 파기 기록 실패", error);
-        return { ok: false as const, error: "파기 기록에 실패했습니다." };
-      }
-      if (!updated || updated.length === 0) {
-        return {
-          ok: false as const,
-          error:
-            "보존 잠금 중이거나 이미 파기 기록이 있는 항목입니다. 잠금을 먼저 해제해 주세요.",
-        };
-      }
-      return { ok: true as const };
-    },
-  );
-
-  if (!result.ok) return { ok: false, error: result.error };
+  const result = await runCritical({ tenantId: session.tenantId, actorEmail: session.email, action: "delete",
+    targetType: "retention", targetId: id, summary: "개인정보 외부 보관 확인 및 파기 완료", category: "privacy", reason: note }, async () => {
+    const { data, error } = await db.rpc("finish_retention_erasure", { p_tenant: session.tenantId, p_id: id, p_actor: session.email, p_note: note });
+    return error || !data?.ok ? { ok: false as const, error: "원본·파일 삭제가 끝나지 않았거나 보존 잠금 중입니다. 처리 상태를 확인해 주세요." } : { ok: true as const };
+  });
   revalidatePath("/admin/privacy");
-  return { ok: true };
+  return result;
 }

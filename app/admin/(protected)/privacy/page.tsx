@@ -1,3 +1,4 @@
+import { ErasureControls } from "@/components/admin/privacy/erasure-controls";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
@@ -22,19 +23,8 @@ import { ActionButton } from "@/components/admin/crm/action-button";
 import {
   holdRetentionRecord,
   recomputeRetentionRecords,
-  recordRetentionDestruction,
   releaseRetentionHold,
 } from "./actions";
-
-// 개인정보 보존기록 (D-04 보존기한 기산 · D-05 보존 잠금).
-//
-// 이 화면이 답하는 질문은 하나다: **무엇을 언제까지 갖고 있기로 했고, 그중 기한이 지난 것은
-// 무엇인가.** 공개 처리방침에 적어 둔 보유기간을 실제 데이터에 적용한 결과가 여기 쌓인다.
-//
-// 이 화면이 하지 않는 것(오해하면 위험하므로 화면에도 그대로 적는다):
-//  · 데이터를 지우지 않는다. '파기 완료 기록'은 운영자가 파기를 실행한 사실을 적는 칸이다.
-//  · 기한이 지나도 자동으로 아무 일도 일어나지 않는다 — 파기는 사람의 결정이다(D-06).
-//  · 모든 기산 사건을 잡지 못한다. 못 잡는 사건과 그 이유를 아래에 그대로 나열한다.
 
 const STATE_LABEL: Record<RetentionState, string> = {
   due: "파기 예정 도달",
@@ -124,11 +114,11 @@ export default async function PrivacyRetentionPage({
           알게 된다. 그 오해는 방치된 개인정보로 이어진다. */}
       <div className="mb-6 rounded-panel border border-line bg-soft px-4 py-3">
         <p className="text-sm font-bold text-ink-soft">
-          이 원장은 기한을 계산하고 기록할 뿐, 데이터를 지우지 않습니다.
+          기한 확인부터 원본 삭제, 외부 보관 확인까지 단계별로 관리합니다.
         </p>
         <p className="mt-1 text-sm leading-relaxed text-muted">
-          기한이 지나도 자동으로 파기되지 않습니다. 실제 파기(주 저장소 삭제·외부 처리자 삭제
-          요청·백업 확인)를 마친 뒤 아래 &lsquo;파기 완료 기록&rsquo;에 범위와 방법을 남겨 주세요.
+          기한이 지난 항목의 파기 범위를 확인한 뒤 직접 실행합니다. 원본·첨부파일 삭제와 외부
+          서비스·백업 확인이 모두 끝나야 완료할 수 있습니다. 보존 잠금 중에는 파기할 수 없습니다.
         </p>
       </div>
 
@@ -202,7 +192,7 @@ export default async function PrivacyRetentionPage({
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={STATE_TONE[r.state]}>{STATE_LABEL[r.state]}</Badge>
+                    <Badge tone={r.erasure && !r.destroyedAt ? "warning" : STATE_TONE[r.state]}>{r.erasure && !r.destroyedAt ? "파기 진행 중" : STATE_LABEL[r.state]}</Badge>
                     <span className="text-xs font-bold text-muted">
                       {SUBJECT_LABEL[r.subjectType]}
                     </span>
@@ -240,7 +230,7 @@ export default async function PrivacyRetentionPage({
 
               {r.destroyedAt ? (
                 <p className="mt-4 rounded-panel border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  <strong className="font-bold">파기 완료 기록</strong> —{" "}
+                  <strong className="font-bold">{r.erasure?.completedAt ? "파기 완료" : "이전 수기 파기 기록 · 실제 삭제 별도 확인"}</strong> —{" "}
                   {r.destroyedNote ?? "내용 미기재"}
                   <span className="ml-1 text-xs">
                     ({r.destroyedBy ?? "담당자 미기재"} · {formatKDateTime(r.destroyedAt)})
@@ -271,21 +261,7 @@ export default async function PrivacyRetentionPage({
                     </Field>
                   </SubmitForm>
 
-                  <SubmitForm
-                    action={recordRetentionDestruction}
-                    submitLabel="파기 완료 기록"
-                  >
-                    <input type="hidden" name="id" value={r.id} />
-                    <Field
-                      label="파기 범위·방법"
-                      hint="실제 파기를 마친 뒤에 기록해 주세요. 이 버튼은 데이터를 지우지 않습니다"
-                    >
-                      <Input
-                        name="note"
-                        placeholder="예: 학생·수업·과제 행 삭제, 스토리지 파일 삭제 확인"
-                      />
-                    </Field>
-                  </SubmitForm>
+                  <ErasureControls record={r} />
                 </div>
               )}
             </Card>

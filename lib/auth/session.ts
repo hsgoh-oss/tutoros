@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
+import { assertProductionAuth, devOtpEnabled, isProductionAuth } from "./environment";
 import { resolveTenant } from "@/lib/tenant";
 import { isMailConfigured, sendOtpMail } from "@/lib/notify/mail";
 
@@ -27,6 +28,7 @@ const DEV_SECRET = "dev-only-secret-change-me";
 
 // 세션 쿠키·OTP 서명 키 — 유출/기본값이면 임의 tenant의 관리자 세션을 위조할 수 있어, 프로덕션에선 미설정 시 즉시 실패한다.
 function secret(): string {
+  assertProductionAuth();
   const s = process.env.AUTH_SECRET;
   if (!s || s === DEV_SECRET) {
     if (process.env.NODE_ENV === "production") {
@@ -117,6 +119,7 @@ export async function createSession(
 ): Promise<CreateSessionResult> {
   const db = createServiceClient();
   if (!db) {
+    if (isProductionAuth()) return { ok: false, error: "인증 저장소에 연결하지 못했습니다." };
     return { ok: true, token: createLegacySessionToken(email, tenantId) };
   }
 
@@ -149,7 +152,7 @@ export const getAdminSession = cache(
     if (!token) return null;
 
     const db = createServiceClient();
-    if (!db) return verifyLegacySessionToken(token); // 개발 모드 폴백
+    if (!db) return isProductionAuth() ? null : verifyLegacySessionToken(token); // 개발 모드 폴백
 
     // 현재 Host의 테넌트로 스코프해 조회한다 — 세션은 발급된 테넌트에서만 유효하고,
     // 타 테넌트 호스트에서 재생된 쿠키는 여기서 무효가 된다(테넌트 격리 원칙).
@@ -277,11 +280,11 @@ export interface OtpResult {
   devCode?: string;
 }
 
-// OTP를 메일 대신 화면에 표시할지 — AUTH_DEV_MODE 하나로만 통제한다(미설정=꺼짐).
+// OTP 화면 표시는 개발 런타임에서만 허용한다. 운영 환경은 설정 자체를 거부한다.
 // 이전엔 host가 *.vercel.app이면 자동으로 켜지는 게이트가 있었는데, 프리뷰 배포도 실 DB를 공유해
 // 관리자 이메일만 알면 로그인이 뚫리는 백도어였다. 호스트 기반 활성화는 제거한다.
 function devOtpVisible(): boolean {
-  return process.env.AUTH_DEV_MODE === "true";
+  return devOtpEnabled();
 }
 
 /**
@@ -295,7 +298,9 @@ export function noteOtpDecoyRequest(email: string): void {
 }
 
 export async function issueOtp(tenantId: string, email: string): Promise<OtpResult> {
+  assertProductionAuth();
   const now = Date.now();
+  if (isProductionAuth() && !createServiceClient()) return { ok: false, error: "인증 저장소에 연결하지 못했습니다." };
   if (otpRateLimited(email, now)) {
     return { ok: false, error: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." };
   }
@@ -316,7 +321,7 @@ export async function issueOtp(tenantId: string, email: string): Promise<OtpResu
     ) {
       return { ok: false, error: "60초 후에 다시 요청해 주세요." };
     }
-    await db.from("admin_otps").upsert(
+    const { error: saveError } = await db.from("admin_otps").upsert(
       {
         tenant_id: tenantId,
         email,
@@ -327,6 +332,7 @@ export async function issueOtp(tenantId: string, email: string): Promise<OtpResu
       },
       { onConflict: "tenant_id,email" },
     );
+    if (saveError) return { ok: false, error: "인증번호를 발급하지 못했습니다. 다시 시도해 주세요." };
   } else {
     const key = devKey(tenantId, email);
     const existing = devOtps.get(key);
@@ -356,7 +362,7 @@ export async function issueOtp(tenantId: string, email: string): Promise<OtpResu
     return { ok: true };
   }
   console.warn(`[otp] 메일 서비스 미연동 — ${email} 코드 발급됨(로그 미노출)`);
-  return { ok: true };
+  return { ok: false, error: "인증 메일 서비스를 사용할 수 없습니다. 운영자에게 문의해 주세요." };
 }
 
 export async function verifyOtp(

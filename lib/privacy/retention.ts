@@ -1,3 +1,4 @@
+import { assertQuery } from "@/lib/data/query-error";
 import { createServiceClient } from "@/lib/supabase/server";
 import { addKstDays, kstDateOnly, kstTodayDateOnly } from "@/lib/kst";
 
@@ -81,25 +82,25 @@ export const RETENTION_EVENTS_NOT_TRACKED = [
   {
     label: "후기·사례 반려·미게시 종료",
     reason:
-      "철회(retracted_at · 00025)는 기산한다. 반려(rejected_at)·수정 요청 뒤 미재제출 건은 '공개된 적 없는 제출본'이라 정본 D-04의 어느 사건에 넣을지 미확정 — 확정 전에는 기산하지 않는다.",
+      "철회한 후기는 자동으로 기산합니다. 반려·미게시 건은 종료 기준을 확인한 뒤 별도로 관리해야 합니다.",
   },
   {
     label: "상담·시범 미전환 종결",
     reason:
-      "상담에 '종결' 상태가 없다(consultations.status는 신규·연락·시범·등록·보류 다섯 가지) — 종결 시각이 없으니 기산할 값이 없다.",
+      "대기 철회·만료 건만 자동으로 기산합니다. 그 외 상담은 종료일을 별도로 확인해야 합니다.",
   },
   {
     label: "폼·초대·상태조회 권한 만료",
     reason:
-      "신청폼·포털 초대에는 만료가 아니라 회수만 있다(초대 링크는 무기한·회수로만 종료).",
+      "회수하거나 사용을 마친 신청폼·포털 초대의 보존기한은 별도로 확인해야 합니다.",
   },
   {
     label: "거래 분쟁 종료",
-    reason: "분쟁 접수·종료를 기록하는 곳이 아직 없다(F-02 요청 접수 미구현).",
+    reason: "분쟁 종료일이 자동으로 기록되지 않아 담당자가 별도로 확인해야 합니다.",
   },
   {
     label: "계정 탈퇴",
-    reason: "정보주체 권리 요청 접수 창구가 아직 없다(D-02 미구현).",
+    reason: "탈퇴·삭제 요청에 따른 보존기한은 요청 내용과 보존 의무를 확인해 별도로 관리해야 합니다.",
   },
 ] as const;
 
@@ -129,6 +130,7 @@ export interface RetentionRecord {
   state: RetentionState;
   /** 파기 예정일까지 남은 일수(KST). 지났으면 음수. */
   daysLeft: number;
+  erasure?: { databaseDeletedAt: string; storageCompletedAt: string | null; externalFileCount: number; completedAt: string | null };
 }
 
 /**
@@ -234,12 +236,15 @@ export async function listRetentionRecords(
     )
     .eq("tenant_id", tenantId)
     .order("retain_until", { ascending: true });
-  if (error) {
-    console.error("[retention] list failed", error);
-    return [];
-  }
+  assertQuery(error, "retention_records");
+  const { data: jobs, error: jobError } = await db.from("privacy_erasure_jobs")
+    .select("retention_id,database_deleted_at,storage_completed_at,external_file_count,completed_at").eq("tenant_id", tenantId);
+  assertQuery(jobError, "privacy_erasure_jobs");
   const today = kstTodayDateOnly();
-  return ((data ?? []) as RetentionRow[]).map((r) => mapRow(r, today));
+  return ((data ?? []) as RetentionRow[]).map((r) => {
+    const job = jobs?.find((j) => j.retention_id === r.id);
+    return { ...mapRow(r, today), erasure: job ? { databaseDeletedAt: job.database_deleted_at, storageCompletedAt: job.storage_completed_at, externalFileCount: job.external_file_count, completedAt: job.completed_at } : undefined };
+  });
 }
 
 /* ==================================================================

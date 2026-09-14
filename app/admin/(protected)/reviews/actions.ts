@@ -1,11 +1,13 @@
 "use server";
 
+import { restoreBackupAtomically } from "@/lib/data/backup";
+
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSession, type AdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
-import { getBackup, recordBackup } from "@/lib/data/backup";
+import { recordBackup } from "@/lib/data/backup";
 import { logActivity, runCritical } from "@/lib/data/activity";
 import {
   getReviewInvitation,
@@ -968,118 +970,12 @@ export async function moveReviewDown(id: string): Promise<CrmActionResult> {
    백업 복원
    ================================================================== */
 
-interface ReviewSnapshotRow {
-  id: string;
-  tenant_id: string;
-  reviewer_type: string;
-  content: string;
-  rating: number;
-  before_grade: string | null;
-  after_grade: string | null;
-  meta: unknown;
-  ai_tags: string[];
-  screenshots: string[];
-  is_pinned: boolean;
-  student_id: string | null;
-  created_at: string;
-  updated_at: string;
-  /** 00016 이후 스냅샷에만 존재 — 이전 백업 복원 호환을 위해 선택 필드. */
-  status?: ReviewStatus;
-  approved_at?: string | null;
-  /** 00025 이후 — 없으면 옛 스냅샷이라 게시본은 마스킹 확인 시각을 승인 시각으로 간주한다. */
-  masking_confirmed_at?: string | null;
-  masking_confirmed_by?: string | null;
-  images_public?: boolean;
-  kind?: string;
-  [key: string]: unknown;
-}
-
 export async function restoreReviewsBackup(backupId: string): Promise<CrmActionResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "인증이 필요합니다." };
   if (!hasDb()) return { ok: false, error: DB_ERROR };
-
-  const backup = await getBackup(session.tenantId, backupId);
-  if (!backup || backup.target !== BACKUP_TARGET) {
-    return { ok: false, error: "백업을 찾을 수 없습니다." };
-  }
-
-  const db = createServiceClient()!;
-  // snapshot은 jsonb라 내용이 스키마를 보장하지 않는다. service_role은 RLS를 우회하므로
-  // 복원 행의 tenant_id를 현재 세션 테넌트로 강제해 타테넌트로 새는 경로를 원천 차단한다.
-  // status가 없는 00016 이전 스냅샷 행은 published로 간주한다(당시 행은 전부 공개 중이던 본).
-  // 00025의 CHECK(published ⇒ masking_confirmed_at)를 옛 스냅샷도 통과하도록 승인 시각으로 채운다.
-  const rows = ((backup.snapshot as ReviewSnapshotRow[]) ?? []).map((row) => {
-    const status: ReviewStatus = row.status ?? "published";
-    const approvedAt = row.approved_at ?? (row.status ? null : row.created_at);
-    const maskingAt =
-      row.masking_confirmed_at ??
-      (status === "published" ? (approvedAt ?? row.created_at) : null);
-    return {
-      ...row,
-      tenant_id: session.tenantId,
-      status,
-      approved_at: approvedAt,
-      masking_confirmed_at: maskingAt,
-      masking_confirmed_by:
-        row.masking_confirmed_by ?? (maskingAt ? "backup:restore" : null),
-      images_public: row.images_public ?? true,
-      kind: row.kind ?? "review",
-    };
-  });
-
-  const { count: currentCount } = await db
-    .from("reviews")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", session.tenantId);
-
-  // 백업 복원은 게시 데이터 전체 치환 — 감사 선기록(pending) 없이는 실행하지 않는다(fail-closed).
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "restore",
-      targetType: "review",
-      targetId: backupId,
-      summary: `후기 백업 복원 (${rows.length}건)`,
-      category: "privacy",
-      before: { review_count: currentCount ?? 0 },
-      after: { backup_id: backupId, restored_count: rows.length },
-    },
-    async () => {
-      const { error: deleteError } = await db
-        .from("reviews")
-        .delete()
-        .eq("tenant_id", session.tenantId);
-      if (deleteError) {
-        console.error("[reviews] restore delete failed", deleteError);
-        return { ok: false, error: "복원 중 오류가 발생했습니다." };
-      }
-      if (rows.length > 0) {
-        const { error: insertError } = await db.from("reviews").insert(rows);
-        if (insertError) {
-          console.error("[reviews] restore insert failed", insertError);
-          return { ok: false, error: "복원 중 오류가 발생했습니다." };
-        }
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  // D-08·W-06 최소 수렴: "복원은 정합 확인 업무로 수렴" — 복원분 정합·과거 파기 대상
-  // 재적용 여부를 사람이 확인하도록 업무를 남긴다(fail-open — 복원 성공은 유지).
-  const { createWorkItem } = await import("@/lib/data/work");
-  await createWorkItem(session.tenantId, {
-    kind: "manual",
-    priority: "privacy",
-    title: "백업 복원 정합 확인",
-    detail: `후기 백업 복원(${rows.length}건)`,
-    sourceType: "backup_restore",
-    sourceId: backupId,
-    nextAction: "복원분 데이터 정합·과거 파기 대상 재적용 여부 확인(D-08·W-06)",
-  });
-
-  revalidateReviews();
+  const target = BACKUP_TARGET;
+  const result = await restoreBackupAtomically(session.tenantId, session.email, backupId, target);
+  if (result.ok) { revalidateReviews(); }
   return result;
 }

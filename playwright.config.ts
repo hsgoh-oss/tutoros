@@ -24,21 +24,20 @@ export default defineConfig({
     },
     {
       name: "admin",
-      testMatch: /(?:admin|calendar(?:-actions)?)\.spec\.ts/,
+      testMatch: /(?:admin|commercial|calendar(?:-actions)?)\.spec\.ts/,
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" },
     },
   ],
-  // 프로덕션 서버(next start) 대상 — 라우트 콜드 컴파일이 없어 동시성/안정성이 dev보다 훨씬 좋다.
-  // 사전에 `next build`가 되어 있어야 한다. AUTH_SECRET은 프로덕션 부팅 하드페일 가드 충족용(E2E 전용값).
+  // 화면에 OTP를 표시하는 E2E는 개발 서버에서만 실행한다. 운영 모드는 AUTH_DEV_MODE를 차단한다.
   webServer: {
-    command: 'node "node_modules/next/dist/bin/next" start -p 3100',
+    command: 'node "node_modules/next/dist/bin/next" dev --turbopack -p 3100',
     url: "http://localhost:3100",
-    reuseExistingServer: false,
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
     timeout: 120_000,
     env: {
       AUTH_DEV_MODE: "true",
-      AUTH_SECRET: "e2e-playwright-secret-do-not-use-in-prod",
+      AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-playwright-secret-do-not-use-in-prod",
     },
   },
 });

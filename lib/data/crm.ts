@@ -2,6 +2,7 @@
 // DB 미연결 시 전부 빈 배열/null 반환. lesson_materials는 타입 미정의라 이 파일에서 자체 정의한다.
 
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
+import { assertQuery } from "./query-error";
 import { kstMonthStartUtc } from "@/lib/kst";
 import type {
   ClassType,
@@ -51,11 +52,13 @@ export async function listStudentOptions(
 ): Promise<StudentOption[]> {
   const db = createServiceClient();
   if (!db) return [];
-  const { data } = await db
+  const { data, error } = await db
     .from("students")
     .select("id,name")
     .eq("tenant_id", tenantId)
+    .is("service_erased_at", null)
     .order("name");
+  assertQuery(error, "student_options");
   return (data ?? []) as StudentOption[];
 }
 
@@ -106,10 +109,12 @@ export async function listStudents(
     .from("students")
     .select("*")
     .eq("tenant_id", tenantId)
+    .is("service_erased_at", null)
     .order("created_at", { ascending: false });
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.q) query = query.ilike("name", `%${filters.q}%`);
-  const { data } = await query;
+  const { data, error } = await query;
+  assertQuery(error, "students");
   return (data ?? []).map((r) => mapStudent(r as StudentRow));
 }
 
@@ -327,7 +332,8 @@ export async function listSchedules(
   query = range.includeOverlapping
     ? query.or(`scheduled_at.gte.${range.from},ends_at.gt.${range.from},and(ends_at.is.null,scheduled_at.gt.${new Date(Date.parse(range.from) - 3_600_000).toISOString()})`)
     : query.gte("scheduled_at", range.from);
-  const { data } = await query;
+  const { data, error } = await query;
+  assertQuery(error, "schedules");
   return (data ?? []).map((r) => {
     const row = r as ScheduleJoinRow;
     return { ...mapSchedule(row), studentName: row.students?.name ?? "알 수 없음" };

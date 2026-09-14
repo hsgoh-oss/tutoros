@@ -213,7 +213,7 @@ test.describe("관리자", () => {
   test("개인정보 보존: 한계를 화면이 먼저 밝힌다", async ({ page }) => {
     await page.goto("/admin/privacy");
     await expect(
-      page.getByText("이 원장은 기한을 계산하고 기록할 뿐, 데이터를 지우지 않습니다."),
+      page.getByText("기한 확인부터 원본 삭제, 외부 보관 확인까지 단계별로 관리합니다."),
     ).toBeVisible();
     // 자동 기산하지 못하는 사건을 숨기지 않는다 — 비어 있는 이유가 화면에 있어야 한다.
     await expect(page.getByText("아직 자동으로 기산하지 않는 사건")).toBeVisible();
