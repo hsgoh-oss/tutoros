@@ -16,6 +16,7 @@ import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { logActivity, runCritical } from "@/lib/data/activity";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 import type { Attendance } from "@/lib/types";
+import { calendarStart } from "@/lib/admin-calendar";
 
 const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 있습니다.";
 
@@ -234,14 +235,15 @@ export async function createMakeup(
 
   const at = String(form.get("scheduledAt") ?? "").trim();
   if (!at) return { ok: false, error: "보강 일시를 입력해 주세요." };
-  const parsed = parseKstWallClock(at);
+  const parsed = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at) ? calendarStart(at.slice(0, 10), at.slice(11)) : null;
   if (!parsed) {
     return { ok: false, error: "보강 일시가 올바르지 않습니다." };
   }
   const durationMin = Number(form.get("durationMin") ?? 60);
-  const endsAt = new Date(
-    parsed.getTime() + (Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 60) * 60_000,
-  );
+  if (!Number.isInteger(durationMin) || durationMin < 10 || durationMin > 480 || durationMin % 5 !== 0) {
+    return { ok: false, error: "수업 길이는 10분부터 8시간까지, 5분 단위로 입력해 주세요." };
+  }
+  const endsAt = new Date(parsed.getTime() + durationMin * 60_000);
   const reason = String(form.get("reason") ?? "").trim();
   if (!reason) return { ok: false, error: "보강 사유를 입력해 주세요." };
 
@@ -314,6 +316,15 @@ export async function logAttendanceContact(
   }
 
   const db = createServiceClient()!;
+  const { data: schedule } = await db.from("schedules").select("scheduled_at, status, attendance")
+    .eq("tenant_id", session.tenantId).eq("id", scheduleId).maybeSingle();
+  if (!schedule) return { ok: false, error: "일정을 찾을 수 없습니다." };
+  if (schedule.attendance || !["planned", "makeup"].includes(schedule.status)) {
+    return { ok: false, error: "출결이 미확정인 예정 수업에만 연락을 기록할 수 있습니다." };
+  }
+  if (Date.now() < Date.parse(schedule.scheduled_at) + minuteMark * 60_000) {
+    return { ok: false, error: `수업 시작 ${minuteMark}분 후부터 기록할 수 있습니다.` };
+  }
   const { error } = await db.from("attendance_contacts").insert({
     tenant_id: session.tenantId,
     schedule_id: scheduleId,

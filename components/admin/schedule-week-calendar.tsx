@@ -4,6 +4,7 @@ import type { ScheduleListItem } from "@/lib/data/crm";
 import { calendarDates, placeSchedulesOnDay } from "@/lib/admin-calendar";
 import { kstDateOnly, kstTime } from "@/lib/kst";
 import { scheduleStatusLabel } from "@/app/admin/(protected)/schedules/constants";
+import { attendanceLabel } from "@/app/admin/(protected)/packages/constants";
 import { studentCalendarStyle, type CalendarOpen } from "./schedule-calendar";
 
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
@@ -33,10 +34,10 @@ export function ScheduleWeekCalendar({ schedules, monday, today, onOpen }: {
           {placed[index].map(({ item, startMin, endMin, column, columnCount }) => <button type="button" key={item.id}
             onClick={() => onOpen(day, undefined, item.id)} className="calendar-week-event" data-status={item.status}
             style={{ ...studentCalendarStyle(item.studentId), top: (startMin / 60 - startHour) * HOUR_PX, height: Math.max(24, (endMin - startMin) / 60 * HOUR_PX - 2), left: `calc(${column / columnCount * 100}% + 3px)`, width: `calc(${100 / columnCount}% - 6px)` }}
-            aria-label={`${kstTime(item.scheduledAt)} ${item.studentName} ${scheduleStatusLabel(item.status)} 수업 보기`}>
+            aria-label={`${kstTime(item.scheduledAt)} ${item.studentName} ${item.attendance ? attendanceLabel(item.attendance) : scheduleStatusLabel(item.status)} 수업 보기`}>
             <span className="calendar-week-event-name">{item.studentName}</span>
             <span>{kstDateOnly(item.scheduledAt) !== day ? "전날부터" : kstTime(item.scheduledAt)}{item.endsAt && `–${kstDateOnly(item.endsAt) !== day ? "24:00" : kstTime(item.endsAt)}`}</span>
-            <small>{scheduleStatusLabel(item.status)}{item.classType === "video" ? " · 화상" : ""}</small>
+            <small>{item.attendance ? attendanceLabel(item.attendance) : scheduleStatusLabel(item.status)}{item.classType === "video" ? " · 화상" : ""}</small>
           </button>)}
         </div>)}
       </div>

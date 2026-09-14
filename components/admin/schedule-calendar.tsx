@@ -6,6 +6,7 @@ import type { ScheduleListItem } from "@/lib/data/crm";
 import { kstTime } from "@/lib/kst";
 import { schedulesOnDay, studentColorIndex } from "@/lib/admin-calendar";
 import { scheduleStatusLabel } from "@/app/admin/(protected)/schedules/constants";
+import { attendanceLabel } from "@/app/admin/(protected)/packages/constants";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 export type CalendarOpen = (date: string, time?: string, eventId?: string) => void;
@@ -35,9 +36,9 @@ export function ScheduleCalendar({ schedules, month, today, onOpen }: {
         <div className="calendar-month-events">
           {items.slice(0, 3).map((item) => <button type="button" key={item.id} onClick={() => onOpen(date, undefined, item.id)}
             className="calendar-month-event" style={studentCalendarStyle(item.studentId)} data-status={item.status}
-            aria-label={`${kstTime(item.scheduledAt)} ${item.studentName} ${scheduleStatusLabel(item.status)} 수업 보기`}>
+            aria-label={`${kstTime(item.scheduledAt)} ${item.studentName} ${item.attendance ? attendanceLabel(item.attendance) : scheduleStatusLabel(item.status)} 수업 보기`}>
             <span className="calendar-student-dot" /><span className="calendar-event-time">{kstTime(item.scheduledAt)}</span><span className="truncate">{item.studentName}</span>
-            {item.status !== "planned" && <span className="calendar-event-status">{scheduleStatusLabel(item.status)}</span>}
+            {item.status !== "planned" && <span className="calendar-event-status">{item.attendance ? attendanceLabel(item.attendance) : scheduleStatusLabel(item.status)}</span>}
           </button>)}
           {items.length > 3 && <button type="button" className="calendar-more" onClick={() => onOpen(date)}>+{items.length - 3}건 더 보기</button>}
         </div>

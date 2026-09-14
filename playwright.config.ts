@@ -1,8 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// E2E — DB 미연결 dev 서버(:3003, AUTH_DEV_MODE=true) 대상.
-// 공개 사이트는 기본 콘텐츠로 완전 렌더되고, 관리자는 dev OTP로 로그인해 화면 로드까지 검증한다.
-// 데이터 변경(CRUD happy-path)은 연결된 Supabase가 필요해 이 스위트 범위 밖(빈 상태/graceful만 검증).
+// 기본 스위트는 dev OTP 로그인과 공개·관리자 화면 및 상호작용을 검증한다.
+// CALENDAR_INTEGRATION=1이면 로컬 Supabase에서 별도 테스트 학생으로 캘린더 변경도 검증한다.
+// 변경 검증은 외부 DB에서 실행되지 않으며, 테스트 학생과 일정은 종료 시 삭제한다.
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
@@ -24,7 +24,7 @@ export default defineConfig({
     },
     {
       name: "admin",
-      testMatch: /(?:admin|calendar)\.spec\.ts/,
+      testMatch: /(?:admin|calendar(?:-actions)?)\.spec\.ts/,
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" },
     },

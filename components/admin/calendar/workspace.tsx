@@ -13,15 +13,14 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/form";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
-import { ActionButton } from "@/components/admin/crm/action-button";
-import { InlineSelect } from "@/components/admin/crm/inline-select";
+import { SessionControls, type SessionMode } from "./session-controls";
 import { calendarHref, durationLabel, schedulesOnDay, scheduleTimeLabel, type CalendarView } from "@/lib/admin-calendar";
 import { addKstDays, addKstMonths, formatKDate, formatKDateTime, kstDateOnly } from "@/lib/kst";
 import type { ScheduleListItem } from "@/lib/data/crm";
-import { MANUAL_SCHEDULE_STATUS_OPTIONS, classTypeLabel, scheduleStatusLabel, scheduleStatusTone } from "@/app/admin/(protected)/schedules/constants";
-import { deleteSchedule, sendMakeupNotice, updateScheduleStatus } from "@/app/admin/(protected)/schedules/actions";
+import { classTypeLabel, scheduleStatusLabel, scheduleStatusTone } from "@/app/admin/(protected)/schedules/constants";
+import { attendanceLabel, attendanceTone, deductionLabel } from "@/app/admin/(protected)/packages/constants";
 
-type Selection = { date: string; time?: string; eventId?: string; creating: boolean };
+type Selection = { date: string; time?: string; eventId?: string; creating: boolean; mode?: SessionMode };
 export function CalendarWorkspace({ schedules, students, studentId, view, focusDate, from, to, today, initialDay, connected }: {
   schedules: ScheduleListItem[]; students: CalendarStudent[]; studentId: string; view: CalendarView;
   focusDate: string; from: string; to: string; today: string; initialDay?: string; connected: boolean;
@@ -33,6 +32,7 @@ export function CalendarWorkspace({ schedules, students, studentId, view, focusD
   const [saving, setSaving] = useState(false);
   const [refreshing, startTransition] = useTransition();
   const [notice, setNotice] = useState("");
+  const [followDate, setFollowDate] = useState<string>();
   const filtered = studentId ? schedules.filter((item) => item.studentId === studentId) : schedules;
   const selectedStudent = students.find((student) => student.id === studentId);
   const activeDay = selection?.date ?? focusDate;
@@ -56,8 +56,19 @@ export function CalendarWorkspace({ schedules, students, studentId, view, focusD
 
   const open: CalendarOpen = (date, time, eventId) => {
     setNotice("");
+    setFollowDate(undefined);
     setSelection({ date, time, eventId, creating: time !== undefined });
   };
+  function manage(item: ScheduleListItem, mode: SessionMode) {
+    setNotice(""); setFollowDate(undefined);
+    setSelection({ date: selection?.date ?? (kstDateOnly(item.scheduledAt) < from ? from : kstDateOnly(item.scheduledAt)), eventId: item.id, creating: false, mode });
+  }
+  function saved(message: string, date?: string) {
+    setSelection((current) => current && { ...current, mode: undefined });
+    setNotice(message); setFollowDate(date);
+    closeButton.current?.focus();
+    startTransition(() => router.refresh());
+  }
   function close() { if (!saving) setSelection(null); }
   function filterStudent(id: string) {
     startTransition(() => router.push(calendarHref({ view, date: focusDate, studentId: id }), { scroll: false }));
@@ -116,35 +127,40 @@ export function CalendarWorkspace({ schedules, students, studentId, view, focusD
         <Td><button type="button" className="calendar-table-date" onClick={() => open(kstDateOnly(item.scheduledAt) < from ? from : kstDateOnly(item.scheduledAt), undefined, item.id)}>{formatKDateTime(item.scheduledAt)}</button><p className="mt-1 text-xs text-muted">{item.endsAt ? `${durationLabel(Math.round((Date.parse(item.endsAt) - Date.parse(item.scheduledAt)) / 60_000))}` : "종료 시간 미정"}</p></Td>
         <Td><Link className="calendar-table-student" style={studentCalendarStyle(item.studentId)} href={`/admin/students/${item.studentId}`}><span className="calendar-student-dot" />{item.studentName}</Link></Td>
         <Td>{classTypeLabel(item.classType)}</Td>
-        <Td>{item.packageId || item.attendance || item.deductionState !== "none" || item.status === "conflict" ? <Badge tone={scheduleStatusTone(item.status)}>{scheduleStatusLabel(item.status)}</Badge> : <InlineSelect action={updateScheduleStatus} id={item.id} value={item.status} options={MANUAL_SCHEDULE_STATUS_OPTIONS} />}</Td>
+        <Td><Badge tone={item.attendance ? attendanceTone(item.attendance) : scheduleStatusTone(item.status)}>{item.attendance ? attendanceLabel(item.attendance) : scheduleStatusLabel(item.status)}</Badge></Td>
         <Td><Badge tone={item.reminderSent ? "success" : "soft"}>{item.reminderSent ? "발송" : "미발송"}</Badge></Td>
-        <Td><div className="flex items-center gap-3"><Link href={`/admin/schedules/${item.id}?from=${encodeURIComponent(calendarUrl)}`} className="text-xs text-ink-soft hover:underline">상세·출결</Link>
-          {item.status === "makeup" && <ActionButton action={sendMakeupNotice} id={item.id} label="보강 안내" confirmText="보강 안내를 학부모에게 발송하시겠습니까?" />}
-          <ActionButton action={deleteSchedule} id={item.id} label="삭제" confirmText="이 일정을 삭제하시겠습니까?" tone="danger" /></div></Td>
+        <Td><button type="button" className="calendar-text-action" onClick={() => open(kstDateOnly(item.scheduledAt) < from ? from : kstDateOnly(item.scheduledAt), undefined, item.id)}>수업 관리<ArrowUpRight size={13} /></button></Td>
       </tr>)}</tbody>
     </Table></TableWrap>}
 
     <dialog ref={dialog} className="calendar-dialog" aria-labelledby="calendar-dialog-title" onCancel={(event) => { event.preventDefault(); close(); }}>
       <div className="calendar-dialog-header">
-        <div><p>{selection?.creating ? "새 수업" : "하루 일정"}</p><h2 id="calendar-dialog-title">{formatKDate(activeDay)} <span>{new Intl.DateTimeFormat("ko-KR", { weekday: "long", timeZone: "Asia/Seoul" }).format(new Date(`${activeDay}T12:00:00+09:00`))}</span></h2></div>
+        <div><p>{selection?.creating ? "새 수업" : selection?.mode ? "수업 관리" : "하루 일정"}</p><h2 id="calendar-dialog-title">{formatKDate(activeDay)} <span>{new Intl.DateTimeFormat("ko-KR", { weekday: "long", timeZone: "Asia/Seoul" }).format(new Date(`${activeDay}T12:00:00+09:00`))}</span></h2></div>
         <button ref={closeButton} type="button" className="dash-icon-button" aria-label="일정 팝업 닫기" disabled={saving} onClick={close}><X size={20} /></button>
       </div>
       {selection && <div className="calendar-dialog-body" aria-busy={refreshing}>
-        {selection.creating ? <>
+        {selection.mode && selection.eventId ? <SessionControls key={`${selection.eventId}-${selection.mode}`} id={selection.eventId} initialMode={selection.mode} schedules={schedules}
+          detailHref={`/admin/schedules/${selection.eventId}?from=${encodeURIComponent(returnUrl)}`} onBack={() => setSelection({ ...selection, mode: undefined })} onSaved={saved} onPendingChange={setSaving} /> : selection.creating ? <>
           <ScheduleCreateForm key={`${selection.date}-${selection.time}`} students={students} initialStudentId={studentId || schedules.find((item) => item.id === selection.eventId)?.studentId}
             initialDate={selection.date} initialTime={selection.time} lockDate schedules={schedules}
             onCreated={created} onPendingChange={setSaving} onCancel={() => setSelection({ ...selection, creating: false })} />
         </> : <>
-          {notice && <p className="calendar-saved" role="status">{notice}{refreshing ? " 캘린더를 갱신하고 있습니다…" : ""}</p>}
+          {notice && <div className="calendar-saved" role="status">{notice}{refreshing ? " 캘린더를 갱신하고 있습니다…" : ""}{followDate && <Link href={calendarHref({ view, date: followDate, studentId, day: followDate })} onClick={() => { setSelection({ date: followDate, creating: false }); setNotice(""); }}>변경된 수업 보기<ArrowUpRight size={13} /></Link>}</div>}
           <div className="calendar-agenda-toolbar"><p>{selectedStudent?.name ?? "전체 학생"} · {dayItems.length}건</p><button type="button" className={buttonClass("primary", "sm")} onClick={() => setSelection({ ...selection, time: "", creating: true })}><Plus size={15} />수업 추가</button></div>
           {dayItems.length === 0 && <div className="calendar-day-empty"><CalendarDays size={28} aria-hidden="true" /><h3>등록된 수업이 없습니다</h3><p>위의 수업 추가 버튼으로 이날 일정을 잡아보세요.</p></div>}
           <div className="calendar-agenda">{dayItems.map((item) => <article key={item.id} className="calendar-agenda-item" data-selected={selection.eventId === item.id || undefined} style={studentCalendarStyle(item.studentId)}>
-            <div className="calendar-agenda-title"><h3><span className="calendar-student-dot" />{item.studentName}</h3><Badge tone={scheduleStatusTone(item.status)}>{scheduleStatusLabel(item.status)}</Badge></div>
+            <div className="calendar-agenda-title"><h3><span className="calendar-student-dot" />{item.studentName}</h3><Badge tone={item.attendance ? attendanceTone(item.attendance) : scheduleStatusTone(item.status)}>{item.attendance ? attendanceLabel(item.attendance) : scheduleStatusLabel(item.status)}</Badge></div>
             <p className="calendar-agenda-time"><Clock3 size={14} />{scheduleTimeLabel(item)}<span>{item.classType === "video" && <Video size={13} />}{classTypeLabel(item.classType)}</span></p>
             {item.conflictReason && <p className="calendar-overlap">{item.conflictReason}</p>}
-            <p className="calendar-agenda-meta">알림 {item.reminderSent ? "발송 완료" : "미발송"}{item.attendance && " · 출결 확정"}{item.packageId ? " · 수업 묶음 연결" : ""}</p>
-            <div className="calendar-agenda-actions">
-              <Link href={detailHref(item)} onClick={close} className={buttonClass("outline", "sm")}>상세·출결 관리<ArrowUpRight size={13} /></Link>
+            <p className="calendar-agenda-meta">알림 {item.reminderSent ? "발송 완료" : "미발송"}{item.deductionState !== "none" && ` · ${deductionLabel(item.deductionState)}`}{item.packageId ? " · 수업 묶음 연결" : ""}</p>
+            <div className="calendar-session-actions">
+              {!item.attendance && ["planned", "makeup"].includes(item.status) && <><button type="button" className={buttonClass("outline", "sm", "calendar-primary-action")} onClick={() => manage(item, "attendance")}>출결 처리</button><button type="button" className={buttonClass("outline", "sm")} onClick={() => manage(item, "absence")}>결석</button></>}
+              {item.attendance && <button type="button" className={buttonClass("outline", "sm")} onClick={() => manage(item, "correction")}>출결 정정</button>}
+              {!item.attendance && item.deductionState === "none" && ["planned", "makeup", "conflict"].includes(item.status) && <><button type="button" className="calendar-text-action" onClick={() => manage(item, "change")}>일정 변경·보강</button><button type="button" className="calendar-text-action calendar-danger-text" onClick={() => manage(item, "cancel")}>수업 취소</button></>}
+              {item.status === "makeup" && <button type="button" className="calendar-text-action" onClick={() => manage(item, "notify")}>보강 안내</button>}
+            </div>
+            <div className="calendar-agenda-actions calendar-secondary-actions">
+              <Link href={detailHref(item)} onClick={close}>수업 상세<ArrowUpRight size={12} /></Link>
               {item.lessonId && <Link href={`/admin/lessons/${item.lessonId}`} onClick={close}>수업 기록</Link>}
               <Link href={`/admin/students/${item.studentId}`} onClick={close}>학생 정보</Link>
             </div>
