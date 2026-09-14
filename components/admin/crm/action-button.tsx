@@ -1,21 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { buttonClass } from "@/components/ui/button";
 import type { CrmActionResult } from "./types";
 
-// id 하나만 받아 실행하는 서버 액션(삭제·완납 처리·학생 전환 등)을 위한 공용 버튼.
-// confirmText가 있으면 실행 전 confirm, 실패 시 alert로 에러를 노출한다.
 export function ActionButton({
-  action,
-  id,
-  label,
-  pendingLabel = "처리 중...",
-  confirmText,
-  redirectTo,
-  tone = "default",
-  className,
+  action, id, label, pendingLabel = "처리 중…", confirmText, redirectTo,
+  tone = "default", className,
 }: {
   action: (id: string) => Promise<CrmActionResult>;
   id: string;
@@ -28,38 +21,68 @@ export function ActionButton({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<{ kind: "confirm" | "error" | "warning"; text: string } | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={async () => {
-        if (confirmText && !window.confirm(confirmText)) return;
-        setPending(true);
-        const result = await action(id);
-        setPending(false);
-        if (result.ok) {
-          // 성공이지만 알려야 하는 결과 — 화면이 조용히 바뀌면 이유가 남지 않는다.
-          if (result.warning) window.alert(result.warning);
-          if (redirectTo) router.push(redirectTo);
-          router.refresh();
-        } else {
-          window.alert(result.error ?? "처리에 실패했습니다.");
-        }
-      }}
-      // 표 안에 같은 액션이 열 줄씩 반복된다 — 전부 유채색이면 목록이 시끄럽고,
-      // 특히 '삭제'가 늘 빨갛게 켜져 있으면 경보로서의 힘을 잃는다.
-      // 평소엔 가라앉히고 커서를 올렸을 때만 성격을 드러낸다.
+  useEffect(() => {
+    if (notice) { if (!dialog.current?.open) dialog.current?.showModal(); }
+    else dialog.current?.close();
+  }, [notice]);
+
+  function complete() {
+    setNotice(null);
+    if (redirectTo) router.push(redirectTo);
+    router.refresh();
+  }
+
+  async function run() {
+    if (pending) return;
+    setPending(true);
+    try {
+      const result = await action(id);
+      if (result.ok) {
+        if (result.warning) setNotice({ kind: "warning", text: result.warning });
+        else complete();
+      } else {
+        setNotice({ kind: "error", text: result.error ?? "처리에 실패했습니다." });
+      }
+    } catch {
+      setNotice({ kind: "error", text: "요청을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요." });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function dismiss() {
+    if (pending) return;
+    if (notice?.kind === "warning") complete();
+    else setNotice(null);
+  }
+
+  return <>
+    <button type="button" disabled={pending}
+      onClick={() => confirmText ? setNotice({ kind: "confirm", text: confirmText }) : void run()}
       className={cn(
-        // 모바일(터치)에서는 44px 높이·좌우 여백을 줘 손가락으로 누를 수 있게 한다. 데스크톱은 글자 크기 그대로.
         "text-xs font-medium underline-offset-2 transition-colors hover:underline disabled:opacity-50 max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:px-1.5",
-        tone === "danger"
-          ? "text-muted hover:text-rose-600"
-          : "text-ink-soft hover:text-brand-700",
+        tone === "danger" ? "text-muted hover:text-rose-600" : "text-ink-soft hover:text-brand-700",
         className,
-      )}
-    >
+      )}>
       {pending ? pendingLabel : label}
     </button>
-  );
+    <dialog ref={dialog} className="dash-action-dialog" aria-labelledby={titleId} aria-describedby={descriptionId}
+      onCancel={(event) => { event.preventDefault(); dismiss(); }}>
+      <div className="dash-action-dialog-body">
+        <h2 id={titleId}>{notice?.kind === "error" ? "처리하지 못했습니다" : label}</h2>
+        <p id={descriptionId} role={notice?.kind === "error" ? "alert" : undefined}>{notice?.text}</p>
+      </div>
+      <div className="dash-action-dialog-footer">
+        {notice?.kind === "confirm" ? <>
+          <button type="button" autoFocus disabled={pending} className={buttonClass("outline", "sm")} onClick={dismiss}>취소</button>
+          <button type="button" disabled={pending} className={cn(buttonClass("primary", "sm"), tone === "danger" && "dash-danger-button")} onClick={() => void run()}>{pending ? pendingLabel : label}</button>
+        </> : <button type="button" autoFocus className={buttonClass("outline", "sm")} onClick={dismiss}>확인</button>}
+      </div>
+    </dialog>
+  </>;
 }

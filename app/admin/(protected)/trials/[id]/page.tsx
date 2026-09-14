@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -113,8 +114,8 @@ export default async function TrialDetailPage({
   const canConfirm = isProposed && trial.pendingGates.length === 0;
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="flex flex-wrap items-center gap-3 text-xl font-semibold tracking-tight">
             {trial.consultationName ?? "상담 정보 없음"} 시범 회차
@@ -130,7 +131,7 @@ export default async function TrialDetailPage({
         <Link href="/admin/trials" className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink">
           ← 목록으로
         </Link>
-      </div>
+      </AdminPageHeader>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -139,7 +140,7 @@ export default async function TrialDetailPage({
             <h2 className="mb-1 text-sm font-semibold text-ink-soft">일정 합의</h2>
             <p className="mb-4 text-xs text-muted">
               일시를 입력하고 신청자와 합의가 끝났으면 합의 표시를 함께 켜세요. 일정만 합의된
-              상태는 확정이 아니라 결제 대기입니다(T-02).
+              상태는 확정이 아니라 결제 대기입니다.
             </p>
             {isProposed ? (
               <ConflictAwareForm action={saveTrialSchedule} submitLabel="일정 저장">
@@ -177,7 +178,7 @@ export default async function TrialDetailPage({
                 </p>
                 <p className="text-xs text-muted">
                   확정 이후의 일시 변경은 재예약으로 처리합니다 — 기존 회차를 닫고 대체 회차를
-                  만듭니다(T-03).
+                  만듭니다.
                 </p>
               </div>
             )}
@@ -284,7 +285,7 @@ export default async function TrialDetailPage({
             <h2 className="mb-1 text-sm font-semibold text-ink-soft">시범 확정</h2>
             <p className="mb-4 text-xs text-muted">
               일정 합의와 결제 확인이 모두 갖춰졌을 때만 확정됩니다. 확정하면 신청자에게 확정
-              안내가 나갑니다 — 안내가 실패해도 회차는 유지되고 발송만 재시도합니다(T-02).
+              안내가 나갑니다 — 안내가 실패해도 회차는 유지되고 발송만 재시도합니다.
             </p>
 
             {isProposed && (
@@ -372,7 +373,7 @@ export default async function TrialDetailPage({
               <p className="mb-5 text-xs text-muted">
                 요청 주체와 귀책을 함께 남깁니다. 운영자 귀책이면 무상 재예약 또는 전액 환불,
                 신청자 요청이면 승인된 환불·차감 정책을 따릅니다 — 정산 자체는 결제 관리에서
-                처리합니다(T-03).
+                처리합니다.
               </p>
 
               <div className="space-y-6">
@@ -434,7 +435,7 @@ export default async function TrialDetailPage({
             <h2 className="mb-1 text-sm font-semibold text-ink-soft">시범 결과</h2>
             <p className="mb-4 text-xs text-muted">
               결과는 덮어쓰지 않습니다 — 결정이 바뀌면 이전 결정을 남긴 채 새 결정을 추가합니다.
-              현재 결과는 가장 최근 결정입니다(T-04).
+              현재 결과는 가장 최근 결정입니다.
             </p>
 
             {trial.results.length === 0 ? (
@@ -486,13 +487,13 @@ export default async function TrialDetailPage({
             ) : (
               <p className="mt-4 rounded-panel bg-soft px-4 py-3 text-xs text-muted">
                 진행 결과(완료·노쇼·취소)가 확정된 뒤에 시범 결과를 정할 수 있습니다 — 자동
-                합격·부적합 판정은 하지 않습니다(T-04).
+                합격·부적합 판정은 하지 않습니다.
               </p>
             )}
 
             <p className="mt-4 rounded-panel border border-brand-100 bg-brand-50 px-4 py-3 text-xs leading-relaxed text-brand-700">
               결과가 <strong>정규 제안</strong>일 때만 상담 상세에서 정규수업 신청폼을 발급할 수
-              있습니다(검수 11). 재시범이면 이 화면에서 새 회차를 만들고, 후속 상담·거절·미진행은
+              있습니다. 재시범이면 이 화면에서 새 회차를 만들고, 후속 상담·거절·미진행은
               상담 화면에서 다음 단계를 정합니다.
               {consultation && (
                 <>

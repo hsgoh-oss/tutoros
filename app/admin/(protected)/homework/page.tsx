@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDate, hasDb } from "@/lib/data/crm";
@@ -53,15 +54,15 @@ export default async function HomeworkPage({
   const unreviewedTotal = assignments.reduce((sum, a) => sum + a.unreviewedCount, 0);
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">과제 관리</h1>
         </div>
         <Link href="/admin/homework/new" className={buttonClass("primary", "sm")}>
           신규 등록
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
@@ -95,6 +96,7 @@ export default async function HomeworkPage({
           basePath="/admin/homework"
           paramKey="status"
           current={status}
+          preserveParams={{ student }}
           options={[
             ...HOMEWORK_STATUS_OPTIONS.map((o) => ({
               value: o.value as string,
@@ -107,8 +109,8 @@ export default async function HomeworkPage({
 
       {assignments.length === 0 ? (
         <EmptyState
-          title="등록된 과제가 없습니다"
-          description="신규 등록 버튼으로 과제 초안을 만들 수 있습니다. 초안은 배부 전까지 학생·보호자에게 노출되지 않습니다."
+          title={status || student ? "조건에 맞는 과제가 없습니다" : "등록된 과제가 없습니다"}
+          description="초안은 배부 전까지 학생·보호자에게 보이지 않습니다."
           action={
             <Link href="/admin/homework/new" className={buttonClass("outline", "sm")}>
               신규 등록

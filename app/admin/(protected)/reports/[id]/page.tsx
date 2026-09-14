@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -60,8 +61,8 @@ export default async function ReportDetailPage({
   const warnIssues = issues.filter((i) => i.level === "warn");
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl font-semibold tracking-tight">
@@ -93,7 +94,7 @@ export default async function ReportDetailPage({
         <Link href="/admin/reports" className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink">
           ← 목록으로
         </Link>
-      </div>
+      </AdminPageHeader>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

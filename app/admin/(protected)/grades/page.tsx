@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listGrades, formatKDate } from "@/lib/data/crm";
@@ -19,15 +20,15 @@ export default async function GradesPage({
   const grades = session ? await listGrades(session.tenantId, student) : [];
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">성적 관리</h1>
         </div>
         <Link href="/admin/grades/new" className={buttonClass("primary", "sm")}>
           신규 등록
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
@@ -60,7 +61,6 @@ export default async function GradesPage({
       {grades.length === 0 ? (
         <EmptyState
           title="등록된 성적이 없습니다"
-          description="신규 등록 버튼으로 시험 성적을 추가할 수 있습니다."
           action={
             <Link href="/admin/grades/new" className={buttonClass("outline", "sm")}>
               신규 등록

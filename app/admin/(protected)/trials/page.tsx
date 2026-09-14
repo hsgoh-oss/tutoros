@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDateTime, hasDb, listConsultations } from "@/lib/data/crm";
@@ -59,13 +60,13 @@ export default async function TrialsPage({
   const waitingPayment = pending.filter((s) => s.pendingGates.includes("payment")).length;
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">시범수업 관리</h1>
         <p className="mt-1 text-sm text-muted">
           일정과 결제가 모두 갖춰졌을 때만 확정됩니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
@@ -165,7 +166,7 @@ export default async function TrialsPage({
       <Card className="mt-8">
         <h2 className="mb-1 text-sm font-semibold text-ink-soft">새 시범 회차 제안</h2>
         <p className="mb-4 text-xs text-muted">
-          한 상담에 진행 중인 회차는 하나만 둡니다(검수 6). 이미 진행 중인 회차가 있으면 그 회차를
+          한 상담에 진행 중인 회차는 하나만 둡니다. 이미 진행 중인 회차가 있으면 그 회차를
           닫거나 재예약하세요. 유료 여부는 만든 뒤에도 바꿀 수 있습니다.
         </p>
         <SubmitForm action={createTrialSession} submitLabel="회차 제안 만들기">

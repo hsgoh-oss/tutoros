@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { SubmitForm } from "@/components/admin/crm/submit-form";
@@ -18,10 +19,10 @@ export default async function NewSchedulePage({
   const students = session ? await listStudentOptions(session.tenantId) : [];
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">일정 신규 등록</h1>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-3xl">
         <SubmitForm

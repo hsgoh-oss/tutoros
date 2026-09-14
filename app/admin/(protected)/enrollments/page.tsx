@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import {
@@ -11,6 +12,7 @@ import { getSeatAvailability, listEnrollments, listForms } from "@/lib/data/inta
 import { isUuid } from "@/lib/uuid";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SummaryRow } from "@/components/admin/crm/summary-row";
 import { Badge } from "@/components/ui/badge";
 import { Field, Select } from "@/components/ui/form";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
@@ -72,58 +74,41 @@ export default async function EnrollmentsPage({
     : [];
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">정규 등록</h1>
         <p className="mt-1 text-sm text-muted">
-          관계·계약·결제·일정 네 조건이 모두 확인돼야 등록이 활성화됩니다(R-04). 조건이 남아 있는
-          동안에는 &lsquo;등록 준비 중&rsquo;이며 확정 수업으로 안내하지 않습니다.
+          관계·계약·결제·일정을 확인한 뒤 등록을 활성화합니다. 준비 중에는 확정 수업으로 안내하지 않습니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <p className="text-xs font-bold text-muted">등록 준비 중</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-600">{pendingCount}</p>
-          <p className="mt-1 text-xs text-muted">네 조건 확인 대기</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">활성화 가능</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-700">{readyCount}</p>
-          <p className="mt-1 text-xs text-muted">네 조건 충족 — 활성화만 남음</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">활성 등록</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-emerald-600">{activeCount}</p>
-          <p className="mt-1 text-xs text-muted">지금 자리를 쓰고 있는 등록</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">남은 자리</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
-            {seats.seatCount === null ? "미설정" : `${seats.remainingSeats ?? 0}`}
+      <div className="mb-6">
+        <SummaryRow items={[
+          { label: "등록 준비 중", value: `${pendingCount}건` },
+          { label: "활성화 가능", value: `${readyCount}건` },
+          { label: "활성 등록", value: `${activeCount}건` },
+          {
+            label: "남은 자리",
+            value: seats.seatCount === null ? "미설정" : `${seats.remainingSeats ?? 0}석`,
+            href: "/admin/recruit",
+            attention: seats.overbooked,
+          },
+        ]} />
+        {seats.overbooked && (
+          <p className="mt-3 text-sm text-rose-700">
+            정원을 초과해 새 자리 제안이 중단됐습니다. 기존 등록과 유효한 제안은 유지됩니다.
           </p>
-          <p className="mt-1 text-xs text-muted">
-            {seats.seatCount === null
-              ? "모집 현황에서 정원을 정하면 계산됩니다"
-              : `정원 ${seats.seatCount} · 활성 ${seats.activeEnrollments} · 열린 제안 ${seats.openOffers}`}
-          </p>
-          {seats.overbooked && (
-            <p className="mt-1 text-xs font-bold text-rose-600">
-              정원 초과 — 기존 등록·유효한 제안은 그대로 두고 새 제안만 중단합니다(검수 63).
-            </p>
-          )}
-        </Card>
+        )}
       </div>
 
       {studentOptions.length > 0 && (
         <Card className="mb-6">
           <h2 className="text-sm font-semibold text-ink-soft">등록 만들기</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
-            학생을 연결해 <strong>등록 준비 중</strong> 상태로 만듭니다. 네 게이트는 모두 미완으로
-            시작하며, 여기서 활성화되는 것은 없습니다. 제출된 정규 신청폼을 고르면 그 폼의 상담이
-            함께 연결됩니다(R-01).
+            학생을 연결해 <strong>등록 준비 중</strong> 상태로 만듭니다. 관계·계약·결제·일정 확인 후 활성화할 수 있습니다.
+            정규 신청폼을 선택하면 해당 상담도 연결됩니다.
           </p>
           <SubmitForm action={createEnrollment} submitLabel="등록 준비 시작">
             <div className="grid gap-4 sm:grid-cols-3">
@@ -181,6 +166,7 @@ export default async function EnrollmentsPage({
           basePath="/admin/enrollments"
           paramKey="status"
           current={filterStatus}
+          preserveParams={{ student: filterStudentId }}
           options={ENROLLMENT_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
       </Toolbar>

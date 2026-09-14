@@ -8,7 +8,7 @@ export function TableWrap({
   return (
     <div
       className={cn(
-        "overflow-x-auto rounded-panel border border-line bg-white max-md:-mx-4 max-md:rounded-none max-md:border-x-0 [-webkit-overflow-scrolling:touch]",
+        "ui-table-wrap overflow-x-auto rounded-panel border border-line bg-white max-md:-mx-4 max-md:rounded-none max-md:border-x-0 [-webkit-overflow-scrolling:touch]",
         className,
       )}
       {...props}
@@ -21,7 +21,7 @@ export function Table({
   ...props
 }: HTMLAttributes<HTMLTableElement>) {
   return (
-    <table className={cn("w-full min-w-160 text-sm", className)} {...props} />
+    <table className={cn("ui-table w-full min-w-160 text-sm", className)} {...props} />
   );
 }
 

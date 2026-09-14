@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import {
@@ -15,7 +16,7 @@ import {
   readRemainPoint,
 } from "@/lib/payssam/client";
 import { buttonClass } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { SummaryRow } from "@/components/admin/crm/summary-row";
 import { Badge } from "@/components/ui/badge";
 import { Field, Select } from "@/components/ui/form";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
@@ -108,60 +109,36 @@ export default async function PaymentsPage({
   }
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">결제 관리</h1>
         </div>
         <Link href="/admin/payments/new" className={buttonClass("primary", "sm")}>
           신규 청구
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
-      <div
-        className={
-          payssamBalance !== null
-            ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-            : "mb-6 grid gap-4 sm:grid-cols-3"
-        }
-      >
-        <Card>
-          <p className="text-xs font-bold text-muted">이번 달 완납</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
-            {formatWon(summary.paidThisMonth)}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">미납 합계</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-rose-600">
-            {formatWon(summary.overdueTotal)}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">청구 대기</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-600">
-            {formatWon(summary.pendingTotal)}
-          </p>
-        </Card>
-        {payssamBalance !== null && (
-          <Card>
-            <p className="text-xs font-bold text-muted">쌤포인트 잔액</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
-              {payssamBalance.toLocaleString("ko-KR")}P
-              <span className="ml-1 text-xs font-normal text-muted">파트너</span>
-            </p>
-            {/*
-              실제로 차감되는 쪽은 계약 방식에 달렸다(파트너 일관 관리 / 사업장 개별 관리).
-              파트너 잔액만 보고 판단하면, 정작 하위사업장이 0이어서 발송이 막혀도 알 수 없다.
-            */}
-            <p className="mt-0.5 text-sm font-semibold tracking-tight text-ink">
-              {merchantBalance === null
-                ? "하위사업장 조회 실패"
-                : `${merchantBalance.toLocaleString("ko-KR")}P`}
-              <span className="ml-1 text-xs font-normal text-muted">하위사업장</span>
-            </p>
+      <div className="mb-5">
+        <SummaryRow items={[
+          { label: "이번 달 완납", value: formatWon(summary.paidThisMonth) },
+          { label: "미납 합계", value: formatWon(summary.overdueTotal), attention: summary.overdueTotal > 0 },
+          { label: "청구 대기", value: formatWon(summary.pendingTotal) },
+        ]} />
+      </div>
+
+      {payssamBalance !== null && (
+        <details className="mb-5 rounded-panel border border-line bg-white">
+          <summary className="cursor-pointer px-4 py-3 text-sm text-ink-soft">
+            <span className="font-medium">쌤포인트 잔액</span>
+            <span className="ml-3 inline-block text-xs text-muted">파트너 {payssamBalance.toLocaleString("ko-KR")}P · 하위사업장 {merchantBalance === null ? "조회 실패" : `${merchantBalance.toLocaleString("ko-KR")}P`}</span>
+            {(payssamBalance < PAYSSAM_POINT_WARN_THRESHOLD || (merchantBalance !== null && merchantBalance < PAYSSAM_POINT_WARN_THRESHOLD)) && (
+              <span className="ml-3 inline-block text-xs font-medium text-rose-700">잔액 확인 필요</span>
+            )}
+          </summary>
+          <div className="border-t border-line px-4 py-3">
             <p className="mt-1 text-xs text-muted">
               청구서 1건당 {PAYSSAM_POINT_PER_SEND}P 차감(재발송 포함). 계약 방식에 따라 둘 중
               한쪽에서 빠집니다.
@@ -196,29 +173,31 @@ export default async function PaymentsPage({
                 )}
               </p>
             )}
-          </Card>
-        )}
-      </div>
+          </div>
+        </details>
+      )}
 
       {studentOptions.length > 0 && (
-        <Card className="mb-6">
-          <h2 className="text-sm font-semibold text-ink-soft">4주 청구 사이클 생성</h2>
-          <p className="mt-1 mb-3 text-sm text-muted">
-            선택한 학생의 직전 청구를 이어 다음 4주 청구를 생성합니다(금액·수단 승계, 발송은 수동).
-          </p>
-          <SubmitForm action={createNextCycle} submitLabel="다음 4주 청구 생성">
-            <Field label="학생">
-              <Select name="studentId" required defaultValue="">
-                <option value="">학생 선택</option>
-                {studentOptions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </SubmitForm>
-        </Card>
+        <details className="mb-5 rounded-panel border border-line bg-white">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-ink-soft">다음 4주 청구 만들기</summary>
+          <div className="border-t border-line p-4">
+            <p className="mb-3 text-sm text-muted">
+              직전 청구의 금액과 결제 수단으로 생성합니다. 생성 후 직접 발송해 주세요.
+            </p>
+            <SubmitForm action={createNextCycle} submitLabel="다음 4주 청구 생성">
+              <Field label="학생">
+                <Select name="studentId" required defaultValue="">
+                  <option value="">학생 선택</option>
+                  {studentOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </SubmitForm>
+          </div>
+        </details>
       )}
 
       <Toolbar>
@@ -226,6 +205,7 @@ export default async function PaymentsPage({
           basePath="/admin/payments"
           paramKey="status"
           current={status}
+          preserveParams={{ student }}
           options={PAYMENT_STATUS_OPTIONS.map((o) => ({
             value: o.value,
             label: o.label,
@@ -235,8 +215,7 @@ export default async function PaymentsPage({
 
       {payments.length === 0 ? (
         <EmptyState
-          title="등록된 청구가 없습니다"
-          description="신규 청구 버튼으로 수강료 청구를 생성할 수 있습니다."
+          title={status || student ? "조건에 맞는 청구가 없습니다" : "등록된 청구가 없습니다"}
           action={
             <Link href="/admin/payments/new" className={buttonClass("outline", "sm")}>
               신규 청구

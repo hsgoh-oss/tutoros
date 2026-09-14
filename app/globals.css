@@ -494,32 +494,3 @@ html.axm-menu-open body {
 .on-dark .axm-eyebrow > b {
   color: rgb(255 255 255 / 82%);
 }
-
-/* ============================================================================
-   관리자 표면 — 마케팅 언어를 도구 언어로 바꾼다.
-
-   기본값이 이미 절제돼 있으므로 여기서 바꾸는 것은 밀도뿐이다: 반경을 한 단계 더
-   줄이고, 글씨 굵기를 낮추고, 행 높이를 조인다. 색·간격 체계·컴포넌트 구조는 그대로 둔다.
-   ========================================================================== */
-.admin-surface {
-  --radius-card: 10px;
-  --radius-panel: 8px;
-  --radius-control: 7px;
-  --radius-field: 7px;
-
-  --ui-w-strong: 600;
-  --ui-w-label: 500;
-  --ui-h-sm: 2.25rem;
-  --ui-h-md: 2.5rem;
-  --ui-card-p: 1.125rem;
-  --ui-row-y: 0.625rem;
-}
-
-/* 터치 화면의 관리자 — 36px 조작부는 손가락에 작다. 44px(칩·작은 버튼)·48px(입력·주 버튼)로 올린다. */
-@media (max-width: 767px) {
-  .admin-surface {
-    --ui-h-sm: 2.75rem;
-    --ui-h-md: 3rem;
-    --ui-card-p: 1rem;
-  }
-}

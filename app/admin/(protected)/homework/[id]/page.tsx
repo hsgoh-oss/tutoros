@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -103,8 +104,8 @@ export default async function HomeworkDetailPage({
   ).length;
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl font-semibold tracking-tight">{assignment.title}</h1>
@@ -124,7 +125,7 @@ export default async function HomeworkDetailPage({
         <Link href="/admin/homework" className="inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-ink">
           ← 목록으로
         </Link>
-      </div>
+      </AdminPageHeader>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -277,7 +278,7 @@ export default async function HomeworkDetailPage({
                 </p>
                 {assignment.archivedAt ? (
                   <p className="text-xs text-muted">
-                    보관됨 — 현재 목록에서 접혀 있습니다(파기 아님, 이력 접근 유지 — H-07).
+                    보관된 과제입니다. 목록에서는 숨겨지며 기록은 유지됩니다.
                   </p>
                 ) : (
                   <ActionButton

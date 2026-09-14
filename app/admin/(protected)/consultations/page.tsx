@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listConsultations, formatKDate } from "@/lib/data/crm";
@@ -43,12 +44,12 @@ export default async function ConsultationsPage({
   }
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">상담 관리</h1>
         </div>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

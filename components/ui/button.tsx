@@ -35,6 +35,7 @@ export function buttonClass(
     "transition-[background-color,border-color,color] duration-[var(--motion-fast)] ease-[var(--motion-ease)]",
     "disabled:opacity-50 disabled:pointer-events-none",
     "focus-visible:outline-3 focus-visible:outline-brand-600/45 focus-visible:outline-offset-2",
+    `ui-button ui-button-${variant}`,
     VARIANT[variant],
     SIZE[size],
     className,

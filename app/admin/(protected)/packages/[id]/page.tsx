@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -53,8 +54,8 @@ export default async function PackageDetailPage({
   };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
             {pkg.studentName ?? "알 수 없음"}
@@ -71,7 +72,7 @@ export default async function PackageDetailPage({
             목록
           </Link>
         </div>
-      </div>
+      </AdminPageHeader>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>

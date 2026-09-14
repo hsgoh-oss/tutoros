@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listStudents, formatKDate } from "@/lib/data/crm";
@@ -36,18 +37,18 @@ export default async function StudentsPage({
     : [];
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
+    <div className="dash-page">
+      <AdminPageHeader>
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold tracking-tight">학생 관리</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="order-last w-full sm:order-none sm:w-auto">
           <CsvUpload />
-          <Link href="/admin/students/new" className={buttonClass("primary", "sm")}>
-            신규 등록
-          </Link>
         </div>
-      </div>
+        <Link href="/admin/students/new" className={buttonClass("primary", "sm")}>
+          신규 등록
+        </Link>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
@@ -56,19 +57,21 @@ export default async function StudentsPage({
           basePath="/admin/students"
           paramKey="status"
           current={status}
+          preserveParams={{ q }}
           options={STUDENT_STATUS_OPTIONS.map((o) => ({
             value: o.value,
             label: o.label,
           }))}
         />
         {/* 필터 칩과 같은 줄에 붙여 툴바 한 줄로 끝낸다 — 검색은 보조 조작이라 폭을 크게 주지 않는다. */}
-        <form method="get" className="ml-auto flex gap-2">
+        <form method="get" role="search" className="flex w-full gap-2 sm:ml-auto sm:w-auto">
           {status && <input type="hidden" name="status" value={status} />}
           <Input
             name="q"
             defaultValue={q ?? ""}
             placeholder="이름 검색"
-            className="!h-[var(--ui-h-sm)] w-40 md:w-48 md:text-sm"
+            aria-label="학생 이름 검색"
+            className="!h-[var(--ui-h-sm)] min-w-0 flex-1 sm:w-40 md:w-48 md:text-sm"
           />
           <button type="submit" className={buttonClass("ghost", "sm")}>
             검색
@@ -78,11 +81,11 @@ export default async function StudentsPage({
 
       {students.length === 0 ? (
         <EmptyState
-          title="등록된 학생이 없습니다"
-          description="신규 등록 버튼 또는 상담 관리의 학생 전환으로 추가할 수 있습니다."
+          title={q || status ? "조건에 맞는 학생이 없습니다" : "등록된 학생이 없습니다"}
+          description={q || status ? "검색어나 상태를 변경해 주세요." : "상담을 마친 학생은 상담 상세에서도 등록할 수 있습니다."}
           action={
-            <Link href="/admin/students/new" className={buttonClass("outline", "sm")}>
-              신규 등록
+            <Link href={q || status ? "/admin/students" : "/admin/students/new"} className={buttonClass("outline", "sm")}>
+              {q || status ? "전체 학생 보기" : "학생 등록"}
             </Link>
           }
         />

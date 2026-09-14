@@ -11,7 +11,7 @@ import type { HTMLAttributes } from "react";
 export function Toolbar({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("mb-4 flex flex-wrap items-center gap-2", className)}
+      className={cn("dash-toolbar mb-4 flex flex-wrap items-center gap-2", className)}
       {...props}
     />
   );

@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions } from "@/lib/data/crm";
 import { isUuid } from "@/lib/uuid";
@@ -17,13 +18,13 @@ export default async function NewReportPage({
   const studentOptions = session ? await listStudentOptions(session.tenantId) : [];
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">AI 리포트 생성</h1>
         <p className="mt-1 text-sm text-muted">
           학생의 최근 수업·성적 기록을 바탕으로 AI 초안을 생성합니다. 실명은 AI에 전달되지 않습니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-3xl">
         <SubmitForm action={createReport} submitLabel="생성" redirectTo="/admin/reports">

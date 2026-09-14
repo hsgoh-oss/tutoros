@@ -1,37 +1,6 @@
 import type { NavIconName } from "./nav-icons";
 
-// 관리자 메뉴 구성 — 상단 모듈 바(module-bar.tsx)와 좌측 하위 메뉴(sidebar.tsx)의 단일 원천.
-//
-// 왜 두 단으로 나눴나: 메뉴가 22개가 되면서 사이드바 한 장에 전부 세로로 쌓였다. 그 길이는
-// 스크롤 문제가 아니라 **찾기 문제**다 — 22개가 같은 무게로 나열돼 있으면 지금 하려는 일이
-// 어디 있는지 매번 처음부터 훑어야 한다. 업무 단위(모듈)를 먼저 고르게 하면 한 번에 보이는
-// 항목이 1~5개로 줄고, 나머지는 "지금 하는 일이 아닌 것"으로 시야에서 사라진다.
-//
-// 묶는 기준은 화면의 성격이 아니라 **업무 흐름**이다: 학생이 들어오고(유입) → 수업하고(수업)
-// → 학생별로 쌓이고(학생) → 돈이 오가고(정산). 사이트·운영은 학생과 무관한 뒷단이라 뒤에 둔다.
-//
-// 라우팅은 그대로다. 이 파일은 링크를 어떻게 묶어 보여줄지만 정하고, 각 화면의 경로·권한·동작은
-// 하나도 바뀌지 않는다(넥사크로식 MDI 작업 탭을 도입하지 않은 이유도 이것이다 — 탭 상태를
-// 클라이언트가 들고 있으면 뒤로가기·새로고침·딥링크가 전부 다르게 동작한다).
-
-/**
- * 상단 모듈 바의 치수 — 바 자신과 그 아래 붙는 요소가 **같은 숫자**를 써야 한다.
- *
- * 처음엔 바 높이를 내용이 정하게 두고(패딩만 지정) 아래 요소에 어림값을 넣었다가 4px이 어긋났다.
- * 스크롤하면 그 틈으로 본문이 비쳐 지나간다. 폰트 지표에 따라 1~2px씩 또 달라지므로,
- * 높이를 명시하고 합계를 여기 한 번만 적는다: 44(브랜드 줄) + 40(탭 줄) + 1(아래 테두리) = 85.
- *
- * Tailwind는 소스에 그대로 적힌 클래스 문자열만 생성하므로, 조립하지 않고 완성형으로 둔다.
- */
-export const ADMIN_TOP_BAR = {
-  brandRow: "h-11",
-  tabRow: "h-10",
-  /** 바 아래에 sticky로 붙는 요소의 top */
-  stickyTop: "top-[85px]",
-  /** 바를 뺀 남은 화면 높이 */
-  belowHeight: "h-[calc(100vh-85px)]",
-} as const;
-
+// Shared navigation for the sidebar, menu search and active-page matching.
 export interface AdminNavItem {
   href: string;
   label: string;
@@ -41,7 +10,7 @@ export interface AdminNavItem {
 export interface AdminModule {
   key: string;
   label: string;
-  /** 상단 바에서 모듈 이름 아래 깔리는 한 줄 설명(툴팁). */
+  /** 메뉴 그룹이 다루는 업무 범위. */
   hint: string;
   items: readonly AdminNavItem[];
 }
@@ -55,7 +24,7 @@ export const ADMIN_MODULES = [
   },
   {
     key: "intake",
-    label: "유입",
+    label: "상담·등록",
     hint: "상담 신청부터 정규 등록까지",
     items: [
       { href: "/admin/consultations", label: "상담 관리", icon: "consult" },
@@ -141,7 +110,7 @@ export function activeNavItem(pathname: string): AdminNavItem | null {
 
 /**
  * 지금 열어야 할 모듈. 어느 항목에도 걸리지 않으면(/admin 진입 직후 등) 첫 모듈로 둔다 —
- * 상단 바가 아무것도 선택되지 않은 채로 떠 있으면 "어디에 있는지" 알 수 없다.
+ * 사이드바는 대시보드를 기본 위치로 표시한다.
  */
 export function activeModule(pathname: string): AdminModule {
   const item = activeNavItem(pathname);

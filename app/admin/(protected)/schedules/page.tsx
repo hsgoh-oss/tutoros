@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listSchedules, formatKDate, formatKDateTime } from "@/lib/data/crm";
@@ -87,7 +88,7 @@ export default async function SchedulesPage({
 
   const header = (
     <>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">수업 캘린더</h1>
         </div>
@@ -99,7 +100,7 @@ export default async function SchedulesPage({
             신규 등록
           </Link>
         </div>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
     </>

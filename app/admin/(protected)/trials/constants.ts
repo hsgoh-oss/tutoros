@@ -52,7 +52,7 @@ export const TRIAL_RESULT_OPTIONS: { value: TrialResult; label: string; hint: st
   {
     value: "regular_offer",
     label: "정규 제안",
-    hint: "상담 상세에서 정규수업 신청폼을 발급할 수 있게 됩니다(검수 11).",
+    hint: "상담 상세에서 정규수업 신청폼을 발급할 수 있게 됩니다.",
   },
   { value: "retrial", label: "재시범", hint: "새 시범 회차를 다시 만들어 일정을 잡습니다." },
   { value: "followup", label: "후속 상담", hint: "추가 확인이 필요해 상담으로 되돌립니다." },
@@ -92,12 +92,12 @@ export const TRIAL_CANCEL_FAULT_OPTIONS: {
   {
     value: "operator",
     label: "운영자 귀책",
-    hint: "무상 재예약 또는 전액 환불 대상입니다(T-03).",
+    hint: "무상 재예약 또는 전액 환불 대상입니다.",
   },
   {
     value: "applicant",
     label: "신청자 요청",
-    hint: "승인된 환불·차감 정책에 따라 정산합니다(T-03).",
+    hint: "승인된 환불·차감 정책에 따라 정산합니다.",
   },
 ];
 

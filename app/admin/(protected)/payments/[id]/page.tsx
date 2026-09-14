@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -96,8 +97,8 @@ export default async function PaymentDetailPage({
   const billActive = ps?.appr_state === "W"; // 발송됨·미결제 — 재발송/파기 가능 구간(검수 42)
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
             {student?.name ?? "알 수 없음"} 청구
@@ -111,7 +112,7 @@ export default async function PaymentDetailPage({
             {paymentStatusLabel(statusEx)}
           </Badge>
         </div>
-      </div>
+      </AdminPageHeader>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

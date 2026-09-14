@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -56,8 +57,8 @@ export default async function GradeDetailPage({
   ]);
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{grade.examName}</h1>
           <p className="mt-1 text-sm text-muted">
@@ -70,7 +71,7 @@ export default async function GradeDetailPage({
         >
           ← 목록으로
         </Link>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-3xl">
         <SubmitForm action={updateGrade} submitLabel="정정 저장" pendingLabel="정정 중...">

@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions, listLessons, formatKDate } from "@/lib/data/crm";
 import { Card } from "@/components/ui/card";
@@ -21,13 +22,13 @@ export default async function NewMaterialPage({
       : [];
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">자료 업로드</h1>
         <p className="mt-1 text-sm text-muted">
           특정 학생 또는 전체 공유 자료를 업로드합니다. (pdf·jpg·png·webp, 10MB 이하)
         </p>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-2xl">
         <SubmitForm

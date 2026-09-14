@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { getStudent, hasDb } from "@/lib/data/crm";
@@ -5,6 +6,7 @@ import { listPackageTargets, listPackages } from "@/lib/data/packages";
 import { isUuid } from "@/lib/uuid";
 import type { LessonPackage, Student } from "@/lib/types";
 import { Card } from "@/components/ui/card";
+import { SummaryRow } from "@/components/admin/crm/summary-row";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/form";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
@@ -65,43 +67,29 @@ export default async function PackagesPage({
   const available = targets.filter((t) => !t.hasLivePackage);
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">수업 묶음</h1>
         <p className="mt-1 text-sm text-muted">
-          계약 조건으로 전체 회차를 만들고, 출결이 확정될 때마다 회차가 차감됩니다. 잔액은 저장된
-          숫자가 아니라 회차 원장의 합이라 언제나 근거로 되짚을 수 있습니다.
+          계약별 수업 회차와 남은 횟수를 확인합니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <p className="text-xs font-bold text-muted">진행 중</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-emerald-600">{activeCount}</p>
-          <p className="mt-1 text-xs text-muted">회차를 만들고 차감할 수 있는 묶음</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">활성화 대기</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-600">{draftCount}</p>
-          <p className="mt-1 text-xs text-muted">등록 활성·계약 동의 확인 후 활성화</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">충돌 회차</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-orange-600">{conflicted}</p>
-          <p className="mt-1 text-xs text-muted">재협의 전까지 확정하지 않은 회차</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-bold text-muted">귀속 미확정</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-rose-600">{unresolved}</p>
-          <p className="mt-1 text-xs text-muted">
-            <Link href="/admin/attendance" className="underline">
-              계약 귀속을 확정
-            </Link>
-            해야 잔액에 반영됩니다
+      <div className="mb-6">
+        <SummaryRow items={[
+          { label: "진행 중", value: `${activeCount}건` },
+          { label: "활성화 대기", value: `${draftCount}건` },
+          { label: "충돌 회차", value: `${conflicted}회`, attention: conflicted > 0 },
+          { label: "귀속 미확정", value: `${unresolved}회`, attention: unresolved > 0 },
+        ]} />
+        {unresolved > 0 && (
+          <p className="mt-3 text-sm text-muted">
+            귀속 미확정 회차는 남은 횟수에 반영되지 않습니다.{" "}
+            <Link href="/admin/attendance" className="underline underline-offset-4">출결·정정에서 확인</Link>
           </p>
-        </Card>
+        )}
       </div>
 
       {available.length > 0 && (
@@ -174,17 +162,20 @@ export default async function PackagesPage({
           basePath="/admin/packages"
           paramKey="status"
           current={filterStatus}
+          preserveParams={{ student: filterStudentId }}
           options={PACKAGE_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
       </Toolbar>
 
       {rows.length === 0 ? (
         <EmptyState
-          title="수업 묶음이 없습니다"
+          title={filterStatus || filterStudentId ? "조건에 맞는 수업 묶음이 없습니다" : "수업 묶음이 없습니다"}
           description={
-            available.length > 0
+            filterStatus || filterStudentId
+              ? "학생이나 상태 조건을 변경해 주세요."
+              : available.length > 0
               ? "위의 '수업 묶음 만들기'에서 시작할 수 있습니다."
-              : "활성 등록과 동의된 계약이 있어야 수업 묶음을 만들 수 있습니다(정규 등록에서 활성화하세요)."
+              : "정규 등록을 활성화하고 계약 동의를 완료하면 수업 묶음을 만들 수 있습니다."
           }
         />
       ) : (

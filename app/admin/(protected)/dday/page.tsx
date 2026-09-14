@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDate, formatKDateTime, hasDb } from "@/lib/data/crm";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -84,14 +85,14 @@ export default async function DdayPage({
   const nextMonth = addKstMonths(month, 1);
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">입시 일정</h1>
         <p className="mt-1 text-sm text-muted">
           수능·모의고사·내신 등 시험일을 달력으로 관리합니다. 노출로 둔 일정은 공개 사이트의
           D-day 배너에도 표시됩니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

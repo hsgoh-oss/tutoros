@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, formatKDate, formatKDateTime } from "@/lib/data/crm";
@@ -90,8 +91,8 @@ export default async function ReviewsPage({
     : [[], [], []];
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">후기·사례 관리</h1>
           <p className="mt-1 text-sm text-muted">
@@ -102,7 +103,7 @@ export default async function ReviewsPage({
         <Link href="/admin/reviews/invite" className={buttonClass("primary", "sm")}>
           작성 초대 보내기
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

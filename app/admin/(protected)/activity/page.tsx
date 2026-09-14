@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDateTime, hasDb } from "@/lib/data/crm";
@@ -186,15 +187,15 @@ export default async function ActivityPage({
   const entries = category ? all.filter((e) => e.category === category) : all;
 
   return (
-    <div>
+    <div className="dash-page">
       {/* 되돌아갈 링크를 따로 두지 않는다 — '운영' 모듈의 정식 메뉴가 되면서 상단·좌측 메뉴가
           현재 위치를 보여주고, 그 위에 뒤로가기 링크가 또 있으면 어디가 상위인지 흐려진다. */}
-      <div className="mb-8">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">변경 이력</h1>
         <p className="mt-1 text-sm text-muted">
           상담·학생·결제·개인정보 등 주요 작업의 감사 기록입니다. 최근 100건(범주 필터 시 500건)까지 봅니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

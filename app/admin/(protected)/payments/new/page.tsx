@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions } from "@/lib/data/crm";
 import { isUuid } from "@/lib/uuid";
@@ -27,13 +28,13 @@ export default async function NewPaymentPage({
   const defaultDueDate = kstDay(27);
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">신규 청구</h1>
         <p className="mt-1 text-sm text-muted">
           생성된 청구는 &apos;청구&apos; 상태로 등록됩니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-3xl">
         <SubmitForm

@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb } from "@/lib/supabase/server";
 import { getSiteContent } from "@/lib/data/content";
@@ -29,17 +30,25 @@ export default async function SettingsPage() {
   }));
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">사이트 설정</h1>
         <p className="mt-1 text-sm text-muted">
           사업자 정보와 연락 채널을 관리합니다. 저장 시 공개 사이트에 즉시 반영됩니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
+      <nav className="dash-settings-nav" aria-label="설정 섹션">
+        <a href="#site-info">사업자·연락처</a>
+        <a href="#rates">수업료</a>
+        <a href="#notifications">알림</a>
+        <a href="#security">보안</a>
+      </nav>
       {!connected && <DbBanner />}
 
-      <Card className="max-w-3xl">
+      <section id="site-info" className="dash-settings-section" aria-labelledby="site-info-heading">
+      <Card>
+        <h2 id="site-info-heading" className="mb-6 text-base font-semibold">사업자·연락처</h2>
         <SubmitForm action={updateSiteInfo} submitLabel="저장">
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="브랜드명" required>
@@ -118,9 +127,12 @@ export default async function SettingsPage() {
         <BackupPanel entries={entries} restoreAction={restoreSetting} />
       </Card>
 
+      </section>
+
       {/* 수업료 — 공개 사이트 계산기·가격표·상담 폼 안내가 전부 이 값을 읽는다. 저장 즉시 반영. */}
-      <Card className="mt-8 max-w-3xl">
-        <h2 className="text-lg font-semibold tracking-tight">수업료</h2>
+      <section id="rates" className="dash-settings-section" aria-labelledby="rates-heading">
+      <Card>
+        <h2 id="rates-heading" className="text-base font-semibold">수업료</h2>
         <p className="mt-1 mb-6 text-sm text-muted">
           시간당 단가와 시범수업료입니다. 수업 안내 페이지의 계산기·가격표, 상담 신청서의
           시범수업 안내에 즉시 반영됩니다. 이미 발행된 청구서 금액은 바뀌지 않습니다.
@@ -156,17 +168,23 @@ export default async function SettingsPage() {
         <BackupPanel entries={rateEntries} restoreAction={restoreSetting} />
       </Card>
 
+      </section>
+
       {/* 브라우저 푸시(00026) — 운영자 기기 알림. 키 미설정이면 카드가 그 사실을 보여 준다. */}
-      <AdminPushCard tenantId={session.tenantId} email={session.email} />
+      <section id="notifications" className="dash-settings-section" aria-label="알림 설정">
+        <AdminPushCard tenantId={session.tenantId} email={session.email} />
+      </section>
 
       {/* 관리자 보안 — 전 세션 로그아웃·운영자 이메일 교체 (P-10). DB 미연결이면 동작하지 않는다(액션이 안내). */}
-      <Card className="mt-8 max-w-3xl">
-        <h2 className="text-lg font-semibold tracking-tight">관리자 보안</h2>
+      <section id="security" className="dash-settings-section" aria-labelledby="security-heading">
+      <Card>
+        <h2 id="security-heading" className="text-base font-semibold">관리자 보안</h2>
         <p className="mt-1 mb-6 text-sm text-muted">
           세션 회수와 운영자 승계를 관리합니다. 두 작업 모두 완료 후 재로그인이 필요합니다.
         </p>
         <SecurityCard currentEmail={session.email} />
       </Card>
+      </section>
     </div>
   );
 }

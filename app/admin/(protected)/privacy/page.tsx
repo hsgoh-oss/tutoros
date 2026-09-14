@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDate, formatKDateTime, hasDb } from "@/lib/data/crm";
@@ -105,8 +106,8 @@ export default async function PrivacyRetentionPage({
   };
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">개인정보 보존기록</h1>
         <p className="mt-1 text-sm text-muted">
           기산 사건에서 보존기한을 계산해 파기 예정일을 관리합니다. 기준은{" "}
@@ -115,7 +116,7 @@ export default async function PrivacyRetentionPage({
           </Link>
           입니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

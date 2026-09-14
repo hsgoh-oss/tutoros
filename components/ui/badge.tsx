@@ -18,8 +18,9 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 export function Badge({ tone = "brand", className, ...props }: BadgeProps) {
   return (
     <span
+      data-tone={tone}
       className={cn(
-        "inline-flex items-center gap-1 rounded-[var(--radius-control)] border px-2.5 py-0.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight",
+        "ui-badge inline-flex items-center gap-1 rounded-[var(--radius-control)] border px-2.5 py-0.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight",
         TONE[tone],
         className,
       )}

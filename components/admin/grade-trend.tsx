@@ -16,10 +16,10 @@ const M = { top: 24, right: 20, bottom: 44, left: 48 };
 const PLOT_W = W - M.left - M.right;
 const PLOT_H = H - M.top - M.bottom;
 
-const LINE_COLOR = "#2b5ce6";
-const GRID_COLOR = "#e6ebf3";
-const AXIS_COLOR = "#c9d2e3";
-const TEXT_COLOR = "#667085";
+const LINE_COLOR = "var(--color-brand-600)";
+const GRID_COLOR = "var(--color-line)";
+const AXIS_COLOR = "var(--color-line-strong)";
+const TEXT_COLOR = "var(--color-muted)";
 
 interface Metric {
   label: string;
@@ -220,7 +220,7 @@ export function GradeTrend({ grades }: { grades: GradeTrendPoint[] }) {
           const date = shortDate(p.date);
           return (
             <g key={`pt-${i}`}>
-              <circle cx={px} cy={py} r={3.5} fill="#ffffff" stroke={LINE_COLOR} strokeWidth={2} />
+              <circle cx={px} cy={py} r={3.5} fill="var(--dash-bg, white)" stroke={LINE_COLOR} strokeWidth={2} />
               {showLabel && (
                 <text
                   x={px}

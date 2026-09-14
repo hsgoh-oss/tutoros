@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
@@ -34,8 +35,8 @@ export default async function ReviewInvitePage() {
   ]);
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">후기·사례 작성 초대</h1>
           <p className="mt-1 text-sm text-muted">
@@ -46,7 +47,7 @@ export default async function ReviewInvitePage() {
         <Link href="/admin/reviews" className="text-sm font-bold text-muted hover:text-ink">
           ← 후기·사례 관리
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

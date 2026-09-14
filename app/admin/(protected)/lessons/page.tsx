@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listLessons, getStudent, formatKDate } from "@/lib/data/crm";
@@ -29,8 +30,8 @@ export default async function LessonsPage({
   }
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">수업 기록</h1>
           <p className="mt-1 text-sm text-muted">
@@ -42,7 +43,7 @@ export default async function LessonsPage({
         <Link href="/admin/lessons/new" className={buttonClass("primary", "sm")}>
           신규 등록
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

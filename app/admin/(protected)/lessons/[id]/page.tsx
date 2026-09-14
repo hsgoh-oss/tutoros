@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -23,8 +24,8 @@ export default async function LessonDetailPage({
   const student = await getStudent(session.tenantId, lesson.studentId);
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
             {student?.name ?? "알 수 없음"} · {lesson.sessionNumber}회차
@@ -37,7 +38,7 @@ export default async function LessonDetailPage({
         >
           ← 목록으로
         </Link>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-3xl">
         <SubmitForm action={updateLesson} submitLabel="저장">

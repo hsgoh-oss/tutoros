@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
 import { resolveTenant } from "@/lib/tenant";
-import { Card } from "@/components/ui/card";
+import { GraduationCap } from "lucide-react";
+import { AdminThemeToggle } from "@/components/admin/theme";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "로그인" };
@@ -28,19 +29,18 @@ export default async function AdminLoginPage({
   const tenant = await resolveTenant();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-soft px-5">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <p className="text-2xl font-semibold tracking-tight text-ink">
+    <div className="dash-login">
+      <div className="dash-login-theme"><AdminThemeToggle /></div>
+      <div className="dash-login-panel">
+        <div className="mb-8">
+          <span className="dash-login-mark"><GraduationCap size={24} aria-hidden="true" /></span>
+          <p className="mt-6 text-xs text-muted">
             {tenant.brandName}
           </p>
-          <p className="mt-1.5 text-sm text-muted">
-            관리자 로그인 — 비밀번호 없이 이메일 인증번호로 로그인합니다.
-          </p>
+          <h1 className="mt-2 text-xl font-semibold tracking-tight">관리자 로그인</h1>
+          <p className="mt-2 text-sm text-muted">이메일로 받은 인증번호를 입력해 주세요.</p>
         </div>
-        <Card className="p-6">
-          <LoginForm next={destination} />
-        </Card>
+        <LoginForm next={destination} />
       </div>
     </div>
   );

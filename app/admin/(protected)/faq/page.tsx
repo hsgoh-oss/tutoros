@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listFaqs, formatKDateTime } from "@/lib/data/crm";
@@ -18,22 +19,21 @@ export default async function FaqPage() {
   const backups = session ? await listBackups(session.tenantId, "faqs") : [];
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">FAQ 관리</h1>
         </div>
         <Link href="/admin/faq/new" className={buttonClass("primary", "sm")}>
           신규 등록
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
       {faqs.length === 0 ? (
         <EmptyState
           title="등록된 FAQ가 없습니다"
-          description="신규 등록 버튼으로 자주 묻는 질문을 추가할 수 있습니다."
           action={
             <Link href="/admin/faq/new" className={buttonClass("outline", "sm")}>
               신규 등록

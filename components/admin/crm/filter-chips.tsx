@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cn } from "@/lib/cn";
 
 export interface FilterChipOption {
   value: string;
@@ -12,37 +11,31 @@ export function FilterChips({
   paramKey,
   options,
   current,
+  preserveParams = {},
 }: {
   basePath: string;
   paramKey: string;
   options: FilterChipOption[];
   current?: string;
+  preserveParams?: Record<string, string | undefined>;
 }) {
+  function hrefFor(value?: string) {
+    const params = new URLSearchParams();
+    for (const [key, preserved] of Object.entries(preserveParams)) {
+      if (preserved && key !== paramKey) params.set(key, preserved);
+    }
+    if (value) params.set(paramKey, value);
+    const query = params.toString();
+    return query ? `${basePath}?${query}` : basePath;
+  }
+
   return (
-    <div className="flex flex-wrap gap-2">
-      <Link
-        href={basePath}
-        className={cn(
-          "inline-flex min-h-[var(--ui-h-sm)] items-center rounded-[var(--radius-control)] border px-3.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight transition-colors",
-          !current
-            ? "border-brand-600 bg-brand-50 text-brand-700"
-            : "border-line bg-white text-ink-soft hover:border-brand-200",
-        )}
-      >
-        전체
-      </Link>
-      {options.map((opt) => (
-        <Link
-          key={opt.value}
-          href={`${basePath}?${paramKey}=${opt.value}`}
-          className={cn(
-            "inline-flex min-h-[var(--ui-h-sm)] items-center rounded-[var(--radius-control)] border px-3.5 text-xs [font-weight:var(--ui-w-label)] tracking-tight transition-colors",
-            current === opt.value
-              ? "border-brand-600 bg-brand-50 text-brand-700"
-              : "border-line bg-white text-ink-soft hover:border-brand-200",
-          )}
-        >
-          {opt.label}
+    <div className="dash-filter-tabs">
+      {[{ value: "", label: "전체" }, ...options].map((option) => (
+        <Link key={option.value} href={hrefFor(option.value)}
+          aria-current={(current ?? "") === option.value ? "page" : undefined}
+          className="dash-filter-tab">
+          {option.label}
         </Link>
       ))}
     </div>

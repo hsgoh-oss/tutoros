@@ -1,7 +1,13 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
+import { CalendarDays, Plus } from "lucide-react";
+import { buttonClass } from "@/components/ui/button";
+import { ConsultationChart } from "@/components/admin/consultation-chart";
 import { getAdminSession } from "@/lib/auth/session";
 import {
   kstDayRangeUtc,
+  addKstDays,
+  kstDateOnly,
   kstDayStartUtc,
   kstTodayDateOnly,
   kstWeekRangeUtc,
@@ -30,7 +36,8 @@ import {
   type WorkItemPriority,
 } from "@/lib/data/work";
 import type { Dday, RecruitState, RecruitStatus, Student } from "@/lib/types";
-import { Card } from "@/components/ui/card";
+import type { ReactNode } from "react";
+import { SummaryRow } from "@/components/admin/crm/summary-row";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableWrap, Td, Th } from "@/components/ui/table";
 import { DbBanner } from "@/components/admin/crm/db-banner";
@@ -138,7 +145,9 @@ function workSourceHref(item: WorkItem): string | null {
   }
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
+  const { range } = await searchParams;
+  const rangeDays = range === "7" ? 7 : range === "30" ? 30 : 14;
   const session = await getAdminSession();
   const connected = hasDb();
 
@@ -188,346 +197,214 @@ export default async function DashboardPage() {
 
   const recent = recentConsultations.slice(0, 5);
   const visibleDdays = ddays.filter((d) => d.isVisible);
+  const today = kstTodayDateOnly();
+  const dayCounts = new Map<string, number>();
+  for (const consultation of recentConsultations) {
+    const day = kstDateOnly(consultation.createdAt);
+    dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
+  }
+  const points = Array.from({ length: rangeDays }, (_, index) => {
+    const date = addKstDays(today, index - rangeDays + 1);
+    return { date, count: dayCounts.get(date) ?? 0 };
+  });
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">대시보드</h1>
+        <Link href="/admin/students/new" className={buttonClass("primary", "sm")}><Plus size={16} aria-hidden="true" /> 학생 등록</Link>
+      </AdminPageHeader>
+
+      <div className="dash-overview-toolbar">
+        <span className="flex items-center gap-2 text-[13px] text-ink-soft"><CalendarDays size={17} aria-hidden="true" />{formatKDate(points[0].date)} – {formatKDate(today)}</span>
+        <nav className="dash-range-links" aria-label="상담 추이 기간">
+          {[7, 14, 30].map((days) => <Link key={days} href={`/admin/dashboard?range=${days}`} aria-current={rangeDays === days ? "page" : undefined}>{days}일</Link>)}
+        </nav>
       </div>
 
       {!connected && <DbBanner />}
 
-      <Card className="mb-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">오늘 업무</h2>
-          <span className="text-xs font-bold text-muted">
-            열린 업무 {openWork.length}건
-          </span>
-        </div>
-        {openWork.length === 0 ? (
-          <EmptyState
-            title="처리할 업무가 없습니다"
-            description="발송 실패·자동화 오류 등 사람 손이 필요한 일감이 이곳에 모입니다."
-          />
-        ) : (
-          <ul className="divide-y divide-line">
-            {openWork.map((w) => {
-              const href = workSourceHref(w);
-              return (
-                <li
-                  key={w.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Badge tone={WORK_PRIORITY_TONE[w.priority]}>
-                        {WORK_PRIORITY_LABEL[w.priority]}
-                      </Badge>
-                      {w.status === "in_progress" && (
-                        <Badge tone="soft">진행 중</Badge>
-                      )}
-                      {/* 제목 자체를 원본으로 가는 링크로 — 작은 '원본 보기'만 두면 눌러야 할 곳을 찾게 된다. */}
+      <SummaryRow items={[
+        { icon: "consult", label: "신규 상담", value: `${newConsultations.length}건`, href: "/admin/consultations?status=new" },
+        { icon: "student", label: "재원 학생", value: `${activeStudents.length}명`, href: "/admin/students?status=active" },
+        { icon: "schedule", label: "이번 주 일정", value: `${weekSchedules.length}건`, href: "/admin/schedules?view=week" },
+        {
+          icon: "payment",
+          label: "이번 달 완납",
+          value: formatWon(paymentSummary.paidThisMonth),
+          href: "/admin/payments",
+          detail: <span className={paymentSummary.overdueTotal > 0 ? "text-rose-700" : undefined}>미납 {formatWon(paymentSummary.overdueTotal)}</span>,
+        },
+      ]} />
+
+      <div className="mt-6"><ConsultationChart key={rangeDays} points={points} connected={connected} /></div>
+
+      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div className="min-w-0 space-y-6">
+          <DashboardSection title="오늘 업무" meta={`${openWork.length}건`}>
+            {openWork.length === 0 ? (
+              <EmptyState compact title="처리할 업무가 없습니다" />
+            ) : (
+              <ul className="divide-y divide-line">
+                {openWork.map((w) => {
+                  const href = workSourceHref(w);
+                  return (
+                    <li key={w.id} className="py-3 first:pt-0 last:pb-0">
+                      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                        <Badge tone={WORK_PRIORITY_TONE[w.priority]}>{WORK_PRIORITY_LABEL[w.priority]}</Badge>
+                        {w.status === "in_progress" && <Badge tone="soft">진행 중</Badge>}
+                        <span className="text-xs text-muted">{formatKDateTime(w.createdAt)}</span>
+                      </div>
                       {href ? (
-                        <Link
-                          href={href}
-                          className="truncate text-sm font-bold text-ink hover:text-brand-700 hover:underline"
-                        >
-                          {w.title}
-                        </Link>
+                        <Link href={href} className="text-sm font-semibold text-ink hover:underline">{w.title}</Link>
                       ) : (
-                        <p className="truncate text-sm font-bold text-ink">{w.title}</p>
+                        <p className="text-sm font-semibold text-ink">{w.title}</p>
                       )}
-                    </div>
-                    <p className="mt-1 text-xs text-muted">
-                      다음 행동: {w.nextAction}
-                      <span className="mx-1.5">·</span>
-                      {formatKDateTime(w.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    {href && (
-                      <Link
-                        href={href}
-                        className="text-xs font-bold text-brand-700 hover:underline"
-                      >
-                        원본 보기
-                      </Link>
-                    )}
-                    <WorkItemActions id={w.id} resolveAction={resolveWorkItemAction} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">{w.nextAction}</p>
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4">
+                        {href && <Link href={href} className="inline-flex min-h-11 items-center text-xs text-ink-soft underline underline-offset-4">내용 확인</Link>}
+                        <WorkItemActions id={w.id} resolveAction={resolveWorkItemAction} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </DashboardSection>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Link href="/admin/consultations">
-          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
-            <p className="text-xs font-medium text-muted">신규 상담</p>
-            <p className="mt-1.5 text-xl font-semibold tracking-tight text-ink">
-              {newConsultations.length}건
-            </p>
-          </Card>
-        </Link>
-        <Link href="/admin/students">
-          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
-            <p className="text-xs font-medium text-muted">재원 학생</p>
-            <p className="mt-1.5 text-xl font-semibold tracking-tight text-ink">
-              {activeStudents.length}명
-            </p>
-          </Card>
-        </Link>
-        <Link href="/admin/schedules">
-          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
-            <p className="text-xs font-medium text-muted">이번 주 일정</p>
-            <p className="mt-1.5 text-xl font-semibold tracking-tight text-ink">
-              {weekSchedules.length}건
-            </p>
-          </Card>
-        </Link>
-        <Link href="/admin/payments">
-          <Card className="h-full px-4 py-3.5 transition-colors hover:border-brand-200">
-            <p className="text-xs font-medium text-muted">이번 달 완납 / 미납</p>
-            <p className="mt-2 text-lg font-semibold tracking-tight text-ink">
-              {formatWon(paymentSummary.paidThisMonth)}
-              <span className="mx-1.5 text-muted">/</span>
-              <span className="text-rose-600">
-                {formatWon(paymentSummary.overdueTotal)}
-              </span>
-            </p>
-          </Card>
-        </Link>
-      </div>
-
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight">오늘 수업</h2>
-            <Link
-              href="/admin/schedules"
-              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
-            >
-              수업 캘린더
-            </Link>
-          </div>
-          {todaySchedules.length === 0 ? (
-            <EmptyState title="오늘 예정된 수업이 없습니다" />
-          ) : (
-            <ul className="divide-y divide-line">
-              {todaySchedules.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-ink">
-                      {s.studentName}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {formatKDateTime(s.scheduledAt)}
-                    </p>
-                  </div>
-                  <Badge tone={scheduleStatusTone(s.status)}>
-                    {scheduleStatusLabel(s.status)}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight">청구 필요 (D-3)</h2>
-            <Link
-              href="/admin/payments"
-              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
-            >
-              결제 관리
-            </Link>
-          </div>
-          {duePayments.length === 0 ? (
-            <EmptyState title="임박한 청구가 없습니다" />
-          ) : (
-            <ul className="divide-y divide-line">
-              {duePayments.map((p) => (
-                <li key={p.id}>
-                  <Link
-                    href={`/admin/payments/${p.id}`}
-                    className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0 hover:text-brand-600"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-ink">
-                        {p.studentName}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted">
-                        마감 {formatKDate(p.dueDate)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold tracking-tight text-ink">
-                      {formatWon(p.amount)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight">D-day</h2>
-            <Link
-              href="/admin/settings"
-              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
-            >
-              설정
-            </Link>
-          </div>
-          {visibleDdays.length === 0 ? (
-            <EmptyState title="표시 중인 D-day가 없습니다" />
-          ) : (
-            <ul className="divide-y divide-line">
-              {visibleDdays.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-ink">{d.name}</p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {formatKDate(d.examDate)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-sm font-semibold tracking-tight text-brand-600">
-                    {ddayLabel(d.examDate)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight">모집 상태</h2>
-            <Link
-              href="/admin/settings"
-              className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
-            >
-              설정
-            </Link>
-          </div>
-          {!recruit ? (
-            <EmptyState title="모집 상태가 설정되지 않았습니다" />
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Badge tone={RECRUIT_TONE[recruit.status]}>
-                  {RECRUIT_LABEL[recruit.status]}
-                </Badge>
-                {recruit.seatCount != null && (
-                  <span className="text-xs font-bold text-muted">
-                    잔여 {recruit.seatCount}석
-                  </span>
-                )}
-              </div>
-              {recruit.message && (
-                <p className="text-sm text-ink-soft">{recruit.message}</p>
-              )}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <Card className="mb-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">최근 상담</h2>
-          <Link
-            href="/admin/consultations"
-            className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
-          >
-            전체 보기
-          </Link>
-        </div>
-        {recent.length === 0 ? (
-          <EmptyState
-            title="상담 신청이 없습니다"
-            description="공개 사이트 상담 폼을 통해 접수되면 이곳에 표시됩니다."
-          />
-        ) : (
-          <TableWrap>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>이름</Th>
-                  <Th>연락처</Th>
-                  <Th>과목</Th>
-                  <Th>신청일</Th>
-                  <Th>상태</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((c) => (
-                  <tr key={c.id}>
-                    <Td>
-                      <Link
-                        href={`/admin/consultations/${c.id}`}
-                        className="font-bold text-ink hover:text-brand-600"
-                      >
-                        {c.name}
-                      </Link>
-                    </Td>
-                    <Td>{c.phone}</Td>
-                    <Td>{c.subject ?? "-"}</Td>
-                    <Td>{formatKDate(c.createdAt)}</Td>
-                    <Td>
-                      <Badge tone={consultationStatusTone(c.status)}>
-                        {consultationStatusLabel(c.status)}
-                      </Badge>
-                    </Td>
-                  </tr>
+          <DashboardSection title="오늘 수업" href="/admin/schedules" linkLabel="수업 캘린더">
+            {todaySchedules.length === 0 ? (
+              <EmptyState compact title="오늘 예정된 수업이 없습니다" />
+            ) : (
+              <ul className="divide-y divide-line">
+                {todaySchedules.map((s) => (
+                  <li key={s.id}>
+                    <Link href={`/admin/schedules/${s.id}`} className="flex items-center justify-between gap-3 py-3 hover:bg-soft">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink">{s.studentName}</p>
+                        <p className="mt-1 text-xs text-muted">{formatKDateTime(s.scheduledAt)}</p>
+                      </div>
+                      <Badge tone={scheduleStatusTone(s.status)}>{scheduleStatusLabel(s.status)}</Badge>
+                    </Link>
+                  </li>
                 ))}
-              </tbody>
-            </Table>
-          </TableWrap>
-        )}
-      </Card>
+              </ul>
+            )}
+          </DashboardSection>
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">최근 변경</h2>
-          <Link
-            href="/admin/activity"
-            className="flex min-h-11 items-center text-xs font-bold text-brand-700 hover:underline"
-          >
-            전체 보기
-          </Link>
+          <DashboardSection title="최근 상담" href="/admin/consultations">
+            {recent.length === 0 ? (
+              <EmptyState compact title="상담 신청이 없습니다" />
+            ) : (
+              <TableWrap>
+                <Table className="!min-w-120">
+                  <thead><tr><Th>이름</Th><Th>연락처</Th><Th>신청일</Th><Th>상태</Th></tr></thead>
+                  <tbody>
+                    {recent.map((c) => (
+                      <tr key={c.id}>
+                        <Td><Link href={`/admin/consultations/${c.id}`} className="font-medium text-ink hover:underline">{c.name}</Link></Td>
+                        <Td className="whitespace-nowrap">{c.phone}</Td>
+                        <Td className="whitespace-nowrap">{formatKDate(c.createdAt)}</Td>
+                        <Td><Badge tone={consultationStatusTone(c.status)}>{consultationStatusLabel(c.status)}</Badge></Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </TableWrap>
+            )}
+          </DashboardSection>
         </div>
-        {recentActivity.length === 0 ? (
-          <EmptyState title="최근 변경 이력이 없습니다" />
-        ) : (
-          <ul className="divide-y divide-line">
-            {recentActivity.map((a) => (
-              <li
-                key={a.id}
-                className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-              >
-                <p className="min-w-0 truncate text-sm text-ink-soft">
-                  {a.summary}
-                </p>
-                <span className="shrink-0 text-xs text-muted">
-                  {formatKDateTime(a.createdAt)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+
+        <div className="min-w-0 space-y-6">
+          <DashboardSection title="청구 필요" href="/admin/payments" linkLabel="결제 관리" meta="3일 이내 마감">
+            {duePayments.length === 0 ? (
+              <EmptyState compact title="3일 이내 마감되는 청구가 없습니다" />
+            ) : (
+              <ul className="divide-y divide-line">
+                {duePayments.map((p) => (
+                  <li key={p.id}>
+                    <Link href={`/admin/payments/${p.id}`} className="flex items-center justify-between gap-3 py-3 hover:bg-soft">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink">{p.studentName}</p>
+                        <p className="mt-1 text-xs text-muted">마감 {formatKDate(p.dueDate)}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-medium tabular-nums">{formatWon(p.amount)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DashboardSection>
+
+          <DashboardSection title="D-day" href="/admin/dday" linkLabel="입시 캘린더">
+            {visibleDdays.length === 0 ? (
+              <EmptyState compact title="등록된 입시 일정이 없습니다" />
+            ) : (
+              <ul className="divide-y divide-line">
+                {visibleDdays.map((d) => (
+                  <li key={d.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <p className="text-sm text-ink">{d.name}</p>
+                      <p className="mt-1 text-xs text-muted">{formatKDate(d.examDate)}</p>
+                    </div>
+                    <span className="shrink-0 text-sm font-medium tabular-nums">{ddayLabel(d.examDate)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DashboardSection>
+
+          <DashboardSection title="모집 상태" href="/admin/recruit" linkLabel="모집 관리">
+            {!recruit ? (
+              <EmptyState compact title="모집 상태가 설정되지 않았습니다" />
+            ) : (
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge tone={RECRUIT_TONE[recruit.status]}>{RECRUIT_LABEL[recruit.status]}</Badge>
+                  {recruit.seatCount != null && <span className="text-sm text-muted">잔여 {recruit.seatCount}석</span>}
+                </div>
+                {recruit.message && <p className="mt-3 text-sm leading-relaxed text-ink-soft">{recruit.message}</p>}
+              </div>
+            )}
+          </DashboardSection>
+
+          <DashboardSection title="최근 변경" href="/admin/activity">
+            {recentActivity.length === 0 ? (
+              <EmptyState compact title="최근 변경 이력이 없습니다" />
+            ) : (
+              <ul className="divide-y divide-line">
+                {recentActivity.slice(0, 5).map((a) => (
+                  <li key={a.id} className="py-3 first:pt-0 last:pb-0">
+                    <p className="text-sm leading-relaxed text-ink-soft">{a.summary}</p>
+                    <p className="mt-1 text-xs text-muted">{formatKDateTime(a.createdAt)}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DashboardSection>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function DashboardSection({ title, meta, href, linkLabel = "전체 보기", children }: {
+  title: string;
+  meta?: string;
+  href?: string;
+  linkLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="dash-section">
+      <div className="dash-section-heading">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          {meta && <span className="text-xs text-muted">{meta}</span>}
+        </div>
+        {href && <Link href={href} className="inline-flex min-h-11 items-center text-xs text-muted hover:text-ink hover:underline">{linkLabel}</Link>}
+      </div>
+      <div className="dash-section-body">{children}</div>
+    </section>
   );
 }

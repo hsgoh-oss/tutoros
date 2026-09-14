@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listStudentOptions } from "@/lib/data/crm";
@@ -24,8 +25,8 @@ export default async function ScheduleExportPage() {
   const end = new Date(kst.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">일정 내보내기</h1>
           <p className="mt-1 text-sm text-muted">
@@ -36,7 +37,7 @@ export default async function ScheduleExportPage() {
         <Link href="/admin/schedules" className={buttonClass("ghost", "sm")}>
           일정
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

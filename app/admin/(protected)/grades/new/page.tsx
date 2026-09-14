@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { getAdminSession } from "@/lib/auth/session";
 import { listStudentOptions } from "@/lib/data/crm";
 import { isUuid } from "@/lib/uuid";
@@ -17,10 +18,10 @@ export default async function NewGradePage({
   const studentOptions = session ? await listStudentOptions(session.tenantId) : [];
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">성적 신규 등록</h1>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-3xl">
         <SubmitForm action={createGrade} submitLabel="등록" redirectTo="/admin/grades">

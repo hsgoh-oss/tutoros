@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDate, hasDb } from "@/lib/data/crm";
@@ -20,16 +21,6 @@ import {
 } from "./constants";
 import type { ReportType } from "@/lib/types";
 
-/**
- * 모델 식별자를 사람이 읽을 만큼만 남긴다.
- * "claude-haiku-4-5-20251001"을 그대로 두면 목록에서 가장 넓은 열을 차지하는데, 운영자에게
- * 필요한 건 어느 등급으로 만들었는지뿐이다. 정확한 버전은 리포트 상세에 남아 있다.
- */
-function shortModel(model: string | null | undefined): string {
-  if (!model) return "-";
-  return model.replace(/^claude-/, "").replace(/-\d{8}$/, "");
-}
-
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -46,15 +37,15 @@ export default async function ReportsPage({
     : [];
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">AI 리포트</h1>
         </div>
         <Link href="/admin/reports/new" className={buttonClass("primary", "sm")}>
           신규 생성
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
@@ -74,14 +65,14 @@ export default async function ReportsPage({
           basePath="/admin/reports"
           paramKey="type"
           current={type}
+          preserveParams={{ student }}
           options={REPORT_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
       </Toolbar>
 
       {reports.length === 0 ? (
         <EmptyState
-          title="생성된 리포트가 없습니다"
-          description="신규 생성 버튼으로 AI 리포트를 만들 수 있습니다."
+          title={type || student ? "조건에 맞는 리포트가 없습니다" : "생성된 리포트가 없습니다"}
           action={
             <Link href="/admin/reports/new" className={buttonClass("outline", "sm")}>
               신규 생성
@@ -99,7 +90,6 @@ export default async function ReportsPage({
                 <Th>깊이</Th>
                 <Th>상태</Th>
                 <Th>전달</Th>
-                <Th>모델</Th>
                 <Th>생성일</Th>
               </tr>
             </thead>
@@ -140,9 +130,6 @@ export default async function ReportsPage({
                         {reportDeliveryLabel(r.deliveryStatus)}
                       </Badge>
                     )}
-                  </Td>
-                  <Td className="whitespace-nowrap text-xs text-muted">
-                    {shortModel(r.modelUsed)}
                   </Td>
                   <Td>{formatKDate(r.createdAt)}</Td>
                 </tr>

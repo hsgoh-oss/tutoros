@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -49,8 +50,8 @@ export default async function ConsultationDetailPage({
   );
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{consultation.name}</h1>
           <p className="mt-1 text-sm text-muted">{formatKDate(consultation.createdAt)} 신청</p>
@@ -67,7 +68,7 @@ export default async function ConsultationDetailPage({
           </Badge>
           <ConsultBriefButton consultationId={consultation.id} />
         </div>
-      </div>
+      </AdminPageHeader>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

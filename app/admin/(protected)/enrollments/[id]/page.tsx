@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -215,7 +216,7 @@ export default async function EnrollmentDetailPage({
         required
         hint={
           gate === "contract"
-            ? "동의된 계약본의 동의도 함께 거둡니다 — 새 조건은 새 계약본으로 다시 동의받습니다(R-03)."
+            ? "동의된 계약본의 동의도 함께 거둡니다 — 새 조건은 새 계약본으로 다시 동의받습니다."
             : "근거가 뒤집혔을 때만 해제합니다(환불·일정 취소·관계 분쟁 등)."
         }
       >
@@ -225,8 +226,8 @@ export default async function EnrollmentDetailPage({
   );
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight">
@@ -261,7 +262,7 @@ export default async function EnrollmentDetailPage({
             </Link>
           )}
         </div>
-      </div>
+      </AdminPageHeader>
 
       {!hasDb() && <DbBanner />}
 
@@ -364,7 +365,7 @@ export default async function EnrollmentDetailPage({
               releaseForm("contract")
             ) : !enrollment.relationOk ? (
               <p className="text-xs font-bold text-amber-700">
-                관계 확인이 먼저입니다 — 계약자·납부자가 정리되기 전에는 계약 단계를 열지 않습니다(R-01).
+                관계 확인이 먼저입니다 — 계약자·납부자가 정리되기 전에는 계약 단계를 열지 않습니다.
               </p>
             ) : (
               <SubmitForm action={recordContractAgreement} submitLabel="계약 동의 기록">
@@ -393,7 +394,7 @@ export default async function EnrollmentDetailPage({
                   <Input name="note" placeholder="예: 교재비 별도 · 휴강 정책 안내함" />
                 </Field>
                 <p className="mt-3 text-xs text-muted">
-                  신청폼 동의는 계약 수락이 아닙니다(R-03). 이 기록은 운영자가 성인 계약자에게 확인받은
+                  신청폼 동의는 계약 수락이 아닙니다. 이 기록은 운영자가 성인 계약자에게 확인받은
                   동의를 남기는 것이며, 조건을 바꾸려면 새 계약본으로 다시 동의받습니다.
                 </p>
               </SubmitForm>
@@ -440,8 +441,7 @@ export default async function EnrollmentDetailPage({
               releaseForm("payment")
             ) : paidPayments.length === 0 ? (
               <p className="text-xs font-bold text-amber-700">
-                완납(paid)된 청구만 근거가 됩니다 — 결제 관리에서 입금 대사를 마친 뒤 다시 확인해
-                주세요(검수 14).
+                결제 관리에서 입금 내역을 확인하고 완납 처리한 뒤 다시 확인해 주세요.
               </p>
             ) : (
               <SubmitForm action={confirmPaymentGate} submitLabel="결제 확인 완료">
@@ -502,8 +502,7 @@ export default async function EnrollmentDetailPage({
               <SubmitForm action={confirmScheduleGate} submitLabel="일정 확정 확인">
                 <input type="hidden" name="id" value={enrollment.id} />
                 <p className="text-xs text-muted">
-                  위 확정 회차를 근거로 일정 게이트를 통과시킵니다. 서버가 저장 직전에 회차를 다시
-                  확인합니다.
+                  확정된 회차를 확인한 뒤 일정 확인을 완료해 주세요.
                 </p>
               </SubmitForm>
             ))}
@@ -516,15 +515,12 @@ export default async function EnrollmentDetailPage({
           {canActivate ? (
             <>
               <p className="mt-1 text-sm text-muted">
-                네 조건이 모두 확인됐습니다. 활성화는 한 문장으로 판정·전환되며(activate_enrollment),
-                그 사이 조건이 하나라도 풀리면 아무것도 바뀌지 않습니다(검수 15). 활성화되면 학생
-                상태도 함께 활성으로 맞춰집니다.
+                관계·계약·결제·일정 확인이 완료됐습니다. 등록을 활성화하면 학생 상태도 재원으로 변경됩니다.
               </p>
               {seatWarning && (
                 <p className="mt-2 text-sm font-bold text-amber-700">
                   남은 자리가 없습니다(정원 {seats.seatCount} · 활성 {seats.activeEnrollments} · 열린
-                  제안 {seats.openOffers}). 정원을 다시 확인하거나 대기·조건 재협의로 보내 주세요(R-04
-                  &lsquo;정원 상실&rsquo;).
+                  제안 {seats.openOffers}). 정원을 조정하거나 대기·조건 재협의로 변경해 주세요.
                 </p>
               )}
               <div className="mt-4">
@@ -561,7 +557,7 @@ export default async function EnrollmentDetailPage({
             {student ? studentStatusLabel(student.status) : "-"}
           </p>
           <p className="mt-3 text-sm text-ink-soft">
-            역할별 포털 초대는 학생 상세의 포털 관계 카드에서 발급합니다(R-06). 초대 발송이 실패해도
+            역할별 포털 초대는 학생 상세의 포털 관계 카드에서 발급합니다. 초대 발송이 실패해도
             등록 활성은 유지됩니다.
           </p>
           <div className="mt-4">
@@ -579,8 +575,8 @@ export default async function EnrollmentDetailPage({
         <Card className="mb-6">
           <h2 className="text-sm font-semibold text-ink-soft">등록 종료</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
-            종료하면 학생 상태도 종료로 맞춰지고, 그 상태를 읽는 기존 포털 접근 판정이 즉시 닫힙니다
-            (E-04 접근 회수). 미수·환불이 남아 있으면 결제 화면에서 정산을 먼저 정리해 주세요.
+            등록을 종료하면 학생 상태가 종료로 변경되고 포털 접근이 중단됩니다.
+            미수금이나 환불이 있으면 결제 관리에서 먼저 정산해 주세요.
           </p>
           <SubmitForm
             action={endEnrollment}
@@ -599,7 +595,7 @@ export default async function EnrollmentDetailPage({
         <Card className="mb-6">
           <h2 className="text-sm font-semibold text-ink-soft">활성화 전 취소</h2>
           <p className="mt-1 mb-3 text-sm text-muted">
-            계약 미동의·미결제·일정 미합의·정원 상실·고객 철회로 준비가 끝났을 때 닫습니다(R-06).
+            계약 미동의·미결제·일정 미합의·정원 상실·고객 철회로 준비가 끝났을 때 닫습니다.
             학생 상태는 건드리지 않습니다 — 이 등록은 활성화된 적이 없습니다. 이미 수납된 금액이
             있으면 결제 화면의 환불 흐름으로 먼저 정리해 주세요.
           </p>
@@ -626,8 +622,7 @@ export default async function EnrollmentDetailPage({
             {enrollment.endReason ? ` · ${enrollment.endReason}` : ""}
           </p>
           <p className="mt-3 text-xs text-muted">
-            재등록은 이 행을 되살리지 않고 새 등록을 만드는 흐름입니다 — 등록의 정본은 이제
-            enrollments입니다(검수 48).
+            다시 수강하는 학생은 새 등록을 만들어 주세요.
           </p>
         </Card>
       )}
@@ -637,7 +632,7 @@ export default async function EnrollmentDetailPage({
           <h2 className="text-sm font-semibold text-ink-soft">계약 이력</h2>
           <p className="mt-1 mb-3 text-xs text-muted">
             조건이 바뀌면 이전 계약본을 고치지 않고 새 계약본을 만듭니다 — 동의된 계약본은 한 등록에
-            하나뿐입니다(R-03 · R-05).
+            하나뿐입니다.
           </p>
           <ul className="flex flex-col gap-3">
             {enrollment.contracts.map((c) => (

@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
@@ -159,8 +160,8 @@ export default async function StudentDetailPage({
     ]);
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="dash-page">
+      <AdminPageHeader>
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold tracking-tight">{student.name}</h1>
@@ -180,7 +181,7 @@ export default async function StudentDetailPage({
         >
           ← 목록으로
         </Link>
-      </div>
+      </AdminPageHeader>
 
       {/* 이 학생으로 이어지는 다음 행동 — 상세에서 다른 모듈로 건너뛸 때 학생을 다시 고르지 않게
           학생 id를 쿼리로 넘긴다. 각 화면이 ?student= 를 읽어 필터·기본값으로 쓴다. */}

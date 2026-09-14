@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDateTime, hasDb, listStudents } from "@/lib/data/crm";
 import {
@@ -99,14 +100,14 @@ export default async function MessagesPage({
   );
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">메시지 발송</h1>
         <p className="mt-1 text-sm text-muted">
           학생·학부모에게 개별 안내를 보내거나 재등록 안내(광고)를 발송합니다. 알림톡 우선,
           실패 시 SMS로 폴백됩니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 

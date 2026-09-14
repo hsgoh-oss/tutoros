@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import { notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
 import { getFaq } from "@/lib/data/crm";
@@ -19,10 +20,10 @@ export default async function FaqDetailPage({
   if (!faq) notFound();
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">FAQ 수정</h1>
-      </div>
+      </AdminPageHeader>
 
       <Card className="max-w-2xl">
         <SubmitForm action={updateFaq} submitLabel="저장">

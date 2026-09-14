@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { formatKDate, formatKDateTime, hasDb, listConsultations } from "@/lib/data/crm";
@@ -134,13 +135,13 @@ export default async function RecruitPage() {
   const overdueOffers = seats?.overdueOffers ?? 0;
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="dash-page">
+      <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">모집 현황</h1>
         <p className="mt-1 text-sm text-muted">
           공개 배너 문구와 접수 상태를 관리하고, 남은 자리를 확인해 대기자에게 자리를 제안합니다.
         </p>
-      </div>
+      </AdminPageHeader>
 
       {!connected && <DbBanner />}
 
@@ -176,7 +177,7 @@ export default async function RecruitPage() {
         {overbooked && (
           <p className="mt-4 rounded-panel border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
             정원 초과 — 활성 등록과 열린 제안의 합이 모집 인원을 넘습니다. 기존 등록·유효한 자리 제안은
-            자동으로 취소하지 않았습니다(검수 63). 새 자리 제안만 중단되며, 정원을 조정하거나 열린 제안을
+            자동으로 취소하지 않았습니다. 새 자리 제안만 중단되며, 정원을 조정하거나 열린 제안을
             개별 확인해 주세요.
           </p>
         )}
@@ -302,7 +303,7 @@ export default async function RecruitPage() {
         {overbooked || seatsFull ? (
           <p className="rounded-panel border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
             남은 자리가 없어 새 자리 제안을 중단했습니다. 이미 나간 제안과 활성 등록은 그대로
-            유지됩니다(검수 63) — 정원을 조정하거나 열린 제안을 마무리한 뒤 다시 제안해 주세요.
+            유지됩니다 — 정원을 조정하거나 열린 제안을 마무리한 뒤 다시 제안해 주세요.
           </p>
         ) : waiting.length === 0 ? (
           <p className="text-sm text-muted">
