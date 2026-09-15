@@ -496,8 +496,10 @@ export default async function StudentDetailPage({
               </>
             ) : (
               <PortalRelationsCard
+                key={`${student.id}:${student.isAdult}`}
                 studentId={student.id}
                 studentName={student.name}
+                isAdult={student.isAdult}
                 studentPhone={student.studentPhone}
                 parentPhone={student.parentPhone}
                 relations={portalRelations}
@@ -513,6 +515,7 @@ export default async function StudentDetailPage({
             <ReviewInviteCard
               studentId={student.id}
               studentName={student.name}
+              isAdult={student.isAdult}
               parentPhone={student.parentPhone}
               studentPhone={student.studentPhone}
               invitations={reviewInvitations}

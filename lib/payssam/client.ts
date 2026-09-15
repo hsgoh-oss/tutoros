@@ -206,22 +206,8 @@ async function postPayssam<T>(
       };
     }
     if (parsed.code !== "0000") {
-      // 거절 응답은 통째로 남긴다. 결제선생은 "must not be null"처럼 어느 필드인지 말하지 않는
-      // 문구를 자주 돌려주는데, 본문에 필드명이 함께 오는 경우가 있어 그게 유일한 단서다.
-      // (알림 발송에서 발신번호 미등록을 못 찾아 헤맸던 것과 같은 부류의 결함이라 같이 고친다.)
-      // 요청까지 함께 남긴다 — "우리가 뭘 잘못 보냈나"는 응답만 봐서는 끝내 알 수 없다.
-      // apiKey는 가리고, 나머지는 실제 전송한 그대로 찍는다(길이·null 여부가 단서다).
-      const safeBody = JSON.parse(JSON.stringify(body)) as Record<string, unknown>;
-      if (typeof safeBody.apiKey === "string") {
-        safeBody.apiKey = `<len=${safeBody.apiKey.length}>`;
-      }
-      console.error(
-        "[payssam] 거절",
-        path,
-        `code=${parsed.code}`,
-        "resp=" + text.slice(0, 500),
-        "req=" + JSON.stringify(safeBody).slice(0, 900),
-      );
+      // 응답도 인증키·발급번호를 되돌려 줄 수 있으므로 요청/응답 원문은 로그에 남기지 않는다.
+      console.error("[payssam] 거절", path, `code=${parsed.code}`);
       return {
         ok: false,
         code: parsed.code,
@@ -380,10 +366,10 @@ export interface IssueCashReceiptParams {
   billId: string;
   /** 결제 금액 */
   price: string | number;
-  /** 공급가액 — 생략 시 사업장의 면·과세 정책을 따른다 */
-  supplyPrice?: string | number;
-  /** 세액 — 생략 시 사업장의 면·과세 정책을 따른다 */
-  tax?: string | number;
+  /** 공급가액 — V2 실제 요청에서 필수(2026-09-15 샌드박스 검증) */
+  supplyPrice: string | number;
+  /** 세액 — 면세인 경우에도 0을 명시한다. */
+  tax: string | number;
   /** 현금영수증 발행 요청 번호(휴대폰/주민번호/사업자번호) */
   issuanceNumber: string;
   /** 개인(소득공제):"0" | 사업자(지출증빙):"1" */
@@ -403,11 +389,8 @@ export function issueCashReceipt(
         billId: params.billId,
         hash: payssamHash(params.billId, null, price), // 2필드 hash(실측)
         price,
-        supplyPrice:
-          params.supplyPrice === undefined
-            ? undefined
-            : String(params.supplyPrice),
-        tax: params.tax === undefined ? undefined : String(params.tax),
+        supplyPrice: String(params.supplyPrice),
+        tax: String(params.tax),
         issuanceNumber: params.issuanceNumber,
         trader: params.trader,
       },

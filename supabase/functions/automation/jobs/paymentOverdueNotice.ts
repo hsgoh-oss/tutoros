@@ -4,13 +4,14 @@
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { paymentOverdueMessage } from "../../_shared/templates.ts";
 import { defaultChannel } from "../../_shared/channel.ts";
+import { studentContactPhoneFromRow, type StudentContactRow } from "../../_shared/student-contact.ts";
 
 interface PaymentRow {
   id: string;
   tenant_id: string;
   student_id: string;
   amount: number;
-  students: { name: string; parent_phone: string } | null;
+  students: (StudentContactRow & { name: string }) | null;
 }
 
 const DEDUP_WINDOW_DAYS = 7;
@@ -18,7 +19,7 @@ const DEDUP_WINDOW_DAYS = 7;
 export async function runPaymentOverdueNotice(db: SupabaseClient) {
   const { data, error } = await db
     .from("payments")
-    .select("id, tenant_id, student_id, amount, students(name, parent_phone)")
+    .select("id, tenant_id, student_id, amount, students(name, parent_phone, student_phone, is_adult)")
     .eq("status", "overdue");
   if (error) throw error;
 
@@ -28,7 +29,8 @@ export async function runPaymentOverdueNotice(db: SupabaseClient) {
   let skipped = 0;
 
   for (const row of (data ?? []) as unknown as PaymentRow[]) {
-    if (!row.students?.parent_phone) {
+    const phone = row.students && studentContactPhoneFromRow(row.students);
+    if (!row.students || !phone) {
       skipped++;
       continue;
     }
@@ -51,7 +53,7 @@ export async function runPaymentOverdueNotice(db: SupabaseClient) {
       student_id: row.student_id,
       type: "payment_overdue",
       channel,
-      phone: row.students.parent_phone,
+      phone,
       message: paymentOverdueMessage(row.students.name, row.amount),
       is_ad: false,
       status: "queued",

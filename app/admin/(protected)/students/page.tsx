@@ -1,4 +1,5 @@
 import { AdminPageHeader } from "@/components/admin/page-header";
+import { studentContactPhone } from "@/lib/student-contact";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { hasDb, listStudents, formatKDate } from "@/lib/data/crm";
@@ -95,7 +96,7 @@ export default async function StudentsPage({
             <thead>
               <tr>
                 <Th>이름</Th>
-                <Th>학부모 연락처</Th>
+                <Th>연락처</Th>
                 <Th>학교/학년</Th>
                 <Th>수업 방식</Th>
                 <Th>과목</Th>
@@ -115,7 +116,7 @@ export default async function StudentsPage({
                       {s.name}
                     </Link>
                   </Td>
-                  <Td>{s.parentPhone}</Td>
+                  <Td>{studentContactPhone(s) ?? "-"}{s.isAdult && <span className="ml-1 text-xs text-muted">본인</span>}</Td>
                   <Td>
                     {s.school ?? "-"}
                     {s.grade && <span className="text-muted"> · {s.grade}</span>}

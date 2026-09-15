@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { studentContactPhoneFromRow, type StudentContactRow } from "@/lib/student-contact";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { nextSessionNumber } from "@/lib/data/crm";
@@ -231,7 +232,7 @@ export async function sendMakeupNotice(id: string): Promise<CrmActionResult> {
 
   const { data: stu, error: stuErr } = await db
     .from("students")
-    .select("name, parent_phone")
+    .select("name, parent_phone, student_phone, is_adult")
     .eq("tenant_id", session.tenantId)
     .eq("id", s.student_id)
     .maybeSingle();
@@ -239,14 +240,16 @@ export async function sendMakeupNotice(id: string): Promise<CrmActionResult> {
     console.error("[schedules] makeup-notice student fetch failed", stuErr);
     return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
   }
-  const student = stu as { name: string; parent_phone: string };
+  const student = stu as StudentContactRow & { name: string };
+  const phone = studentContactPhoneFromRow(student);
+  if (!phone) return { ok: false, error: "안내를 받을 연락처가 없습니다." };
   const dateText = kstDateOnly(s.scheduled_at);
 
   const result = await sendNotification({
     tenantId: session.tenantId,
     studentId: s.student_id,
     type: "schedule_changed",
-    phone: student.parent_phone,
+    phone,
     message: `${student.name}님, 보강 수업이 ${dateText}에 예정되었습니다. 확인 부탁드립니다.`,
     isAd: false,
   });

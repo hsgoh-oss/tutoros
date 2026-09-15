@@ -9,12 +9,12 @@ import type { SiteSettings } from "@/lib/types";
 // 카카오톡 채널은 아예 아이콘이 없었다. "문의" 아래 세 줄의 이름은 누구에게나 같은 뜻이다.
 // 값이 없는 고지 행은 아예 그리지 않는다: 비어 있는 "신고번호:" 는 없는 것보다 나쁘다.
 //
-// 로고 파일은 /img/logo/footer-logo.png 하나만 바꾸면 된다(어두운 바탕용 흰 워드마크).
+// 어두운 바탕용 흰 워드마크 원본을 비율 그대로 표시한다.
 
 /** 공정거래위원회 사업자정보 조회 — 사업자등록번호(하이픈 제거)로 질의한다. */
 function ftcLookupUrl(bizNo: string) {
   const digits = bizNo.replace(/\D/g, "");
-  return `https://www.ftc.go.kr/www/selectBizCommList.do?key=254&searchCnd=BRNO&searchKrwd=${digits}`;
+  return `https://www.ftc.go.kr/bizCommPop.do?wrkr_no=${digits}`;
 }
 
 const linkClass = "inline-flex min-h-11 items-center text-[14px] font-bold text-white/80 hover:text-white";
@@ -34,13 +34,14 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
         <div className="flex flex-col gap-5">
           {/* 접근 이름은 로고 alt + 슬로건 텍스트 그대로 — aria-label을 따로 두면 보이는 글자와
               어긋나 "label-content-name-mismatch"가 된다. */}
-          <Link href="/" className="inline-flex w-fit flex-col gap-2.5 py-1">
+          <Link href="/" className="inline-flex w-fit max-w-full flex-col gap-2.5 py-1">
             <Image
-              src="/img/logo/footer-logo.png"
+              src="/img/logo/footer-wordmark-white.png"
               alt={settings.brandName}
-              width={640}
-              height={123}
-              className="h-auto w-44 md:w-52"
+              width={4101}
+              height={372}
+              sizes="(max-width: 767px) 288px, 320px"
+              className="h-auto w-72 max-w-full md:w-80"
             />
             <span className="text-[13.5px] font-bold tracking-[-0.02em] text-white/70">
               {settings.tagline}

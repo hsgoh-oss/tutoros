@@ -96,21 +96,23 @@ export function SiteHeader({ kakaoUrl }: { kakaoUrl: string }) {
     <>
     <header className="sticky top-0 z-60 border-b border-line bg-white/96 backdrop-blur-lg">
       <div className="axm-measure flex h-[72px] items-center justify-between gap-6">
-        {/* block+py로 44px 히트영역 — flex로 감싸면 next/image가 종횡비 경고를 낸다. */}
         <Link
           href="/"
           aria-label="AXIOM MATH LAB 메인으로 이동"
           onClick={() => setOpen(false)}
-          className="block py-2"
+          className="block shrink-0 py-2"
         >
-          <Image
-            src="/img/logo/header-axiom.png"
-            alt="AXIOM MATH LAB"
-            width={190}
-            height={40}
-            priority
-            className="h-auto w-36 md:w-[178px]"
-          />
+          {/* 원본의 투명 여백만 프레임 밖으로 빼서 정사각형 로고 전체를 선명하게 표시한다. */}
+          <span className="relative block h-14 w-[60px] overflow-hidden">
+            <Image
+              src="/img/logo/header-main-blue.png"
+              alt="AXIOM MATH LAB"
+              fill
+              sizes="84px"
+              priority
+              className="scale-[1.38] object-cover"
+            />
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-7 md:flex" aria-label="주요 메뉴">

@@ -192,8 +192,9 @@ export type ClassType = "inperson" | "video";
 export interface Student {
   id: string;
   name: string;
-  parentPhone: string;
-  studentPhone: string | null; // 선택·동의 기반
+  isAdult: boolean; // 성인 본인 연락·납부
+  parentPhone: string | null; // 성인은 보호자 입력 생략
+  studentPhone: string | null; // 성인은 필수, 미성년자는 선택·동의 기반
   school: string | null;
   grade: string | null;
   classType: ClassType;

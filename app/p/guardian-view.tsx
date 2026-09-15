@@ -1,4 +1,5 @@
 import { HomeworkStatusList } from "@/components/portal/homework-status-list";
+import { PortalRefreshButton } from "@/components/portal/refresh-button";
 import { ReportCard } from "@/components/portal/report-card";
 import { formatDateTime, kstToday } from "@/components/portal/format";
 import {
@@ -50,7 +51,7 @@ export async function GuardianView({
 }) {
   const [reports, assignments, schedule] = await Promise.all([
     listGuardianReports(session, studentId),
-    listGuardianHomework(session, studentId),
+    listGuardianHomework(session, studentId).catch(() => null),
     getGuardianSchedule(session, studentId),
   ]);
   const today = kstToday();
@@ -116,13 +117,22 @@ export async function GuardianView({
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-1 text-lg font-black tracking-tight text-ink">
-          과제 현황
-        </h2>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black tracking-tight text-ink">
+            과제 현황
+          </h2>
+          <PortalRefreshButton />
+        </div>
         <p className="mb-4 text-xs leading-relaxed text-muted">
           과제 제출과 질문은 학생 본인 화면에서만 할 수 있어요.
         </p>
-        {assignments.length === 0 ? (
+        {assignments === null ? (
+          <div role="alert" className="rounded-card border border-line bg-white p-10 text-center">
+            <p className="text-sm text-muted">
+              과제를 불러오지 못했습니다. 새로고침해 주세요.
+            </p>
+          </div>
+        ) : assignments.length === 0 ? (
           <div className="rounded-card border border-line bg-white p-10 text-center">
             <p className="text-sm text-muted">배부된 과제가 없습니다.</p>
           </div>

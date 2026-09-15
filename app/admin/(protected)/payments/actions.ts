@@ -1,28 +1,26 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { studentContactPhoneFromRow, type StudentContactRow } from "@/lib/student-contact";
 import { getAdminSession } from "@/lib/auth/session";
 import { resolveTenant } from "@/lib/tenant";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { formatKDate, formatWon } from "@/lib/data/crm";
-import { parseKstWallClock } from "@/lib/kst";
 import { getSiteContent } from "@/lib/data/content";
 import { runCritical } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
 import { sendNotification } from "@/lib/notify/send";
 import { renderTemplate } from "@/lib/notify/templates";
+import { getPayssamAccount } from "@/lib/payssam/account";
+import type { PayssamAccount } from "@/lib/payssam/client";
 import {
   cancelBill,
-  cancelCashReceipt,
   destroyBill,
   generateBillId,
-  issueCashReceipt,
   readBill,
-  readCashReceipt,
   resendBill,
   sendBill,
 } from "@/lib/payssam/client";
-import type { CashReceiptHistoryItem, PayssamCashTrader } from "@/lib/payssam/types";
 import type { PaymentMethod } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -34,24 +32,12 @@ interface PaymentWithStudentRow {
   amount: number;
   method: PaymentMethod;
   student_id: string;
-  students: { parent_phone: string; name: string } | null;
+  students: (StudentContactRow & { name: string }) | null;
 }
 
 function revalidatePayment(id: string) {
   revalidatePath("/admin/payments");
   revalidatePath(`/admin/payments/${id}`);
-}
-
-/**
- * 결제선생 승인 일시("YYYYMMDDhhmmss") → KST 벽시계 문자열("YYYY-MM-DDTHH:MM:SS").
- *
- * 응답에 시간대 표기가 없다 — 국내 결제 사업자의 시각이므로 KST 벽시계로 읽고,
- * UTC instant로 옮기는 일은 lib/kst.ts의 parseKstWallClock에 맡긴다(저장은 늘 UTC).
- * 형식이 다르면 빈 문자열을 돌려 파서가 null을 내게 한다 — 추측해서 시각을 만들지 않는다.
- */
-function formatApprDt(raw: string): string {
-  if (!/^\d{14}$/.test(raw)) return "";
-  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}T${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`;
 }
 
 /** date-only 문자열(YYYY-MM-DD)에 일수를 더한다 — UTC 자정 고정으로 타임존 드리프트 방지. */
@@ -281,7 +267,7 @@ export async function sendPaymentRequestNotice(id: string): Promise<CrmActionRes
   const db = createServiceClient()!;
   const { data, error: fetchError } = await db
     .from("payments")
-    .select("id, amount, method, student_id, students(parent_phone, name)")
+    .select("id, amount, method, student_id, students(parent_phone, student_phone, is_adult, name)")
     .eq("tenant_id", session.tenantId)
     .eq("id", id)
     .maybeSingle();
@@ -290,10 +276,10 @@ export async function sendPaymentRequestNotice(id: string): Promise<CrmActionRes
   }
   // students는 to-one 관계지만 Database 제네릭 없이는 supabase-js가 배열로 추론한다 — 실제 응답은 단일 객체.
   const payment = data as unknown as PaymentWithStudentRow;
-  if (!payment.students?.parent_phone) {
-    return { ok: false, error: "학부모 연락처를 확인할 수 없습니다." };
+  const contactPhone = payment.students && studentContactPhoneFromRow(payment.students);
+  if (!payment.students || !contactPhone) {
+    return { ok: false, error: "청구를 받을 연락처를 확인할 수 없습니다." };
   }
-  const parentPhone = payment.students.parent_phone;
 
   let message = renderTemplate("payment_request", {
     name: payment.students.name,
@@ -328,7 +314,7 @@ export async function sendPaymentRequestNotice(id: string): Promise<CrmActionRes
         tenantId: session.tenantId,
         studentId: payment.student_id,
         type: "payment_request",
-        phone: parentPhone,
+        phone: contactPhone,
         message,
         isAd: false,
       });
@@ -423,6 +409,7 @@ type Db = NonNullable<ReturnType<typeof createServiceClient>>;
 
 /** 결제선생 연동에 필요한 payments 행 + 학생 조인 — 00014 확장 컬럼 포함. */
 interface PayssamPaymentRow {
+  account: PayssamAccount;
   id: string;
   amount: number;
   method: PaymentMethod;
@@ -439,13 +426,13 @@ interface PayssamPaymentRow {
   cash_receipt_state: string | null;
   cash_receipt_appr_num: string | null;
   cash_receipt_trader: string | null;
-  students: { name: string; parent_phone: string | null } | null;
+  students: (StudentContactRow & { name: string }) | null;
 }
 
 const PAYSSAM_PAYMENT_SELECT =
   "id, amount, method, status, period_start, period_end, student_id, paid_at, " +
   "bill_id, bill_short_url, appr_state, appr_num, cash_receipt_state, cash_receipt_appr_num, " +
-  "cash_receipt_trader, students(name, parent_phone)";
+  "cash_receipt_trader, students(name, parent_phone, student_phone, is_adult)";
 
 async function fetchPayssamPayment(
   db: Db,
@@ -463,7 +450,9 @@ async function fetchPayssamPayment(
     return null;
   }
   // students는 to-one 관계지만 Database 제네릭 없이는 배열로 추론된다 — 실제 응답은 단일 객체.
-  return data as unknown as PayssamPaymentRow;
+  const account = await getPayssamAccount(tenantId);
+  if (!account) return null;
+  return { ...(data as unknown as PayssamPaymentRow), account };
 }
 
 /**
@@ -588,8 +577,8 @@ export async function sendPayssamBillAction(
   }
   // 결제선생은 숫자만 허용 — 저장 형식(010-1234-5678)의 하이픈·공백을 제거해 전송한다
   // (로컬 실측 2026-08-25: 하이픈 포함 시 "휴대폰 번호 형식이 올바르지 않습니다" 거절).
-  const phone = (payment.students?.parent_phone ?? "").replace(/\D/g, "");
-  if (!phone) return { ok: false, error: "학부모 연락처를 확인할 수 없습니다." };
+  const phone = (payment.students && studentContactPhoneFromRow(payment.students) || "").replace(/\D/g, "");
+  if (!phone) return { ok: false, error: "청구를 받을 연락처를 확인할 수 없습니다." };
   const memberName = payment.students?.name ?? "학부모";
 
   const billId = generateBillId();
@@ -621,7 +610,7 @@ export async function sendPayssamBillAction(
         phone,
         sendType,
         // callbackUrl은 클라이언트가 PAYSSAM_CALLBACK_URL → SITE_URL+/api/payssam/callback로 보강한다.
-      });
+      }, payment.account);
       if (!sent.ok) {
         if (sent.code === "NETWORK") {
           // 결과 불명 — 발송됐을 수 있으므로 billId를 원장에 남겨 추적 가능하게 한다(검수 37).
@@ -733,7 +722,7 @@ export async function resendPayssamBillAction(id: string): Promise<CrmActionResu
       after: { bill_id: billId },
     },
     async (): Promise<CrmActionResult> => {
-      const resent = await resendBill(billId);
+      const resent = await resendBill(billId, payment.account);
       if (!resent.ok) {
         if (resent.code === "NETWORK") {
           // 재발송은 상태 전이가 없어 결과 불명이어도 내부가 오염되지 않는다 — 확인만 안내.
@@ -787,7 +776,7 @@ export async function destroyPayssamBillAction(id: string): Promise<CrmActionRes
       after: { appr_state: "D" },
     },
     async (): Promise<CrmActionResult> => {
-      const destroyed = await destroyBill(billId, payment.amount); // 2필드 hash — phone 불필요(실측)
+      const destroyed = await destroyBill(billId, payment.amount, payment.account);
       if (!destroyed.ok) {
         if (destroyed.code === "NETWORK") {
           // 결과 불명 — 파기됐을 수도 있으니 D로 확정하지 않는다. 동기화로 실제 상태를 대조.
@@ -847,7 +836,7 @@ export async function syncPayssamBillAction(id: string): Promise<CrmActionResult
       before: { status: payment.status, appr_state: payment.appr_state },
     },
     async (): Promise<CrmActionResult> => {
-      const read = await readBill(billId);
+      const read = await readBill(billId, payment.account);
       if (!read.ok) {
         if (read.code === "NETWORK") {
           return { ok: false, error: "결제선생 조회에 실패했습니다(통신 오류). 잠시 후 다시 시도해 주세요." };
@@ -1101,7 +1090,7 @@ export async function refundPayssamBillAction(
       reason: trimmedReason,
     },
     async (): Promise<CrmActionResult> => {
-      const canceled = await cancelBill(billId, payment.amount, trimmedReason); // 2필드 hash — phone 불필요(실측)
+      const canceled = await cancelBill(billId, payment.amount, trimmedReason, payment.account);
       if (!canceled.ok) {
         if (canceled.code === "NETWORK") {
           // 결과 불명은 성공이 아니다 — refunded로 확정하지 않고 업무 큐로 수렴(검수 37).
@@ -1156,289 +1145,6 @@ export async function refundPayssamBillAction(
         );
       }
       return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  revalidatePayment(id);
-  return result;
-}
-
-/**
- * ⑥-a 현금영수증 발급 — POST /cash-receipt/issue. 완납(paid) + 결제선생 청구 건만.
- * supplyPrice·tax는 생략해 사업장의 면·과세 정책을 따른다(스펙 기본 동작).
- */
-export async function issueCashReceiptAction(
-  id: string,
-  trader: string,
-  issuanceNumber: string,
-): Promise<CrmActionResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, error: "인증이 필요합니다." };
-  if (!hasDb()) return { ok: false, error: DB_ERROR };
-
-  if (trader !== "0" && trader !== "1") {
-    return { ok: false, error: "발급 구분(개인/사업자)을 선택해 주세요." };
-  }
-  const normalizedNumber = issuanceNumber.replace(/[^0-9]/g, "");
-  if (!normalizedNumber) {
-    return { ok: false, error: "발행 요청 번호(휴대폰/주민번호/사업자번호)를 입력해 주세요." };
-  }
-
-  const db = createServiceClient()!;
-  const payment = await fetchPayssamPayment(db, session.tenantId, id);
-  if (!payment) return { ok: false, error: "청구 정보를 찾을 수 없습니다." };
-  if (!payment.bill_id) {
-    return { ok: false, error: "결제선생 청구서로 결제된 건만 API로 현금영수증을 발급할 수 있습니다." };
-  }
-  if (payment.status !== "paid") {
-    return { ok: false, error: "완납된 청구만 현금영수증을 발급할 수 있습니다." };
-  }
-  if (payment.cash_receipt_state === "issued") {
-    return { ok: false, error: "이미 발급된 현금영수증이 있습니다. 정정은 취소 후 재발급으로 진행하세요." };
-  }
-  const billId = payment.bill_id;
-  const traderValue: PayssamCashTrader = trader;
-
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "payssam_cash_receipt_issue",
-      targetType: "payment",
-      targetId: id,
-      summary: `현금영수증 발급: ${formatWon(payment.amount)}`,
-      category: "money",
-      after: { bill_id: billId, trader: traderValue },
-    },
-    async (): Promise<CrmActionResult> => {
-      const issued = await issueCashReceipt({
-        billId,
-        price: payment.amount,
-        issuanceNumber: normalizedNumber,
-        trader: traderValue,
-      });
-      if (!issued.ok) {
-        if (issued.code === "NETWORK") {
-          // 결과 불명 — 발급됐을 수 있으므로 성공/실패 확정 없이 업무 큐로 수렴(검수 37).
-          await createPayssamWorkItem(
-            session.tenantId,
-            "payssam_unknown_result",
-            id,
-            "현금영수증 발급 결과 불명",
-            `billId=${billId} · ${formatWon(payment.amount)}`,
-            "결제선생 관리자에서 발급 이력 확인 후, 미발급이면 재시도",
-          );
-          return {
-            ok: false,
-            error: "발급 결과를 확인할 수 없습니다(통신 오류). 업무 큐에서 발급 이력을 확인해 주세요.",
-          };
-        }
-        return { ok: false, error: `결제선생이 발급을 거절했습니다: ${issued.error}` };
-      }
-      const { error } = await db
-        .from("payments")
-        .update({
-          cash_receipt_state: "issued",
-          cash_receipt_appr_num: issued.data.apprCashNum ?? null,
-          cash_receipt_trader: traderValue,
-          cash_receipt_issued_at: new Date().toISOString(),
-        })
-        .eq("tenant_id", session.tenantId)
-        .eq("id", id);
-      if (error) {
-        console.error("[payssam] cash receipt save failed", error);
-        return { ok: false, error: "발급은 됐지만 저장에 실패했습니다. 새로고침 후 상태를 확인해 주세요." };
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  revalidatePayment(id);
-  return result;
-}
-
-/** ⑥-b 현금영수증 발급 취소 — POST /cash-receipt/cancel. 발급됨(issued)만(검수 45 증빙 수렴). */
-export async function cancelCashReceiptAction(id: string): Promise<CrmActionResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, error: "인증이 필요합니다." };
-  if (!hasDb()) return { ok: false, error: DB_ERROR };
-
-  const db = createServiceClient()!;
-  const payment = await fetchPayssamPayment(db, session.tenantId, id);
-  if (!payment) return { ok: false, error: "청구 정보를 찾을 수 없습니다." };
-  if (!payment.bill_id) return { ok: false, error: "결제선생 청구서가 없는 건입니다." };
-  if (payment.cash_receipt_state !== "issued") {
-    return { ok: false, error: "발급된 현금영수증이 없습니다." };
-  }
-  const trader = payment.cash_receipt_trader;
-  if (trader !== "0" && trader !== "1") {
-    return { ok: false, error: "발급 구분 정보가 없어 취소 요청을 만들 수 없습니다." };
-  }
-  const billId = payment.bill_id;
-
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "payssam_cash_receipt_cancel",
-      targetType: "payment",
-      targetId: id,
-      summary: `현금영수증 발급 취소: ${formatWon(payment.amount)}`,
-      category: "money",
-      before: { cash_receipt_state: "issued", cash_receipt_appr_num: payment.cash_receipt_appr_num },
-      after: { cash_receipt_state: "canceled" },
-    },
-    async (): Promise<CrmActionResult> => {
-      const canceled = await cancelCashReceipt({
-        billId,
-        price: payment.amount,
-        trader,
-      });
-      if (!canceled.ok) {
-        if (canceled.code === "NETWORK") {
-          return {
-            ok: false,
-            error: "취소 결과를 확인할 수 없습니다(통신 오류). 결제선생 발급 이력 확인 후 재시도해 주세요.",
-          };
-        }
-        return { ok: false, error: `결제선생이 취소를 거절했습니다: ${canceled.error}` };
-      }
-      const { error } = await db
-        .from("payments")
-        .update({ cash_receipt_state: "canceled" }) // 승인번호·발급 구분은 이력으로 보존
-        .eq("tenant_id", session.tenantId)
-        .eq("id", id);
-      if (error) {
-        console.error("[payssam] cash receipt cancel save failed", error);
-        return { ok: false, error: "취소는 됐지만 저장에 실패했습니다. 새로고침 후 상태를 확인해 주세요." };
-      }
-      return { ok: true };
-    },
-  );
-  if (!result.ok) return result;
-
-  revalidatePayment(id);
-  return result;
-}
-
-/**
- * ⑥-c 현금영수증 대조 — POST /cash-receipt/read.
- *
- * 왜 필요한가: 발급·취소는 우리가 요청한 결과만 기록한다. 결제선생 관리자 화면에서 직접
- * 발급하거나 취소한 건, 통신 오류로 결과를 못 받은 건(결과 불명)은 우리 기록과 어긋난 채로
- * 남는다. 환불 경로가 "현금영수증이 발급돼 있으면 먼저 취소"를 우리 기록으로 판단하므로
- * (검수 45), 기록이 틀리면 그 판단도 함께 틀린다 — 청구서 '동기화'와 같은 이유의 버튼이다.
- *
- * 대조만 하고 발급·취소를 새로 실행하지는 않는다. 어긋남을 발견하면 우리 기록을 결제선생
- * 사실에 맞추고, 그 사실을 원장(payssam_events)에 남긴다. 증빙 상태가 곧 금전 판단의 입력이라
- * 금전 전환(money)으로 감사한다.
- */
-export async function syncCashReceiptAction(id: string): Promise<CrmActionResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, error: "인증이 필요합니다." };
-  if (!hasDb()) return { ok: false, error: DB_ERROR };
-
-  const db = createServiceClient()!;
-  const payment = await fetchPayssamPayment(db, session.tenantId, id);
-  if (!payment) return { ok: false, error: "청구 정보를 찾을 수 없습니다." };
-  if (!payment.bill_id) return { ok: false, error: "결제선생 청구서가 없는 건입니다." };
-  const billId = payment.bill_id;
-
-  const result = await runCritical(
-    {
-      tenantId: session.tenantId,
-      actorEmail: session.email,
-      action: "payssam_cash_receipt_sync",
-      targetType: "payment",
-      targetId: id,
-      summary: `현금영수증 대조: ${formatWon(payment.amount)}`,
-      category: "money",
-      before: {
-        cash_receipt_state: payment.cash_receipt_state,
-        cash_receipt_appr_num: payment.cash_receipt_appr_num,
-      },
-    },
-    async (): Promise<CrmActionResult> => {
-      const read = await readCashReceipt(billId, payment.amount);
-      if (!read.ok) {
-        if (read.code === "NETWORK") {
-          return {
-            ok: false,
-            error: "결제선생 조회에 실패했습니다(통신 오류). 잠시 후 다시 시도해 주세요.",
-          };
-        }
-        return { ok: false, error: `결제선생 조회 거절: ${read.error}` };
-      }
-
-      // 이력에서 "지금 상태"를 정하는 것은 가장 최근 승인 건이다. apprDt는 YYYYMMDDhhmmss라
-      // 문자열 비교가 곧 시각 비교다. 시각이 없는 항목은 순서를 신뢰할 수 없으므로 뒤로 민다.
-      const history = (read.data.info ?? []) as CashReceiptHistoryItem[];
-      const latest = history.reduce<CashReceiptHistoryItem | null>((best, item) => {
-        if (!best) return item;
-        return (item.apprDt ?? "") >= (best.apprDt ?? "") ? item : best;
-      }, null);
-
-      // 결제선생이 말하는 사실 — 승인(F)이면 발급됨, 취소(C)면 취소됨, 이력이 없으면 발급 없음.
-      const remoteState: "issued" | "canceled" | null =
-        latest?.apprState === "F" ? "issued" : latest?.apprState === "C" ? "canceled" : null;
-      const localState = payment.cash_receipt_state ?? null;
-
-      await recordPayssamEvent(db, {
-        tenantId: session.tenantId,
-        paymentId: id,
-        billId,
-        payload: { ...read.data, apiKey: "[redacted]" }, // 원문 보존, 파트너 비밀키만 마스킹
-        outcome: remoteState === localState ? "duplicate" : "mismatch",
-        note:
-          remoteState === localState
-            ? `현금영수증 대조 일치 (${localState ?? "발급 없음"})`
-            : `현금영수증 상태 불일치 — 내부 ${localState ?? "발급 없음"} vs 결제선생 ${remoteState ?? "발급 없음"}`,
-      });
-
-      if (remoteState === localState) {
-        return { ok: true };
-      }
-
-      // 어긋났다 — 사실(결제선생)에 맞춘다. 승인번호·발급 구분도 함께 가져와야 이후 취소 요청을
-      // 만들 수 있다(취소는 trader가 없으면 요청 자체를 만들지 못한다).
-      const trader =
-        latest?.trader === "0" || latest?.trader === "1" ? latest.trader : payment.cash_receipt_trader;
-      const patch: Record<string, unknown> = { cash_receipt_state: remoteState };
-      if (remoteState === "issued") {
-        patch.cash_receipt_appr_num = latest?.apprNum ?? payment.cash_receipt_appr_num;
-        patch.cash_receipt_trader = trader;
-        // 승인 일시(YYYYMMDDhhmmss)는 시간대 표기가 없다 — KST 벽시계로 읽어 UTC로 옮긴다
-        // (lib/kst.ts 규약: 입력은 KST 벽시계).
-        const issuedAt = latest?.apprDt ? parseKstWallClock(formatApprDt(latest.apprDt)) : null;
-        if (issuedAt) patch.cash_receipt_issued_at = issuedAt.toISOString();
-      }
-
-      const { error } = await db
-        .from("payments")
-        .update(patch)
-        .eq("tenant_id", session.tenantId)
-        .eq("id", id);
-      if (error) {
-        console.error("[payssam] cash receipt sync save failed", error);
-        return { ok: false, error: "대조 결과 저장에 실패했습니다. 다시 시도해 주세요." };
-      }
-
-      await createPayssamWorkItem(
-        session.tenantId,
-        "payssam_mismatch",
-        id,
-        "현금영수증 상태 불일치 — 내부 기록을 결제선생 기준으로 맞춤",
-        `billId=${billId} · 내부 ${localState ?? "발급 없음"} → 결제선생 ${remoteState ?? "발급 없음"}`,
-        "결제선생에서 직접 처리한 발급·취소가 있었는지 확인하고, 환불·증빙 정합을 다시 볼 것",
-      );
-
-      return {
-        ok: true,
-        // 성공이지만 사람이 알아야 하는 사실이다 — 조용히 덮으면 "왜 바뀌었지"가 남는다.
-        warning: `내부 기록이 결제선생과 달라 맞췄습니다: ${localState ?? "발급 없음"} → ${remoteState ?? "발급 없음"}. 오늘 업무에 확인 항목을 남겼습니다.`,
-      };
     },
   );
   if (!result.ok) return result;

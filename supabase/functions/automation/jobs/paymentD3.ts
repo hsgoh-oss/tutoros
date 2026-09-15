@@ -5,13 +5,14 @@ import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDateString, kstDayRangeUtc } from "../../_shared/kst.ts";
 import { paymentD3Message } from "../../_shared/templates.ts";
 import { defaultChannel } from "../../_shared/channel.ts";
+import { studentContactPhoneFromRow, type StudentContactRow } from "../../_shared/student-contact.ts";
 
 interface PaymentRow {
   id: string;
   tenant_id: string;
   student_id: string;
   amount: number;
-  students: { name: string; parent_phone: string } | null;
+  students: (StudentContactRow & { name: string }) | null;
 }
 
 export async function runPaymentD3(db: SupabaseClient) {
@@ -20,7 +21,7 @@ export async function runPaymentD3(db: SupabaseClient) {
 
   const { data, error } = await db
     .from("payments")
-    .select("id, tenant_id, student_id, amount, students(name, parent_phone)")
+    .select("id, tenant_id, student_id, amount, students(name, parent_phone, student_phone, is_adult)")
     .eq("status", "pending")
     .eq("due_date", dueDate);
   if (error) throw error;
@@ -30,7 +31,8 @@ export async function runPaymentD3(db: SupabaseClient) {
   let skipped = 0;
 
   for (const row of (data ?? []) as unknown as PaymentRow[]) {
-    if (!row.students?.parent_phone) {
+    const phone = row.students && studentContactPhoneFromRow(row.students);
+    if (!row.students || !phone) {
       skipped++;
       continue;
     }
@@ -53,7 +55,7 @@ export async function runPaymentD3(db: SupabaseClient) {
       student_id: row.student_id,
       type: "payment_d3",
       channel,
-      phone: row.students.parent_phone,
+      phone,
       message: paymentD3Message(row.students.name, row.amount),
       is_ad: false,
       status: "queued",

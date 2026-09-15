@@ -19,6 +19,7 @@ import {
   type PortalRole,
 } from "@/lib/portal/auth";
 import { resolveTenant } from "@/lib/tenant";
+import { studentContactPhone } from "@/lib/student-contact";
 import type { ClassType, Student } from "@/lib/types";
 import type { CrmActionResult } from "@/components/admin/crm/types";
 
@@ -28,7 +29,8 @@ const VALID_STATUSES: Student["status"][] = ["trial", "active", "paused", "ended
 
 interface StudentFormPayload {
   name: string;
-  parentPhone: string;
+  isAdult: boolean;
+  parentPhone: string | null;
   studentPhone: string | null;
   studentPhoneConsent: boolean;
   school: string | null;
@@ -40,11 +42,15 @@ interface StudentFormPayload {
 
 function parseStudentForm(formData: FormData): StudentFormPayload | { error: string } {
   const name = String(formData.get("name") ?? "").trim();
-  const parentPhone = String(formData.get("parentPhone") ?? "").trim();
+  const isAdult = formData.get("isAdult") === "true";
+  const parentPhone = isAdult ? null : String(formData.get("parentPhone") ?? "").trim();
   if (!name) return { error: "이름을 입력해 주세요." };
-  if (!parentPhone) return { error: "학부모 연락처를 입력해 주세요." };
+  if (!isAdult && !parentPhone) return { error: "학부모 연락처를 입력해 주세요." };
 
   const studentPhoneRaw = String(formData.get("studentPhone") ?? "").trim();
+  if (isAdult && !/^[0-9]{9,12}$/.test(normalizePortalPhone(studentPhoneRaw))) {
+    return { error: "성인 수강생의 본인 연락처를 입력해 주세요(숫자 9~12자리)." };
+  }
   const studentPhoneConsent = formData.get("studentPhoneConsent") === "on";
   if (studentPhoneRaw && !studentPhoneConsent) {
     return { error: "학생 연락처를 입력하려면 수집 동의 확인이 필요합니다." };
@@ -62,6 +68,7 @@ function parseStudentForm(formData: FormData): StudentFormPayload | { error: str
 
   return {
     name,
+    isAdult,
     parentPhone,
     studentPhone: studentPhoneRaw || null,
     studentPhoneConsent,
@@ -119,6 +126,7 @@ export async function createStudent(formData: FormData): Promise<CrmActionResult
       // 연락처 원문은 감사 로그에 남기지 않는다 — 보유 여부만 기록(필드 서브셋).
       after: {
         name: parsed.name,
+        is_adult: parsed.isAdult,
         school: parsed.school,
         grade: parsed.grade,
         class_type: parsed.classType,
@@ -134,6 +142,7 @@ export async function createStudent(formData: FormData): Promise<CrmActionResult
         .insert({
           tenant_id: session.tenantId,
           name: parsed.name,
+          is_adult: parsed.isAdult,
           parent_phone: parsed.parentPhone,
           student_phone: parsed.studentPhone,
           school: parsed.school,
@@ -193,7 +202,7 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
   // 수정 전 행을 before_data로 남기기 위해 먼저 조회한다(연락처 원문은 보유 여부로만 요약).
   const { data: existing, error: fetchError } = await db
     .from("students")
-    .select("name, school, grade, class_type, subject_type, status, student_phone")
+    .select("name, is_adult, school, grade, class_type, subject_type, status, student_phone")
     .eq("tenant_id", session.tenantId)
     .eq("id", id)
     .maybeSingle();
@@ -234,6 +243,7 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
       ...(isEnding ? { reason: "등록 종료 — 포털 접근 회수(E-04)" } : {}),
       before: {
         name: existing.name,
+        is_adult: existing.is_adult,
         school: existing.school,
         grade: existing.grade,
         class_type: existing.class_type,
@@ -243,6 +253,7 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
       },
       after: {
         name: parsed.name,
+        is_adult: parsed.isAdult,
         school: parsed.school,
         grade: parsed.grade,
         class_type: parsed.classType,
@@ -271,6 +282,7 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
         .from("students")
         .update({
           name: parsed.name,
+          is_adult: parsed.isAdult,
           parent_phone: parsed.parentPhone,
           student_phone: parsed.studentPhone,
           school: parsed.school,
@@ -311,7 +323,7 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
       tenantId: session.tenantId,
       studentId: id,
       type: "custom_message",
-      phone: parsed.parentPhone,
+      phone: studentContactPhone(parsed)!,
       message: `[${tenant.brandName}] ${parsed.name} 학생의 등록이 종료되어 리포트 포털 접근도 함께 종료되었습니다. 그동안 함께해 주셔서 감사합니다.`,
       isAd: false,
     });
@@ -322,6 +334,7 @@ export async function updateStudent(formData: FormData): Promise<CrmActionResult
 
   revalidatePath("/admin/students");
   revalidatePath(`/admin/students/${id}`);
+  revalidatePath("/p", "layout");
   return result;
 }
 

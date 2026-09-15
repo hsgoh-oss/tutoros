@@ -1,4 +1,5 @@
 import { HomeworkCard } from "@/components/portal/homework-card";
+import { PortalRefreshButton } from "@/components/portal/refresh-button";
 import { QuestionForm } from "@/components/portal/question-form";
 import { QuestionList } from "@/components/portal/question-list";
 import { ReportCard, reportTypeLabel } from "@/components/portal/report-card";
@@ -42,13 +43,13 @@ export async function StudentView({
   // 역할 게이트는 각 조회 함수 안에 있다(student 관계가 없으면 빈 결과).
   const [reports, assignments, questions] = await Promise.all([
     listStudentReports(session, studentId),
-    listStudentHomework(session, studentId),
+    listStudentHomework(session, studentId).catch(() => null),
     listStudentQuestions(session, studentId),
   ]);
   const today = kstToday();
 
   // 질문의 원 기록 라벨 — 본인에게 노출되는 과제·리포트 범위 안에서만 해석한다.
-  const assignmentTitle = new Map(assignments.map((a) => [a.id, a.title]));
+  const assignmentTitle = new Map((assignments ?? []).map((a) => [a.id, a.title]));
   const reportLabel = new Map(
     reports.map((r) => [
       r.id,
@@ -87,11 +88,24 @@ export async function StudentView({
       </section>
 
       {/* 과제 (H-02) — 배부·종료만 내려온다(초안·취소는 데이터 계층에서 제외). */}
-      {assignments.length > 0 && (
-        <section className="mt-10">
-          <h2 className="mb-4 text-lg font-black tracking-tight text-ink">
+      <section className="mt-10">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black tracking-tight text-ink">
             과제
           </h2>
+          <PortalRefreshButton />
+        </div>
+        {assignments === null ? (
+          <div role="alert" className="rounded-card border border-line bg-white p-10 text-center">
+            <p className="text-sm text-muted">
+              과제를 불러오지 못했습니다. 새로고침해 주세요.
+            </p>
+          </div>
+        ) : assignments.length === 0 ? (
+          <div className="rounded-card border border-line bg-white p-10 text-center">
+            <p className="text-sm text-muted">아직 배부된 과제가 없습니다.</p>
+          </div>
+        ) : (
           <div className="space-y-5">
             {assignments.map((h) => (
               <HomeworkCard
@@ -102,8 +116,8 @@ export async function StudentView({
               />
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* 질문과 답변 (H-04) — 본인 질문만, 답변은 승인분만. */}
       {questions.length > 0 && (

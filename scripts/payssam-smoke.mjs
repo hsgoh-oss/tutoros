@@ -13,7 +13,7 @@
  *   read    <billId>                                        청구서 단건 조회(apprState 확인)
  *   destroy <billId> [--price 1000]                         청구서 파기 — 미결제(W) 건만
  *   cancel  <billId> --reason "사유" [--price 1000]         결제 전액 취소 — 승인(F) 건만
- *   receipt <billId> --trader 0 --number 010xxxxxxxx [--price 1000]
+ *   receipt <billId> --trader 0 --number 010xxxxxxxx --tax-type exempt|taxable [--price 1000]
  *                                                           현금영수증 발행(0 개인 소득공제 | 1 사업자 지출증빙)
  *   point                                                   쌤포인트 잔액 조회
  *
@@ -177,7 +177,7 @@ function usage() {
   read    <billId>
   destroy <billId> [--price 1000]
   cancel  <billId> --reason "사유" [--price 1000]
-  receipt <billId> --trader 0 --number 010xxxxxxxx [--price 1000]
+  receipt <billId> --trader 0 --number 010xxxxxxxx --tax-type exempt|taxable [--price 1000]
   point
 
 destroy/cancel/receipt의 hash는 "{billId},{price}"다(요청에 phone 필드가 없음 — 샌드박스 실측).
@@ -351,7 +351,12 @@ async function main() {
       );
       const price = flags.price ?? "1000";
       const phone = phoneForHash(flags);
-      // supplyPrice/tax는 생략 — 스펙상 미전송 시 사업장의 면·과세 정책을 따른다(client.ts와 동일)
+      const taxType = requireFlag(flags, "tax-type", "면세 exempt 또는 부가세 포함 taxable");
+      if (!["exempt", "taxable"].includes(taxType) || !/^\d+$/.test(price) || !Number.isSafeInteger(Number(price)) || Number(price) <= 0) {
+        console.error("❌ --tax-type exempt|taxable 및 양의 정수 --price가 필요합니다.");
+        process.exit(1);
+      }
+      const supplyPrice = taxType === "exempt" ? Number(price) : Math.round(Number(price) / 1.1);
       const result = await postPayssam(
         "/cash-receipt/issue",
         cashReceiptEnvelope({
@@ -359,6 +364,8 @@ async function main() {
           hash: payssamHash(billId, phone, price),
           price,
           issuanceNumber,
+          supplyPrice: String(supplyPrice),
+          tax: String(Number(price) - supplyPrice),
           trader,
         }),
       );

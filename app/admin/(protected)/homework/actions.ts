@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { studentContactPhone } from "@/lib/student-contact";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getLesson, getStudent } from "@/lib/data/crm";
@@ -31,6 +32,7 @@ const DB_ERROR = "Supabase 미연결 — 환경변수 설정 후 사용할 수 �
 function revalidateHomework(id?: string) {
   revalidatePath("/admin/homework");
   if (id) revalidatePath(`/admin/homework/${id}`);
+  revalidatePath("/p", "layout");
 }
 
 /* ---------- 과제 초안 (H-01: 초안은 학생·보호자 비노출) ---------- */
@@ -202,6 +204,8 @@ export async function assignAssignment(id: string): Promise<CrmActionResult> {
   );
   if (!result.ok) return result;
 
+  revalidateHomework(id);
+
   // 학부모 알림 — 업무(배부)와 전달(알림)을 분리한다: 알림 실패가 배부를 되돌리지 않는다.
   // 실패·야간 대기 건은 notifications 큐(failed→재시도 크론→소진 시 오늘 업무)로 수렴한다.
   const { settings } = await getSiteContent(session.tenantId);
@@ -214,7 +218,7 @@ export async function assignAssignment(id: string): Promise<CrmActionResult> {
     tenantId: session.tenantId,
     studentId: student.id,
     type: "homework_assigned",
-    phone: student.parentPhone,
+    phone: studentContactPhone(student) ?? "",
     message,
     isAd: false,
   });
@@ -222,7 +226,6 @@ export async function assignAssignment(id: string): Promise<CrmActionResult> {
     console.error("[homework] 배부 알림 발송 실패 — 배부는 유지, 알림 큐 재시도로 수렴", sent.error);
   }
 
-  revalidateHomework(id);
   return result;
 }
 

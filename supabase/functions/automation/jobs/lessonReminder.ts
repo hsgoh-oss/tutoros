@@ -5,20 +5,21 @@ import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDayRangeUtc, formatKstDateTime } from "../../_shared/kst.ts";
 import { lessonReminderMessage } from "../../_shared/templates.ts";
 import { defaultChannel } from "../../_shared/channel.ts";
+import { studentContactPhoneFromRow, type StudentContactRow } from "../../_shared/student-contact.ts";
 
 interface ScheduleRow {
   id: string;
   tenant_id: string;
   student_id: string;
   scheduled_at: string;
-  students: { name: string; parent_phone: string } | null;
+  students: (StudentContactRow & { name: string }) | null;
 }
 
 export async function runLessonReminder(db: SupabaseClient) {
   const { start, end } = kstDayRangeUtc(1); // 내일(KST) 범위
   const { data, error } = await db
     .from("schedules")
-    .select("id, tenant_id, student_id, scheduled_at, students(name, parent_phone)")
+    .select("id, tenant_id, student_id, scheduled_at, students(name, parent_phone, student_phone, is_adult)")
     .eq("status", "planned")
     .eq("reminder_sent", false)
     .gte("scheduled_at", start.toISOString())
@@ -30,7 +31,8 @@ export async function runLessonReminder(db: SupabaseClient) {
   let skipped = 0;
 
   for (const row of (data ?? []) as unknown as ScheduleRow[]) {
-    if (!row.students?.parent_phone) {
+    const phone = row.students && studentContactPhoneFromRow(row.students);
+    if (!row.students || !phone) {
       skipped++;
       continue;
     }
@@ -40,7 +42,7 @@ export async function runLessonReminder(db: SupabaseClient) {
       student_id: row.student_id,
       type: "lesson_reminder",
       channel,
-      phone: row.students.parent_phone,
+      phone,
       message: lessonReminderMessage(row.students.name, formatKstDateTime(row.scheduled_at)),
       is_ad: false,
       status: "queued",

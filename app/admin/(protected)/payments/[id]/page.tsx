@@ -25,8 +25,6 @@ import {
   type PaymentStatusEx,
 } from "../constants";
 import {
-  cancelCashReceiptAction,
-  syncCashReceiptAction,
   deletePayment,
   destroyPayssamBillAction,
   markPaid,
@@ -36,6 +34,8 @@ import {
   sendPaymentRequestNotice,
   syncPayssamBillAction,
 } from "../actions";
+import { cancelCashReceiptAction, syncCashReceiptAction } from "../cash-receipt-actions";
+import { getPayssamAccount } from "@/lib/payssam/account";
 import { PayssamRefundButton } from "../payssam-refund-button";
 import { PayssamCashReceiptForm } from "../payssam-cash-receipt-form";
 
@@ -54,6 +54,8 @@ interface PayssamDetailRow {
   refund_appr_num: string | null;
   refunded_at: string | null;
   refund_reason: string | null;
+  cash_receipt_bill_id: string | null;
+  cash_receipt_operation: string | null;
   cash_receipt_state: string | null;
   cash_receipt_appr_num: string | null;
   cash_receipt_trader: string | null;
@@ -81,7 +83,7 @@ export default async function PaymentDetailPage({
     const { data } = await db
       .from("payments")
       .select(
-        "status, bill_id, bill_short_url, bill_sent_at, appr_state, appr_num, appr_dt, appr_price, appr_issuer, last_synced_at, refund_appr_num, refunded_at, refund_reason, cash_receipt_state, cash_receipt_appr_num, cash_receipt_trader, cash_receipt_issued_at",
+        "status, bill_id, bill_short_url, bill_sent_at, appr_state, appr_num, appr_dt, appr_price, appr_issuer, last_synced_at, refund_appr_num, refunded_at, refund_reason, cash_receipt_bill_id, cash_receipt_operation, cash_receipt_state, cash_receipt_appr_num, cash_receipt_trader, cash_receipt_issued_at",
       )
       .eq("tenant_id", session.tenantId)
       .eq("id", id)
@@ -92,7 +94,8 @@ export default async function PaymentDetailPage({
   // 업무 상태 — 00014 'refunded'는 lib/types 유니온보다 넓어 화면 확장 타입으로 판정한다.
   const statusEx = (ps?.status ?? payment.status) as PaymentStatusEx;
   const actionable = statusEx !== "paid" && statusEx !== "refunded";
-  const payssamConfigured = isPayssamConfigured();
+  const payssamAccount = await getPayssamAccount(session.tenantId);
+  const payssamConfigured = Boolean(payssamAccount && isPayssamConfigured(payssamAccount));
   const showPayssamCard = payment.method === "payssaem" || Boolean(ps?.bill_id);
   const billActive = ps?.appr_state === "W"; // 발송됨·미결제 — 재발송/파기 가능 구간(검수 42)
 
@@ -319,63 +322,51 @@ export default async function PaymentDetailPage({
                     )}
                   </div>
 
-                  {/* 현금영수증 — 완납 건 증빙(검수 45 수렴 대상). 발급됨이면 승인번호+취소, 아니면 발급 폼. */}
-                  {statusEx === "paid" && (
-                    <div className="border-t border-line pt-4">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-sm font-semibold text-ink-soft">현금영수증</h3>
-                        {/* 청구서 '동기화'와 같은 역할 — 결제선생에서 직접 발급·취소한 건이나
-                            결과 불명으로 끝난 건이 있으면 우리 기록이 사실과 어긋난다.
-                            환불 경로가 이 기록으로 "먼저 취소해야 하나"를 판단한다(검수 45). */}
-                        <ActionButton
-                          action={syncCashReceiptAction}
-                          id={payment.id}
-                          label="결제선생과 대조"
-                          pendingLabel="대조 중..."
-                        />
-                      </div>
-                      {ps.cash_receipt_state === "issued" ? (
-                        <div className="space-y-3">
-                          <dl className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <dt className="text-muted">승인번호</dt>
-                              <dd className="font-bold">
-                                {ps.cash_receipt_appr_num ?? "-"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-muted">발급 구분</dt>
-                              <dd className="font-bold">
-                                {payssamCashTraderLabel(ps.cash_receipt_trader)}
-                              </dd>
-                            </div>
-                            <div className="col-span-2">
-                              <dt className="text-muted">발급일시</dt>
-                              <dd className="font-bold">
-                                {formatKDateTime(ps.cash_receipt_issued_at)}
-                              </dd>
-                            </div>
-                          </dl>
-                          <ActionButton
-                            action={cancelCashReceiptAction}
-                            id={payment.id}
-                            label="현금영수증 발급 취소"
-                            tone="danger"
-                            pendingLabel="취소 중..."
-                            confirmText="현금영수증 발급을 취소하시겠습니까?"
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          {ps.cash_receipt_state === "canceled" && (
-                            <p className="mb-3 text-xs text-muted">
-                              이전 발급분은 취소되었습니다. 필요하면 다시 발급할 수 있습니다.
-                            </p>
-                          )}
-                          <PayssamCashReceiptForm id={payment.id} />
-                        </>
-                      )}
-                    </div>
+                </div>
+              )}
+            </Card>
+          )}
+          {(statusEx === "paid" || statusEx === "refunded") && (
+            <Card>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-ink-soft">현금영수증</h2>
+                {payssamConfigured && (ps?.cash_receipt_bill_id || ps?.bill_id) && (
+                  <ActionButton action={syncCashReceiptAction} id={payment.id}
+                    label="결제선생과 대조" pendingLabel="대조 중..." />
+                )}
+              </div>
+              {!ps ? (
+                <p className="text-sm text-muted">현금영수증 정보를 불러올 수 없습니다. DB 연동 설정을 확인해 주세요.</p>
+              ) : !payssamConfigured ? (
+                <p className="text-sm text-muted">결제선생 사업장 연동 설정 후 현금영수증을 사용할 수 있습니다.</p>
+              ) : (
+                <div className="space-y-4">
+                  {process.env.PAYSSAM_BASE_URL?.includes("sandbox") && (
+                    <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">테스트 연동 상태입니다. 실제 발급은 운영 연동 전환 후 이용할 수 있습니다.</p>
+                  )}
+                  {ps.cash_receipt_operation && (
+                    <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                      처리 중이거나 결과 확인이 필요합니다. 1분 후 ‘결제선생과 대조’를 눌러 주세요.
+                    </p>
+                  )}
+                  {ps.cash_receipt_state && (
+                    <dl className="grid grid-cols-2 gap-4 text-sm">
+                      <div><dt className="text-muted">상태</dt><dd className="font-bold">{ps.cash_receipt_state === "issued" ? "발급 완료" : "발급 취소"}</dd></div>
+                      <div><dt className="text-muted">발급 구분</dt><dd className="font-bold">{payssamCashTraderLabel(ps.cash_receipt_trader)}</dd></div>
+                      <div><dt className="text-muted">발급 승인번호</dt><dd className="font-bold break-all">{ps.cash_receipt_appr_num ?? "-"}</dd></div>
+                      <div><dt className="text-muted">발급일시</dt><dd className="font-bold">{formatKDateTime(ps.cash_receipt_issued_at)}</dd></div>
+                    </dl>
+                  )}
+                  {!ps.cash_receipt_operation && ps.cash_receipt_state === "issued" && (
+                    <ActionButton action={cancelCashReceiptAction} id={payment.id} label="현금영수증 발급 취소"
+                      tone="danger" pendingLabel="취소 중..." confirmText="현금영수증 발급을 취소하시겠습니까? 수납 금액은 환불되지 않습니다." />
+                  )}
+                  {!ps.cash_receipt_operation && ps.cash_receipt_state !== "issued" && statusEx === "paid" && (
+                    payment.method === "bank" ? (
+                      <PayssamCashReceiptForm id={payment.id} amount={payment.amount} />
+                    ) : (
+                      <p className="text-sm text-muted">신규 현금영수증은 입금 확인 후 완납 처리한 계좌이체 청구에서 발급할 수 있습니다. 기존 발급 건은 대조 후 취소할 수 있습니다.</p>
+                    )
                   )}
                 </div>
               )}

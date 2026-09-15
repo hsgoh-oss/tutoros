@@ -132,7 +132,7 @@ export default async function MessagesPage({
                 </Field>
                 <Field label="수신 대상">
                   <Select name="recipient" defaultValue="parent">
-                    <option value="parent">학부모</option>
+                    <option value="parent">보호자 · 성인은 본인</option>
                     <option value="student">학생 본인</option>
                   </Select>
                 </Field>

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { studentContactPhone } from "@/lib/student-contact";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { getStudent } from "@/lib/data/crm";
@@ -770,12 +771,13 @@ export async function activateEnrollment(id: string): Promise<CrmActionResult> {
   // 예외 「완료 안내 실패: 등록은 유지하고 전달 실패 업무 생성」 — 업무 성공과 전달 성공을
   // 분리한다(활성화는 이미 확정됐고, 전달만 다시 시도한다).
   const student = await getStudent(session.tenantId, before.student_id);
-  if (student?.parentPhone) {
+  const contactPhone = student && studentContactPhone(student);
+  if (student && contactPhone) {
     const sent = await sendNotification({
       tenantId: session.tenantId,
       studentId: before.student_id,
       type: "enrollment_activated",
-      phone: student.parentPhone,
+      phone: contactPhone,
       message: renderTemplate("enrollment_activated", { name: student.name }),
       isAd: false,
     });

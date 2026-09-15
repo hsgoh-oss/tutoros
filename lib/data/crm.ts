@@ -67,7 +67,8 @@ export async function listStudentOptions(
 interface StudentRow {
   id: string;
   name: string;
-  parent_phone: string;
+  is_adult: boolean;
+  parent_phone: string | null;
   student_phone: string | null;
   school: string | null;
   grade: string | null;
@@ -82,6 +83,7 @@ function mapStudent(row: StudentRow): Student {
   return {
     id: row.id,
     name: row.name,
+    isAdult: row.is_adult ?? false,
     parentPhone: row.parent_phone,
     studentPhone: row.student_phone,
     school: row.school,

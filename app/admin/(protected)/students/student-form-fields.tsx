@@ -1,28 +1,47 @@
+"use client";
+
+import { useState } from "react";
 import { Field, Input, Select } from "@/components/ui/form";
 import { CLASS_TYPE_OPTIONS, STUDENT_STATUS_OPTIONS } from "./constants";
 import type { Student } from "@/lib/types";
 
 export function StudentFormFields({ student }: { student?: Student }) {
+  const [isAdult, setIsAdult] = useState(student?.isAdult ?? false);
   return (
     <div className="grid gap-5 md:grid-cols-2">
       <Field label="이름" required>
         <Input name="name" defaultValue={student?.name ?? ""} placeholder="홍길동" />
       </Field>
 
-      <Field label="학부모 연락처" required>
+      <Field label="수강생 구분" required>
+        <Select name="isAdult" value={isAdult ? "true" : "false"} onChange={(event) => setIsAdult(event.target.value === "true")}>
+          <option value="false">미성년자 · 보호자 연락</option>
+          <option value="true">성인 · 본인 연락 및 납부</option>
+        </Select>
+      </Field>
+
+      {isAdult && (
+        <p className="rounded-lg bg-soft p-3 text-xs leading-relaxed text-muted md:col-span-2">
+          본인 연락처로 수업 안내와 청구서를 보냅니다. 본인 학생 초대를 수락하면 학생·납부자 탭을 함께 이용할 수 있습니다.
+        </p>
+      )}
+
+      {!isAdult && <Field label="학부모 연락처" required>
         <Input
           name="parentPhone"
           defaultValue={student?.parentPhone ?? ""}
           inputMode="numeric"
+          required
           placeholder="010-1234-5678"
         />
-      </Field>
+      </Field>}
 
-      <Field label="학생 연락처" hint="입력 시 아래 수집 동의 확인이 필요합니다">
+      <Field label={isAdult ? "본인 연락처" : "학생 연락처"} required={isAdult} hint="입력 시 아래 수집 동의 확인이 필요합니다">
         <Input
           name="studentPhone"
           defaultValue={student?.studentPhone ?? ""}
           inputMode="numeric"
+          required={isAdult}
           placeholder="010-1234-5678"
         />
       </Field>

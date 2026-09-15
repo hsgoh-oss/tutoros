@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { readBill } from "@/lib/payssam/client";
+import { getPayssamAccount } from "@/lib/payssam/account";
 import { runCritical } from "@/lib/data/activity";
 import { createWorkItem } from "@/lib/data/work";
 
@@ -214,7 +215,9 @@ export async function POST(request: Request) {
   }
 
   // ③ 정합 검증(검수 37·128): 통보를 그대로 믿지 않는다 — /bill/read로 실제 상태 재조회.
-  const read = await readBill(billId);
+  const account = await getPayssamAccount(payment.tenant_id);
+  if (!account) return NextResponse.json({ error: "merchant lookup failed" }, { status: 503 });
+  const read = await readBill(billId, account);
   if (!read.ok) {
     // NETWORK(결과 불명)든 명시 거절이든 실제 승인 상태를 확인하지 못한 것 — 반영 보류.
     // 수신 자체는 성공했으므로 0000, 처리는 업무(work_items)로 수렴한다(정본 ⑧).

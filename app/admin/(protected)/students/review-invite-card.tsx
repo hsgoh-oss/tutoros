@@ -12,13 +12,15 @@ import { InvitationList } from "../reviews/invitation-list";
 export function ReviewInviteCard({
   studentId,
   studentName,
+  isAdult,
   parentPhone,
   studentPhone,
   invitations,
 }: {
   studentId: string;
   studentName: string;
-  parentPhone: string;
+  isAdult: boolean;
+  parentPhone: string | null;
   studentPhone: string | null;
   invitations: ReviewInvitation[];
 }) {
@@ -35,7 +37,7 @@ export function ReviewInviteCard({
       </p>
       <ReviewInviteForm
         compact
-        fixedStudent={{ id: studentId, name: studentName, parentPhone, studentPhone }}
+        fixedStudent={{ id: studentId, name: studentName, isAdult, parentPhone, studentPhone }}
       />
       <div className="mt-5 border-t border-line pt-4">
         <h3 className="mb-3 text-xs font-semibold text-ink-soft">발급 이력</h3>

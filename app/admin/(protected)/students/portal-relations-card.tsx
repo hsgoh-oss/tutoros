@@ -114,6 +114,7 @@ function IssuedLink({ link }: { link: string }) {
 export function PortalRelationsCard({
   studentId,
   studentName,
+  isAdult,
   studentPhone,
   parentPhone,
   relations,
@@ -123,10 +124,11 @@ export function PortalRelationsCard({
 }: {
   studentId: string;
   studentName: string;
+  isAdult: boolean;
   /** 학생 본인 역할 채우기용(없으면 버튼 자체가 없다). */
   studentPhone: string | null;
   /** 보호자 역할 채우기용. */
-  parentPhone: string;
+  parentPhone: string | null;
   relations: PortalRelationItem[];
   invite: (formData: FormData) => Promise<PortalInviteResult>;
   resend: (relationId: string) => Promise<PortalInviteResult>;
@@ -134,9 +136,9 @@ export function PortalRelationsCard({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [role, setRole] = useState<PortalRoleValue>("guardian");
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
+  const [role, setRole] = useState<PortalRoleValue>(isAdult ? "student" : "guardian");
+  const [phone, setPhone] = useState(isAdult ? studentPhone ?? "" : "");
+  const [name, setName] = useState(isAdult ? studentName : "");
   const [link, setLink] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -216,13 +218,19 @@ export function PortalRelationsCard({
       ? studentPhone
         ? { label: "학생 본인 연락처 채우기", value: studentPhone }
         : null
-      : role === "guardian"
+      : role === "guardian" && parentPhone
         ? { label: "보호자 연락처 채우기", value: parentPhone }
         : null;
 
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold text-ink-soft">포털 관계</h2>
+      {isAdult && (
+        <p className="mb-3 rounded-lg bg-soft p-3 text-xs leading-relaxed text-muted">
+          성인 본인 번호로 학생 초대를 보내면 과제·리포트와 수업료를 함께 확인할 수 있습니다.
+          학생 관계를 회수하면 함께 열린 납부 권한도 닫힙니다. 별도로 설정한 납부자 관계는 해당 설정을 따릅니다.
+        </p>
+      )}
       <p className="mb-4 text-xs leading-relaxed text-muted">
         역할별로 초대를 발급하면 받는 사람마다 자기 링크로 로그인합니다. 역할이 다르면
         권한도 따로 관리되고, 회수하면 그 사람의 링크와 로그인 세션이 함께 닫힙니다.

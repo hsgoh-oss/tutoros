@@ -14,7 +14,8 @@ import { IssuedReviewLink } from "./issued-link";
 // 실제 거부는 서버 액션이 한다.
 
 export interface StudentPrefill extends StudentOption {
-  parentPhone: string;
+  isAdult: boolean;
+  parentPhone: string | null;
   studentPhone: string | null;
 }
 
@@ -33,9 +34,9 @@ export function ReviewInviteForm({
   const [pending, startTransition] = useTransition();
   const [studentId, setStudentId] = useState<string>(fixedStudent?.id ?? "");
   const [studentName, setStudentName] = useState<string>(fixedStudent?.name ?? "");
-  const [authorRole, setAuthorRole] = useState<"student" | "parent">("parent");
-  const [authorName, setAuthorName] = useState<string>("");
-  const [authorPhone, setAuthorPhone] = useState<string>(fixedStudent?.parentPhone ?? "");
+  const [authorRole, setAuthorRole] = useState<"student" | "parent">(fixedStudent?.isAdult ? "student" : "parent");
+  const [authorName, setAuthorName] = useState<string>(fixedStudent?.isAdult ? fixedStudent.name : "");
+  const [authorPhone, setAuthorPhone] = useState<string>((fixedStudent?.isAdult ? fixedStudent.studentPhone : fixedStudent?.parentPhone) ?? "");
   const [expiresDays, setExpiresDays] = useState<string>("14");
   const [confirmed, setConfirmed] = useState(false);
   const [result, setResult] = useState<ReviewLinkResult | null>(null);
@@ -48,8 +49,10 @@ export function ReviewInviteForm({
     const s = students?.find((x) => x.id === id);
     if (s) {
       setStudentName(s.name);
-      setAuthorPhone(authorRole === "student" ? (s.studentPhone ?? "") : s.parentPhone);
-      if (authorRole === "student") setAuthorName(s.name);
+      const role = s.isAdult ? "student" : authorRole;
+      setAuthorRole(role);
+      setAuthorPhone((role === "student" ? s.studentPhone : s.parentPhone) ?? "");
+      if (role === "student") setAuthorName(s.name);
     }
   };
 
@@ -60,7 +63,7 @@ export function ReviewInviteForm({
       setAuthorName(current.name);
       setAuthorPhone(current.studentPhone ?? "");
     } else {
-      setAuthorPhone(current.parentPhone);
+      setAuthorPhone(current.parentPhone ?? "");
     }
   };
 

@@ -64,7 +64,7 @@ export function LessonFormFields({
       </div>
 
       <div className="md:col-span-2">
-        <Field label="숙제">
+        <Field label="숙제" hint="수업 기록용 메모입니다. 포털에 표시하려면 과제 메뉴에서 과제를 만들고 게시·배부해 주세요.">
           <Textarea
             name="homework"
             defaultValue={lesson?.homework ?? ""}

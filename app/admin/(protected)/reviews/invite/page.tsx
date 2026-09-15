@@ -16,11 +16,11 @@ async function listStudentPrefills(tenantId: string): Promise<StudentPrefill[]> 
   if (!db) return [];
   const { data } = await db
     .from("students")
-    .select("id, name, parent_phone, student_phone")
+    .select("id, name, is_adult, parent_phone, student_phone")
     .eq("tenant_id", tenantId)
     .order("name");
-  return ((data ?? []) as { id: string; name: string; parent_phone: string; student_phone: string | null }[]).map(
-    (s) => ({ id: s.id, name: s.name, parentPhone: s.parent_phone, studentPhone: s.student_phone }),
+  return ((data ?? []) as { id: string; name: string; is_adult: boolean; parent_phone: string | null; student_phone: string | null }[]).map(
+    (s) => ({ id: s.id, name: s.name, isAdult: s.is_adult, parentPhone: s.parent_phone, studentPhone: s.student_phone }),
   );
 }
 

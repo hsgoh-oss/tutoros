@@ -7,12 +7,12 @@
 
 import type { SupabaseClient } from "../../_shared/db.ts";
 import { kstDateString } from "../../_shared/kst.ts";
+import { studentContactPhoneFromRow, type StudentContactRow } from "../../_shared/student-contact.ts";
 
-interface StudentRow {
+interface StudentRow extends StudentContactRow {
   id: string;
   tenant_id: string;
   name: string;
-  parent_phone: string;
 }
 
 const REVIEW_AFTER_DAYS = 28; // 수업 4주차 도달
@@ -21,7 +21,7 @@ export async function runReviewRequest(db: SupabaseClient) {
   const cutoff = kstDateString(-REVIEW_AFTER_DAYS); // 4주 전(KST) — 첫 수업이 이보다 이전이면 대상
   const { data: students, error } = await db
     .from("students")
-    .select("id, tenant_id, name, parent_phone")
+    .select("id, tenant_id, name, parent_phone, student_phone, is_adult")
     .eq("status", "active");
   if (error) throw error;
 
@@ -31,7 +31,8 @@ export async function runReviewRequest(db: SupabaseClient) {
   for (const s of (students ?? []) as StudentRow[]) {
     // 대상 선정은 이전과 동일하게 유지(연락처 있는 학생·첫 수업 4주 경과) — 바뀐 것은
     // "자동 발송 → 운영자 수동 판단 업무"라는 후속 행동뿐이다.
-    if (!s.parent_phone) {
+    const phone = studentContactPhoneFromRow(s);
+    if (!phone) {
       skipped++;
       continue;
     }
@@ -86,7 +87,7 @@ export async function runReviewRequest(db: SupabaseClient) {
       tenant_id: s.tenant_id,
       kind: "manual",
       title: `후기 요청 후보 — ${s.name}`,
-      detail: `첫 수업 ${first} · 4주 경과 (학부모 ${s.parent_phone})`,
+      detail: `첫 수업 ${first} · 4주 경과 (${s.is_adult ? "본인" : "보호자"} ${phone})`,
       source_type: "review_request",
       source_id: s.id,
       priority: "normal",

@@ -18,6 +18,7 @@
 // runCritical(lib/data/activity.ts, category "grade")로 감싸 수행한다 — 이 파일은 조회·초안만 담당.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { assertQuery } from "@/lib/data/query-error";
 import type {
   HomeworkAnswerStatus,
   HomeworkFeedbackStatus,
@@ -474,8 +475,8 @@ export async function listPortalAssignments(
   studentId: string,
 ): Promise<PortalHomework[]> {
   const db = createServiceClient();
-  if (!db) return [];
-  const { data } = await db
+  if (!db) throw new Error("과제를 불러올 수 없습니다.");
+  const { data, error } = await db
     .from("homework_assignments")
     .select("*")
     .eq("tenant_id", tenantId)
@@ -483,11 +484,12 @@ export async function listPortalAssignments(
     .in("status", ["assigned", "closed"])
     .is("archived_at", null) // 보관분은 현재 목록에서 접는다(H-07 — 파기 아님, 운영자 이력은 유지)
     .order("created_at", { ascending: false });
+  assertQuery(error, "portal homework assignments");
   const rows = (data ?? []) as AssignmentRow[];
   if (rows.length === 0) return [];
 
   // 제출은 본인 과제(위에서 student_id로 스코프된 id)에 딸린 것만 조회한다.
-  const { data: subs } = await db
+  const { data: subs, error: submissionsError } = await db
     .from("homework_submissions")
     .select("*")
     .eq("tenant_id", tenantId)
@@ -496,6 +498,7 @@ export async function listPortalAssignments(
       rows.map((r) => r.id),
     )
     .order("attempt_no", { ascending: true });
+  assertQuery(submissionsError, "portal homework submissions");
   const submissions = await mapSubmissionsWithUrl(db, (subs ?? []) as SubmissionRow[]);
   const byAssignment = new Map<string, HomeworkSubmission[]>();
   for (const s of submissions) {

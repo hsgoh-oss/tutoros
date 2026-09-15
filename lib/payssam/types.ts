@@ -138,6 +138,7 @@ export interface CashReceiptCancelData {
 
 /** POST /cash-receipt/read 응답 data.info[] — 현금영수증 단건 이력 */
 export interface CashReceiptHistoryItem {
+  /** 항목에서는 생략될 수 있다. 이 경우 상위 응답의 billId로 거래를 대조한다. */
   billId?: string;
   apprPrice?: string;
   apprSupplyPrice?: string;
@@ -148,7 +149,7 @@ export interface CashReceiptHistoryItem {
   apprNum?: string;
   /** 승인 상태 (F:승인, C:취소) */
   apprState?: string;
-  /** 승인 일시 (YYYYMMDDhhmmss) */
+  /** 승인 일시 — 문서 YYYYMMDDhhmmss, 샌드박스 실응답 YYMMDDhhmmss도 지원. */
   apprDt?: string;
   /** 발급 요청 번호 */
   issuanceNumber?: string;

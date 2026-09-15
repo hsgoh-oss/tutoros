@@ -3,6 +3,8 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveTenant } from "@/lib/tenant";
+import { normalizeContactPhone } from "@/lib/student-contact";
+import { includeSelfPayerRelations, type SelfPayerStudent } from "./self-payer";
 
 // 이용자(학생·보호자·납부자·계약자) 포털 인증 — 역할별 초대 링크 + 서버측 세션.
 // 정본: docs/flow-canon/01_atlas_02_portal_lessons.md P-01(역할별 초대)·P-02(로그인·세션·복구)·P-06(관계 변경·권한 회수).
@@ -55,11 +57,7 @@ export const PORTAL_COOKIE_OPTIONS = {
  * 반드시 같은 함수를 써야 한다 — 한쪽만 바뀌면 "등록된 번호인데 못 찾는" 상태가 된다.
  */
 export function normalizePortalPhone(raw: string): string {
-  let digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("82") && digits.length >= 11) {
-    digits = `0${digits.slice(2)}`;
-  }
-  return digits;
+  return normalizeContactPhone(raw);
 }
 
 /**
@@ -126,7 +124,7 @@ export async function hasActivePortalRelation(
   return Boolean(data && data.length > 0);
 }
 
-/** 세션이 이 역할로 이 학생에 접근할 수 있는지. 관계는 역할별로 독립이다(검수 16). */
+/** 세션이 이 역할로 이 학생에 접근할 수 있는지. 성인 본인 납부는 세션 조회 시 학생 관계에서 확장한다. */
 export function hasPortalAccess(
   session: PortalSession,
   role: PortalRole,
@@ -189,7 +187,7 @@ export function isPortalRole(value: string): value is PortalRole {
   return Object.hasOwn(PORTAL_ROLE_LABEL, value);
 }
 
-/** 세션이 실제로 열 수 있는 관계 한 건(active만). 권한 판정의 단위다. */
+/** 활성 관계 한 건. 성인 본인 납부는 활성 학생 관계에서 파생되며 같은 시점에 닫힌다. */
 export interface PortalRelationView {
   relationId: string;
   role: PortalRole;
@@ -202,7 +200,7 @@ export interface PortalSession {
   contactId: string;
   tenantId: string;
   contactName: string;
-  /** 지금 이 사람에게 열려 있는 관계 전부 — 역할·학생별로 독립이다(검수 16). */
+  /** 활성 관계와 성인 본인 납부 권한. 다른 역할·학생으로는 확장하지 않는다. */
   relations: PortalRelationView[];
   expiresAt: string;
 }
@@ -321,6 +319,7 @@ export async function issuePortalSessionFromLink(
 interface RelationRow {
   id: string;
   role: string;
+  status: string;
   student_id: string;
   accepted_at: string | null;
 }
@@ -367,16 +366,15 @@ export const getPortalSession = cache(async (): Promise<PortalSession | null> =>
   const [contactRes, relationRes] = await Promise.all([
     db
       .from("portal_contacts")
-      .select("name")
+      .select("name, phone")
       .eq("tenant_id", tenantId)
       .eq("id", contactId)
       .maybeSingle(),
     db
       .from("portal_relations")
-      .select("id, role, student_id, accepted_at")
+      .select("id, role, student_id, accepted_at, status")
       .eq("tenant_id", tenantId)
-      .eq("contact_id", contactId)
-      .eq("status", "active"),
+      .eq("contact_id", contactId),
   ]);
   if (contactRes.error || relationRes.error) {
     console.error(
@@ -387,13 +385,14 @@ export const getPortalSession = cache(async (): Promise<PortalSession | null> =>
   }
   if (!contactRes.data) return null; // 사람 행이 사라졌으면 세션도 없다
 
-  const rows = (relationRes.data ?? []) as RelationRow[];
+  const allRows = (relationRes.data ?? []) as RelationRow[];
+  const rows = allRows.filter((row) => row.status === "active");
   if (rows.length === 0) return null; // 관계 전부 종료 → 접근 종료(검수 21)
 
   const studentIds = [...new Set(rows.map((r) => r.student_id))];
   const { data: studentData, error: studentError } = await db
     .from("students")
-    .select("id, name, status")
+    .select("id, name, status, is_adult, student_phone")
     .eq("tenant_id", tenantId)
     .in("id", studentIds);
   if (studentError) {
@@ -431,7 +430,12 @@ export const getPortalSession = cache(async (): Promise<PortalSession | null> =>
     contactId,
     tenantId,
     contactName: contactRes.data.name as string,
-    relations,
+    relations: includeSelfPayerRelations(
+      relations,
+      (studentData ?? []) as SelfPayerStudent[],
+      contactRes.data.phone as string,
+      new Set(allRows.filter((row) => row.role === "payer").map((row) => row.student_id)),
+    ),
     expiresAt,
   };
 });

@@ -10,7 +10,7 @@ export default function NewStudentPage() {
       <AdminPageHeader>
         <h1 className="text-xl font-semibold tracking-tight">학생 신규 등록</h1>
         <p className="mt-1 text-sm text-muted">
-          학생 연락처는 선택 항목이며, 입력 시 수집 동의 확인이 필요합니다.
+          성인은 본인 연락처만 입력합니다. 미성년자는 보호자 연락처가 필요하며 학생 연락처는 선택입니다.
         </p>
       </AdminPageHeader>
 

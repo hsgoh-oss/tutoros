@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { studentContactPhoneFromRow, type StudentContactRow } from "@/lib/student-contact";
 import { getAdminSession } from "@/lib/auth/session";
 import { createServiceClient, hasDb } from "@/lib/supabase/server";
 import { resolveTenant } from "@/lib/tenant";
@@ -18,14 +19,14 @@ async function getStudentContact(
   db: NonNullable<ReturnType<typeof createServiceClient>>,
   tenantId: string,
   studentId: string,
-): Promise<{ name: string; parent_phone: string; student_phone: string | null } | null> {
+): Promise<(StudentContactRow & { name: string }) | null> {
   const { data } = await db
     .from("students")
-    .select("name, parent_phone, student_phone")
+    .select("name, parent_phone, student_phone, is_adult")
     .eq("tenant_id", tenantId)
     .eq("id", studentId)
     .maybeSingle();
-  return (data as { name: string; parent_phone: string; student_phone: string | null } | null) ?? null;
+  return (data as (StudentContactRow & { name: string }) | null) ?? null;
 }
 
 /** ⑫ 개별 메시지 — 관리자가 직접 작성한 문구를 학부모/학생에게 발송. */
@@ -44,14 +45,14 @@ export async function sendCustomMessage(formData: FormData): Promise<CrmActionRe
   const student = await getStudentContact(db, session.tenantId, studentId);
   if (!student) return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
 
-  const phone = recipient === "student" ? student.student_phone : student.parent_phone;
+  const phone = recipient === "student" ? student.student_phone : studentContactPhoneFromRow(student);
   if (!phone) {
     return {
       ok: false,
       error:
         recipient === "student"
           ? "학생 연락처가 없습니다(연락처 수집 동의 필요)."
-          : "학부모 연락처가 없습니다.",
+          : "안내를 받을 연락처가 없습니다.",
     };
   }
 
@@ -71,7 +72,7 @@ export async function sendCustomMessage(formData: FormData): Promise<CrmActionRe
     "notify",
     "student",
     studentId,
-    `개별 메시지 발송 (${recipient === "student" ? "학생" : "학부모"})`,
+    `개별 메시지 발송 (${recipient === "student" || student.is_adult ? "학생" : "학부모"})`,
   );
   return { ok: true };
 }
@@ -89,12 +90,14 @@ export async function sendReEnrollmentNotice(formData: FormData): Promise<CrmAct
   const student = await getStudentContact(db, session.tenantId, studentId);
   if (!student) return { ok: false, error: "학생 정보를 찾을 수 없습니다." };
 
+  const phone = studentContactPhoneFromRow(student);
+  if (!phone) return { ok: false, error: "안내를 받을 연락처가 없습니다." };
   const tenant = await resolveTenant();
   const result = await sendNotification({
     tenantId: session.tenantId,
     studentId,
     type: "re_enrollment",
-    phone: student.parent_phone,
+    phone,
     message: `(광고) [${tenant.brandName}] ${student.name}님, 재등록을 안내드립니다. 다시 함께 공부할 수 있길 바랍니다. 문의는 편히 연락 주세요. 무료수신거부: 회신 '거부'`,
     isAd: true,
     consentSubject: { type: "student", id: studentId },
